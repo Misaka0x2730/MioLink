@@ -1,0 +1,3 @@
+[submodule "firmware/thirdParty/blackmagic"]
+	path = firmware/thirdParty/blackmagic
+	url = https://github.com/blackmagic-debug/blackmagic
