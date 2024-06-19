@@ -1,3 +1,7 @@
+# KiCad files
+*.kicad_prl
+fp-info-cache
+
 # Prerequisites
 *.d
 
