@@ -16067,13 +16067,12 @@
 			)
 		)
 		(property "Value" "MCU SWD"
-			(at 157.48 26.6699 0)
+			(at 157.226 55.372 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 				(justify right)
-				(hide yes)
 			)
 		)
 		(property "Footprint" "Connector_PinHeader_1.27mm:PinHeader_2x05_P1.27mm_Vertical_SMD"
@@ -16103,7 +16102,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "S062100026"
+		(property "Part Number" "M50-3600542R"
 			(at 146.05 40.64 0)
 			(effects
 				(font
@@ -16749,7 +16748,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "GPHB204-0502A001A1BC"
+		(property "Part Number" "5103310-1"
 			(at 257.81 245.11 0)
 			(effects
 				(font
@@ -22845,7 +22844,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "PZ254-2-02-W-8.5"
+		(property "Part Number" "M20-9950245"
 			(at 257.81 207.01 0)
 			(effects
 				(font
