@@ -4,6 +4,11 @@
 	(generator_version "8.0")
 	(uuid "cba74bb0-db8a-4445-b36f-a6bd7314337e")
 	(paper "A3")
+	(title_block
+		(title "MioLink rev. A")
+		(date "2024-06-29")
+		(comment 2 "Designed by: Dmitry Rezvanov (https://github.com/Misaka0x2730)")
+	)
 	(lib_symbols
 		(symbol "Amplifier_Operational:TLV9001IDCK"
 			(pin_names
@@ -10624,7 +10629,7 @@
 		)
 		(uuid "e4f45811-1ec6-46e3-87b7-13052a3261e1")
 	)
-	(text "3V3 POWER"
+	(text "3V3 Power"
 		(exclude_from_sim no)
 		(at 125.73 125.73 0)
 		(effects
@@ -11597,7 +11602,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "27"
+		(property "Value" "100"
 			(at 274.32 205.74 90)
 			(effects
 				(font
@@ -11633,7 +11638,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-0727RL"
+		(property "Part Number" "0402WGF1000TCE"
 			(at 271.78 207.01 0)
 			(effects
 				(font
@@ -11653,6 +11658,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 271.78 207.01 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25076"
+			(at 269.24 205.74 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11862,7 +11876,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 237.49 77.47 0)
 			(effects
 				(font
@@ -11882,6 +11896,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 237.49 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 236.22 76.2 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12693,6 +12716,15 @@
 				(hide yes)
 			)
 		)
+		(property "LCSC" "C15741"
+			(at 341.63 27.94 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
 		(pin "1"
 			(uuid "c7c1d7be-1e54-4745-9c0d-bcc2cf496662")
 		)
@@ -12846,7 +12878,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 356.87 66.04 0)
 			(effects
 				(font
@@ -12866,6 +12898,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 356.87 66.04 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 355.6 64.77 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12941,7 +12982,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-071KL"
+		(property "Part Number" "0402WGF1001TCE"
 			(at 213.36 78.74 0)
 			(effects
 				(font
@@ -12961,6 +13002,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 213.36 78.74 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C11702"
+			(at 213.36 76.2 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13122,6 +13172,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 165.1 212.09 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C55266"
+			(at 165.1 203.2 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13341,6 +13400,15 @@
 			)
 		)
 		(property "Part Number" "TYPE-C-31-M-12A"
+			(at 41.91 40.64 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C5337088"
 			(at 41.91 40.64 0)
 			(effects
 				(font
@@ -13655,7 +13723,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX5R6BB105"
+		(property "Part Number" "CL05A105KA5NQNC"
 			(at 63.5 109.22 0)
 			(effects
 				(font
@@ -13675,6 +13743,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 63.5 109.22 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C52923"
+			(at 66.04 108.204 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13782,7 +13859,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "27"
+		(property "Value" "100"
 			(at 241.3 243.84 90)
 			(effects
 				(font
@@ -13818,7 +13895,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-0727RL"
+		(property "Part Number" "0402WGF1000TCE"
 			(at 238.76 245.11 0)
 			(effects
 				(font
@@ -13838,6 +13915,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 238.76 245.11 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25076"
+			(at 236.22 243.84 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13980,7 +14066,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 148.59 107.95 0)
 			(effects
 				(font
@@ -14000,6 +14086,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 148.59 107.95 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 147.32 106.68 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14404,7 +14499,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 213.36 86.36 0)
 			(effects
 				(font
@@ -14424,6 +14519,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 213.36 86.36 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 211.836 85.09 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14631,7 +14735,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-07100KL"
+		(property "Part Number" "0402WGF1003TCE"
 			(at 149.86 261.62 0)
 			(effects
 				(font
@@ -14651,6 +14755,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 149.86 261.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25741"
+			(at 151.13 260.35 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14877,7 +14990,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 243.84 58.42 0)
 			(effects
 				(font
@@ -14897,6 +15010,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 243.84 58.42 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 245.11 57.15 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -15123,7 +15245,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 356.87 114.3 0)
 			(effects
 				(font
@@ -15143,6 +15265,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 356.87 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 355.6 113.03 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -15219,7 +15350,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX5R6BB105"
+		(property "Part Number" "CL05A105KA5NQNC"
 			(at 148.59 101.6 0)
 			(effects
 				(font
@@ -15239,6 +15370,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 148.59 101.6 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C52923"
+			(at 147.32 100.33 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -15383,7 +15523,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 237.49 71.12 0)
 			(effects
 				(font
@@ -15403,6 +15543,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 237.49 71.12 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 236.22 69.85 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -15566,6 +15715,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 250.19 132.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C2040"
+			(at 228.346 88.9 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -15940,7 +16098,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX5R6BB105"
+		(property "Part Number" "CL05A105KA5NQNC"
 			(at 266.7 83.82 0)
 			(effects
 				(font
@@ -15960,6 +16118,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 266.7 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C52923"
+			(at 265.43 82.55 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -16102,7 +16269,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "M50-3600542R"
+		(property "Part Number" "20021121-00010T4LF"
 			(at 146.05 40.64 0)
 			(effects
 				(font
@@ -16121,6 +16288,15 @@
 			)
 		)
 		(property "Sim.Pins" ""
+			(at 146.05 40.64 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C598540"
 			(at 146.05 40.64 0)
 			(effects
 				(font
@@ -16223,7 +16399,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-07100KL"
+		(property "Part Number" "0402WGF1003TCE"
 			(at 143.51 220.98 0)
 			(effects
 				(font
@@ -16243,6 +16419,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 143.51 220.98 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25741"
+			(at 142.24 219.71 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -16533,10 +16718,9 @@
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "4acbcf79-3ae4-4254-8309-a2d24085e469")
 		(property "Reference" "Q1"
-			(at 354.33 224.7899 0)
+			(at 353.822 224.79 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -16545,7 +16729,7 @@
 			)
 		)
 		(property "Value" "BSS138"
-			(at 354.33 227.3299 0)
+			(at 353.822 227.33 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -16564,7 +16748,7 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" "https://www.onsemi.com/pub/Collateral/BSS138-D.PDF"
+		(property "Datasheet" "https://www.onsemi.com/pdf/datasheet/bss138lt1-d.pdf"
 			(at 353.06 229.87 0)
 			(effects
 				(font
@@ -16601,8 +16785,17 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "BSS138P,215"
+		(property "Part Number" "BSS138LT1G"
 			(at 347.98 226.06 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C82045"
+			(at 354.33 224.7899 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -16748,7 +16941,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "5103310-1"
+		(property "Part Number" "0502A001A1BC"
 			(at 257.81 245.11 0)
 			(effects
 				(font
@@ -16767,6 +16960,15 @@
 			)
 		)
 		(property "Sim.Pins" ""
+			(at 257.81 245.11 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C7434504"
 			(at 257.81 245.11 0)
 			(effects
 				(font
@@ -16978,6 +17180,15 @@
 				(hide yes)
 			)
 		)
+		(property "LCSC" "C20625731"
+			(at 190.5 147.32 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
 		(pin "1"
 			(uuid "e48d027d-8105-4a96-b7f3-012fcfe67be5")
 		)
@@ -17146,6 +17357,15 @@
 				(hide yes)
 			)
 		)
+		(property "LCSC" "C19702"
+			(at 80.01 52.07 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
 		(pin "1"
 			(uuid "fd564e2d-954a-4be0-a957-6e333cb2704a")
 		)
@@ -17242,6 +17462,15 @@
 				(hide yes)
 			)
 		)
+		(property "LCSC" "C7519"
+			(at 112.522 34.036 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
 		(pin "1"
 			(uuid "d306d400-1dbd-42ff-8364-6b7e319c4f9a")
 		)
@@ -17323,7 +17552,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 339.09 161.29 0)
 			(effects
 				(font
@@ -17343,6 +17572,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 339.09 161.29 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 337.82 160.02 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -17383,7 +17621,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "27"
+		(property "Value" "100"
 			(at 241.3 248.92 90)
 			(effects
 				(font
@@ -17419,7 +17657,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-0727RL"
+		(property "Part Number" "0402WGF1000TCE"
 			(at 238.76 250.19 0)
 			(effects
 				(font
@@ -17439,6 +17677,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 238.76 250.19 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25076"
+			(at 236.22 248.92 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -17516,6 +17763,15 @@
 		)
 		(property "Part Number" "LP5907MFX-3.3"
 			(at 53.34 102.87 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C80670"
+			(at 53.34 92.71 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -18145,7 +18401,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-0710KL"
+		(property "Part Number" "0402WGF1002TCE"
 			(at 220.98 72.39 0)
 			(effects
 				(font
@@ -18165,6 +18421,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 220.98 72.39 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25744"
+			(at 219.456 71.12 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -18242,7 +18507,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "L152L-GC-TR"
+		(property "Part Number" "XL-3216SYGC"
 			(at 76.2 173.99 0)
 			(effects
 				(font
@@ -18262,6 +18527,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 76.2 173.99 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C965826"
+			(at 73.66 172.72 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -18338,7 +18612,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX5R6BB105"
+		(property "Part Number" "CL05A105KA5NQNC"
 			(at 182.88 220.98 0)
 			(effects
 				(font
@@ -18358,6 +18632,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 182.88 220.98 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C52923"
+			(at 185.42 219.964 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -18435,7 +18718,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 243.84 64.77 0)
 			(effects
 				(font
@@ -18455,6 +18738,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 243.84 64.77 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 245.11 63.5 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -18532,7 +18824,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX5R6BB105"
+		(property "Part Number" "CL05A105KA5NQNC"
 			(at 152.4 220.98 0)
 			(effects
 				(font
@@ -18552,6 +18844,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 152.4 220.98 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C52923"
+			(at 149.86 219.964 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -18693,7 +18994,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX5R6BB105"
+		(property "Part Number" "CL05A105KA5NQNC"
 			(at 114.3 109.22 0)
 			(effects
 				(font
@@ -18713,6 +19014,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 114.3 109.22 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C52923"
+			(at 116.84 108.204 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -18884,7 +19194,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "27"
+		(property "Value" "100"
 			(at 241.3 241.3 90)
 			(effects
 				(font
@@ -18920,7 +19230,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-0727RL"
+		(property "Part Number" "0402WGF1000TCE"
 			(at 238.76 242.57 0)
 			(effects
 				(font
@@ -18940,6 +19250,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 238.76 242.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25076"
+			(at 236.22 241.3 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -19035,6 +19354,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 104.14 100.33 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C14709"
+			(at 104.394 96.774 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -19457,7 +19785,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 266.7 72.39 0)
 			(effects
 				(font
@@ -19477,6 +19805,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 266.7 72.39 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 265.43 71.12 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -19645,6 +19982,15 @@
 				(hide yes)
 			)
 		)
+		(property "LCSC" "C82317"
+			(at 136.144 111.76 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
 		(pin "1"
 			(uuid "b9004f0e-fe54-4285-a20d-08d62429f36a")
 		)
@@ -19760,6 +20106,15 @@
 				(hide yes)
 			)
 		)
+		(property "LCSC" "C88984"
+			(at 31.75 71.12 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
 		(pin "1"
 			(uuid "5cda7a2f-22db-4d2e-81be-2f435e19812a")
 		)
@@ -19829,7 +20184,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-07100KL"
+		(property "Part Number" "0402WGF1003TCE"
 			(at 149.86 248.92 0)
 			(effects
 				(font
@@ -19849,6 +20204,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 149.86 248.92 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25741"
+			(at 151.13 247.65 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -20120,7 +20484,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-071KL"
+		(property "Part Number" "0402WGF1001TCE"
 			(at 179.07 115.57 0)
 			(effects
 				(font
@@ -20140,6 +20504,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 179.07 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C11702"
+			(at 179.07 113.03 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -20283,7 +20656,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402GRNPO9BN160"
+		(property "Part Number" "CC0402JRNPO9BN160"
 			(at 186.69 156.21 0)
 			(effects
 				(font
@@ -20303,6 +20676,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 186.69 156.21 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C77590"
+			(at 184.15 154.94 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -20380,7 +20762,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX5R6BB105"
+		(property "Part Number" "CL05A105KA5NQNC"
 			(at 93.98 109.22 0)
 			(effects
 				(font
@@ -20400,6 +20782,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 93.98 109.22 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C52923"
+			(at 91.44 108.204 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -20743,7 +21134,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-075K1L"
+		(property "Part Number" "0402WGF5101TCE"
 			(at 67.31 53.34 0)
 			(effects
 				(font
@@ -20763,6 +21154,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 67.31 53.34 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25905"
+			(at 68.58 52.07 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -21102,7 +21502,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-071KL"
+		(property "Part Number" "0402WGF1001TCE"
 			(at 334.01 226.06 0)
 			(effects
 				(font
@@ -21122,6 +21522,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 334.01 226.06 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C11702"
+			(at 336.042 224.028 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -21199,7 +21608,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 172.72 245.11 0)
 			(effects
 				(font
@@ -21219,6 +21628,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 172.72 245.11 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 171.45 243.84 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -21296,7 +21714,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-071KL"
+		(property "Part Number" "0402WGF1001TCE"
 			(at 110.49 161.29 0)
 			(effects
 				(font
@@ -21316,6 +21734,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 110.49 161.29 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C11702"
+			(at 109.22 160.02 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -21393,7 +21820,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "L152L-QOC-TR"
+		(property "Part Number" "XL-3216UOC"
 			(at 87.63 173.99 0)
 			(effects
 				(font
@@ -21413,6 +21840,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 87.63 173.99 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C965823"
+			(at 85.09 172.72 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -21620,7 +22056,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 339.09 66.04 0)
 			(effects
 				(font
@@ -21640,6 +22076,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 339.09 66.04 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 337.82 64.77 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -22021,6 +22466,15 @@
 				(hide yes)
 			)
 		)
+		(property "LCSC" "C2733655"
+			(at 201.93 78.74 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
 		(pin "1"
 			(uuid "0987283e-a0a0-4fe1-8559-f3ef49fbd82c")
 		)
@@ -22306,7 +22760,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-071KL"
+		(property "Part Number" "0402WGF1001TCE"
 			(at 87.63 161.29 0)
 			(effects
 				(font
@@ -22326,6 +22780,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 87.63 161.29 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C11702"
+			(at 86.36 160.02 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -22402,7 +22865,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402GRNPO9BN160"
+		(property "Part Number" "CC0402JRNPO9BN160"
 			(at 198.12 156.21 0)
 			(effects
 				(font
@@ -22422,6 +22885,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 198.12 156.21 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C77590"
+			(at 200.66 154.94 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -22564,7 +23036,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 243.84 52.07 0)
 			(effects
 				(font
@@ -22584,6 +23056,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 243.84 52.07 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 245.11 50.8 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -22678,6 +23159,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 165.1 257.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C398362"
+			(at 168.91 252.73 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -22844,7 +23334,16 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "M20-9950245"
+		(property "Part Number" "PZ254-2-02-W-8.5"
+			(at 257.81 207.01 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C2894982"
 			(at 257.81 207.01 0)
 			(effects
 				(font
@@ -22995,7 +23494,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 339.09 24.13 0)
 			(effects
 				(font
@@ -23015,6 +23514,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 339.09 24.13 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 337.82 22.86 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -23224,7 +23732,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-0710KL"
+		(property "Part Number" "0402WGF1002TCE"
 			(at 165.1 109.22 0)
 			(effects
 				(font
@@ -23244,6 +23752,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 165.1 109.22 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25744"
+			(at 166.37 107.95 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -23404,7 +23921,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-0710KL"
+		(property "Part Number" "0402WGF1002TCE"
 			(at 350.52 212.09 0)
 			(effects
 				(font
@@ -23424,6 +23941,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 350.52 212.09 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25744"
+			(at 351.79 210.82 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -23500,7 +24026,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 266.7 64.77 0)
 			(effects
 				(font
@@ -23520,6 +24046,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 266.7 64.77 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 265.43 63.5 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -23597,7 +24132,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 243.84 33.02 0)
 			(effects
 				(font
@@ -23617,6 +24152,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 243.84 33.02 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 245.11 31.75 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -23713,6 +24257,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 347.98 81.28 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C15741"
+			(at 341.63 69.85 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -24285,7 +24838,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-0727RL"
+		(property "Part Number" "0402WGF270JTCE"
 			(at 215.9 104.14 0)
 			(effects
 				(font
@@ -24305,6 +24858,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 215.9 104.14 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25100"
+			(at 213.36 102.87 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -24447,7 +25009,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 356.87 161.29 0)
 			(effects
 				(font
@@ -24467,6 +25029,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 356.87 161.29 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 355.6 160.02 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -24572,6 +25143,15 @@
 				(hide yes)
 			)
 		)
+		(property "LCSC" "C2733655"
+			(at 185.42 123.19 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
 		(pin "1"
 			(uuid "6f125312-1e6c-41fd-b1d2-f5238cf09397")
 		)
@@ -24642,7 +25222,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-071KL"
+		(property "Part Number" "0402WGF1001TCE"
 			(at 99.06 161.29 0)
 			(effects
 				(font
@@ -24662,6 +25242,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 99.06 161.29 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C11702"
+			(at 97.79 160.02 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -24739,7 +25328,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-07100KL"
+		(property "Part Number" "0402WGF1003TCE"
 			(at 340.36 232.41 0)
 			(effects
 				(font
@@ -24759,6 +25348,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 340.36 232.41 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25741"
+			(at 339.09 231.14 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -24984,7 +25582,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-071KL"
+		(property "Part Number" "0402WGF1001TCE"
 			(at 217.17 149.86 0)
 			(effects
 				(font
@@ -25004,6 +25602,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 217.17 149.86 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C11702"
+			(at 217.17 147.32 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -25146,7 +25753,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 356.87 24.13 0)
 			(effects
 				(font
@@ -25166,6 +25773,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 356.87 24.13 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 355.6 22.86 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -25243,7 +25859,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-075K1L"
+		(property "Part Number" "0402WGF5101TCE"
 			(at 59.69 53.34 0)
 			(effects
 				(font
@@ -25263,6 +25879,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 59.69 53.34 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25905"
+			(at 60.96 52.07 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -25567,7 +26192,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "27"
+		(property "Value" "100"
 			(at 241.3 236.22 90)
 			(effects
 				(font
@@ -25603,7 +26228,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-0727RL"
+		(property "Part Number" "0402WGF1000TCE"
 			(at 238.76 237.49 0)
 			(effects
 				(font
@@ -25623,6 +26248,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 238.76 237.49 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25076"
+			(at 236.22 236.22 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -25718,6 +26352,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 67.31 25.4 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C14709"
+			(at 67.31 19.558 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -25862,7 +26505,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 243.84 45.72 0)
 			(effects
 				(font
@@ -25882,6 +26525,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 243.84 45.72 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 245.11 44.45 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -26090,7 +26742,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 243.84 39.37 0)
 			(effects
 				(font
@@ -26110,6 +26762,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 243.84 39.37 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 245.11 38.1 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -26253,7 +26914,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "L152L-QYC-TR"
+		(property "Part Number" "XL-3216UYC"
 			(at 99.06 173.99 0)
 			(effects
 				(font
@@ -26273,6 +26934,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 99.06 173.99 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C965824"
+			(at 96.52 172.72 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -26349,7 +27019,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-07100KL"
+		(property "Part Number" "0402WGF1003TCE"
 			(at 149.86 203.2 0)
 			(effects
 				(font
@@ -26369,6 +27039,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 149.86 203.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25741"
+			(at 151.13 201.93 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -26446,7 +27125,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX5R6BB105"
+		(property "Part Number" "CL05A105KA5NQNC"
 			(at 237.49 83.82 0)
 			(effects
 				(font
@@ -26466,6 +27145,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 237.49 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C52923"
+			(at 236.22 82.55 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -26822,7 +27510,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-071KL"
+		(property "Part Number" "0402WGF1001TCE"
 			(at 76.2 161.29 0)
 			(effects
 				(font
@@ -26842,6 +27530,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 76.2 161.29 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C11702"
+			(at 74.93 160.02 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -26985,7 +27682,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-0727RL"
+		(property "Part Number" "0402WGF270JTCE"
 			(at 215.9 101.6 0)
 			(effects
 				(font
@@ -27005,6 +27702,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 215.9 101.6 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25100"
+			(at 213.36 100.33 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -27101,6 +27807,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 347.98 129.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C15741"
+			(at 341.63 118.11 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -27288,6 +28003,15 @@
 				(hide yes)
 			)
 		)
+		(property "LCSC" "C15741"
+			(at 341.63 165.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
 		(pin "1"
 			(uuid "e0d310f4-56b2-45cf-af32-9fafff6406b1")
 		)
@@ -27339,7 +28063,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "27"
+		(property "Value" "100"
 			(at 248.92 205.74 90)
 			(effects
 				(font
@@ -27375,7 +28099,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-0727RL"
+		(property "Part Number" "0402WGF1000TCE"
 			(at 246.38 207.01 0)
 			(effects
 				(font
@@ -27395,6 +28119,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 246.38 207.01 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25076"
+			(at 243.84 205.74 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -27538,7 +28271,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "L150B-QEC-TR "
+		(property "Part Number" "XL-3216SURC"
 			(at 110.49 173.99 0)
 			(effects
 				(font
@@ -27558,6 +28291,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 110.49 173.99 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C965822"
+			(at 107.95 172.72 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -27700,7 +28442,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX5R6BB105"
+		(property "Part Number" "CL05A105KA5NQNC"
 			(at 43.18 109.22 0)
 			(effects
 				(font
@@ -27720,6 +28462,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 43.18 109.22 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C52923"
+			(at 40.64 108.204 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -27844,7 +28595,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "27"
+		(property "Value" "100"
 			(at 241.3 246.38 90)
 			(effects
 				(font
@@ -27880,7 +28631,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "RC0402FR-0727RL"
+		(property "Part Number" "0402WGF1000TCE"
 			(at 238.76 247.65 0)
 			(effects
 				(font
@@ -27900,6 +28651,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 238.76 247.65 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C25076"
+			(at 236.22 246.38 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -28107,7 +28867,7 @@
 				(hide yes)
 			)
 		)
-		(property "Part Number" "CC0402KRX7R7BB104"
+		(property "Part Number" "CL05B104KO5NNNC"
 			(at 339.09 114.3 0)
 			(effects
 				(font
@@ -28127,6 +28887,15 @@
 		)
 		(property "Sim.Pins" ""
 			(at 339.09 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSC" "C1525"
+			(at 337.82 113.03 0)
 			(effects
 				(font
 					(size 1.27 1.27)
