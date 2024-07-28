@@ -1,3 +1,8 @@
-[submodule "firmware/thirdParty/blackmagic"]
+[submodule "blackmagic"]
 	path = firmware/thirdParty/blackmagic
-	url = https://github.com/blackmagic-debug/blackmagic
+	url = https://github.com/blackmagic-debug/blackmagic.git
+	branch = main
+[submodule "FreeRTOS-Kernel"]
+	path = firmware/thirdParty/FreeRTOS-Kernel
+	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
+	branch = main
