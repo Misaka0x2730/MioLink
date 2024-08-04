@@ -61,8 +61,6 @@ static void swdptap_seq_out_parity(uint32_t tms_states, size_t clock_cycles) __a
  * connection is lower bandwidth (with adequately slower clocks configured).
  */
 
-#define TARGET_NON_ISO_PIO (pio0)
-
 #define SWD_START_PROG_POS            (0)
 #define SWD_FLOAT_TO_DRIVE_POS        (1)
 #define SWD_SEQ_OUT_POS               (3)
@@ -260,31 +258,31 @@ static void __not_in_flash_func(swdptap_seq_out_parity)(const uint32_t tms_state
 
     if (olddir == SWDIO_STATUS_FLOAT)
     {
-        pio_sm_put_blocking(TARGET_NON_ISO_PIO, 0, SWD_FLOAT_TO_DRIVE_POS);
+        TARGET_NON_ISO_PIO->txf[0] = SWD_FLOAT_TO_DRIVE_POS;
         olddir = SWDIO_STATUS_DRIVE;
     }
     else
     {
-        pio_sm_put_blocking(TARGET_NON_ISO_PIO, 0, SWD_SEQ_OUT_POS);
+        TARGET_NON_ISO_PIO->txf[0] = SWD_SEQ_OUT_POS;
     }
 
-    pio_sm_put_blocking(TARGET_NON_ISO_PIO, 0, clock_cycles);
+    TARGET_NON_ISO_PIO->txf[0] = clock_cycles;
 
     if (clock_cycles <= 31)
     {
         uint32_t value = tms_states;
         value |= (parity ? (1ul << clock_cycles) : 0);
-        pio_sm_put_blocking(TARGET_NON_ISO_PIO, 0, value);
+        TARGET_NON_ISO_PIO->txf[0] = value;
 
         if (clock_cycles == 31)
         {
-            pio_sm_put_blocking(TARGET_NON_ISO_PIO, 0, 0);
+            TARGET_NON_ISO_PIO->txf[0] = 0;
         }
     }
     else
     {
-        pio_sm_put_blocking(TARGET_NON_ISO_PIO, 0, tms_states);
-        pio_sm_put_blocking(TARGET_NON_ISO_PIO, 0, parity);
+        TARGET_NON_ISO_PIO->txf[0] = tms_states;
+        TARGET_NON_ISO_PIO->txf[0] = parity;
     }
 
     TARGET_NON_ISO_PIO->fdebug = (1ul << 24);

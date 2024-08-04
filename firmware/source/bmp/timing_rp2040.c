@@ -124,8 +124,8 @@ void platform_max_frequency_set(uint32_t freq)
     const uint32_t sys_freq = clock_get_hz(clk_sys);
     const uint32_t interface_freq = sys_freq / 2;
 
-    const uint32_t min_freq = (interface_freq / (UINT16_MAX + 1));
-    const uint32_t max_freq = (interface_freq);
+    const uint32_t min_freq = (interface_freq >> 16); /* Max divider = 65536 */
+    const uint32_t max_freq = interface_freq;
 
     if (freq < min_freq)
     {
@@ -136,7 +136,15 @@ void platform_max_frequency_set(uint32_t freq)
         freq = max_freq;
     }
 
-    pio_sm_set_clkdiv(TARGET_NON_ISO_PIO, 0, ((float)interface_freq)/((float)freq));
+    uint32_t clkdiv_int = (interface_freq / freq);
+    uint32_t clkdiv_fraq = ((((uint64_t)interface_freq) << 8) / freq) & 0xFF;
+
+    if (clkdiv_int >= (((uint32_t)UINT16_MAX) + 1))
+    {
+        clkdiv_int = 0;
+        clkdiv_fraq = 0;
+    }
+    pio_sm_set_clkdiv_int_frac(TARGET_NON_ISO_PIO, 0, clkdiv_int, clkdiv_fraq);
     pio_sm_clkdiv_restart(TARGET_NON_ISO_PIO, 0);
 
     target_interface_frequency = freq;
@@ -152,11 +160,11 @@ uint32_t platform_max_frequency_get(void)
 
     if (clkdiv_int == 0)
     {
-        clkdiv_int = UINT16_MAX + 1;
+        clkdiv_int = ((uint32_t)UINT16_MAX) + 1;
         clkdiv_frac = 0;
     }
 
-    target_interface_frequency = (uint32_t)((float)(interface_freq) / (((float)clkdiv_int) + (((float)clkdiv_frac) / 256)));
+    target_interface_frequency = (uint32_t)(((((uint64_t)interface_freq) << 8) / ((clkdiv_int << 8) + clkdiv_frac)) & 0xFFFFFFFF);
 
     return target_interface_frequency;
 }

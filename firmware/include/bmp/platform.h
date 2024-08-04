@@ -23,6 +23,7 @@
 #include "hardware/dma.h"
 #include "pico/unique_id.h"
 #include "timing_rp2040.h"
+#include "hardware/pio.h"
 #if ENABLE_DEBUG == 1
 #include "SEGGER_RTT.h"
 #endif
