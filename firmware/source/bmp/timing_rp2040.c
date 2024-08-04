@@ -26,18 +26,23 @@
 
 #include "pico/time.h"
 
+#include "hardware/pio.h"
+#include "hardware/clocks.h"
+
 #include "FreeRTOS.h"
 #include "timers.h"
 
 bool running_status = false;
 static volatile uint32_t time_ms = 0;
-uint32_t target_clk_divider = 20;
+uint32_t target_clk_divider = 2;
 
 static size_t morse_tick = 0;
 #if defined(PLATFORM_HAS_POWER_SWITCH)
 static uint8_t monitor_ticks = 0;
 static uint8_t monitor_error_count = 0;
 #endif
+
+uint32_t target_interface_frequency = PLATFORM_DEFAULT_FREQUENCY;
 
 static void __not_in_flash_func(sys_timer_callback)(TimerHandle_t xTimer)
 {
@@ -116,10 +121,42 @@ uint32_t platform_time_ms(void)
 
 void platform_max_frequency_set(uint32_t freq)
 {
-    (void)freq;
+    const uint32_t sys_freq = clock_get_hz(clk_sys);
+    const uint32_t interface_freq = sys_freq / 2;
+
+    const uint32_t min_freq = (interface_freq / (UINT16_MAX + 1));
+    const uint32_t max_freq = (interface_freq);
+
+    if (freq < min_freq)
+    {
+        freq = min_freq;
+    }
+    else if (freq > max_freq)
+    {
+        freq = max_freq;
+    }
+
+    pio_sm_set_clkdiv(TARGET_NON_ISO_PIO, 0, ((float)interface_freq)/((float)freq));
+    pio_sm_clkdiv_restart(TARGET_NON_ISO_PIO, 0);
+
+    target_interface_frequency = freq;
 }
 
 uint32_t platform_max_frequency_get(void)
 {
-    return FREQ_FIXED;
+    const uint32_t sys_freq = clock_get_hz(clk_sys);
+    const uint32_t interface_freq = sys_freq / 2;
+
+    uint32_t clkdiv_int = (TARGET_NON_ISO_PIO->sm[0].clkdiv & PIO_SM0_CLKDIV_INT_BITS) >> PIO_SM0_CLKDIV_INT_LSB;
+    uint32_t clkdiv_frac = (TARGET_NON_ISO_PIO->sm[0].clkdiv & PIO_SM0_CLKDIV_FRAC_BITS) >> PIO_SM0_CLKDIV_FRAC_LSB;
+
+    if (clkdiv_int == 0)
+    {
+        clkdiv_int = UINT16_MAX + 1;
+        clkdiv_frac = 0;
+    }
+
+    target_interface_frequency = (uint32_t)((float)(interface_freq) / (((float)clkdiv_int) + (((float)clkdiv_frac) / 256)));
+
+    return target_interface_frequency;
 }

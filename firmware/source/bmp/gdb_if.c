@@ -36,7 +36,7 @@ static uint32_t out_ptr;
 static char buffer_out[64];
 static char buffer_in[64];
 
-void gdb_if_putchar(const char c, const int flush)
+void __not_in_flash_func(gdb_if_putchar)(const char c, const int flush)
 {
 	buffer_in[count_in++] = c;
 	if (flush || count_in == sizeof(buffer_in))
@@ -48,7 +48,13 @@ void gdb_if_putchar(const char c, const int flush)
 			count_in = 0;
 			return;
 		}
-		tud_cdc_n_write(USB_SERIAL_GDB, buffer_in, count_in);
+
+        while (tud_cdc_n_write_available(USB_SERIAL_GDB) < count_in);
+
+        if (tud_cdc_n_write(USB_SERIAL_GDB, buffer_in, count_in) != count_in)
+        {
+            vTaskDelay(1);
+        }
 
 		if (flush && (count_in < sizeof(buffer_in)))
 		{
@@ -59,7 +65,7 @@ void gdb_if_putchar(const char c, const int flush)
 	}
 }
 
-char gdb_if_getchar(void)
+char __not_in_flash_func(gdb_if_getchar)(void)
 {
 	while (tud_cdc_n_available(USB_SERIAL_GDB) == 0)
 	{
@@ -71,13 +77,15 @@ char gdb_if_getchar(void)
         while (usb_get_config() != 1)
             vTaskDelay(5);
 
-        vTaskDelay(1);
+        //vTaskDelay(1);
+
+        taskYIELD();
 	}
 
     return (char)tud_cdc_n_read_char(USB_SERIAL_GDB);
 }
 
-char gdb_if_getchar_to(const uint32_t timeout)
+char __not_in_flash_func(gdb_if_getchar_to)(const uint32_t timeout)
 {
 	platform_timeout_s receive_timeout;
 	platform_timeout_set(&receive_timeout, timeout);
@@ -93,7 +101,7 @@ char gdb_if_getchar_to(const uint32_t timeout)
         while (usb_get_config() != 1)
             vTaskDelay(5);
 
-        vTaskDelay(1);
+        //vTaskDelay(1);
 	}
 
     return (tud_cdc_n_available(USB_SERIAL_GDB) > 0) ? (char)tud_cdc_n_read_char(USB_SERIAL_GDB) : -1;

@@ -24,6 +24,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define PLATFORM_DEFAULT_FREQUENCY    (4000000UL)
+
 extern bool running_status;
 
 void platform_timing_init(void);

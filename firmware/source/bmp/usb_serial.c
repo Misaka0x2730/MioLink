@@ -53,8 +53,6 @@
 #include "tusb.h"
 #include "serialno.h"
 
-static bool gdb_serial_dtr = true;
-
 static void aux_serial_receive_isr(void);
 static void uart_dma_handler(void);
 
@@ -80,13 +78,14 @@ typedef struct usb_serial_thread_info_s
 	configSTACK_DEPTH_TYPE stack_size;
 	UBaseType_t priority;
 	uint8_t interface_number;
+    uint32_t notifyMask;
 } usb_serial_thread_info_t;
 
 
 static usb_serial_thread_info_t usb_serial_info[CFG_TUD_CDC] =
 {
-	{0, gdb_thread, "GDB", configMINIMAL_STACK_SIZE, PLATFORM_PRIORITY_NORMAL, 0},
-	{0, target_serial_thread, "Target", configMINIMAL_STACK_SIZE, PLATFORM_PRIORITY_NORMAL, 1}
+	{0, gdb_thread, "GDB", configMINIMAL_STACK_SIZE, PLATFORM_PRIORITY_NORMAL, 0, 0},
+	{0, target_serial_thread, "Target", configMINIMAL_STACK_SIZE, PLATFORM_PRIORITY_NORMAL, 1, 0x3F}
 };
 
 static int dma_tx_channel = -1;
@@ -98,7 +97,7 @@ uint16_t usb_get_config(void)
 
 void tud_cdc_rx_cb(uint8_t interface)
 {
-    if ((interface < CFG_TUD_CDC) && (usb_serial_info[interface].task != NULL))
+    if ((interface < CFG_TUD_CDC) && (usb_serial_info[interface].task != NULL) && (usb_serial_info[interface].notifyMask & USB_SERIAL_DATA_RX))
     {
         xTaskNotify(usb_serial_info[interface].task, USB_SERIAL_DATA_RX, eSetBits);
     }
@@ -109,7 +108,7 @@ void tud_cdc_line_state_cb(uint8_t interface, bool dtr, bool rts)
     (void) rts;
     (void) dtr;
 
-    if ((interface < CFG_TUD_CDC) && (usb_serial_info[interface].task != NULL))
+    if ((interface < CFG_TUD_CDC) && (usb_serial_info[interface].task != NULL) && (usb_serial_info[interface].notifyMask & USB_SERIAL_LINE_STATE_UPDATE))
     {
         xTaskNotify(usb_serial_info[interface].task, USB_SERIAL_LINE_STATE_UPDATE, eSetBits);
     }
@@ -117,7 +116,7 @@ void tud_cdc_line_state_cb(uint8_t interface, bool dtr, bool rts)
 
 void tud_cdc_line_coding_cb(uint8_t interface, cdc_line_coding_t const* p_line_coding)
 {
-    if ((interface < CFG_TUD_CDC) && (usb_serial_info[interface].task != NULL))
+    if ((interface < CFG_TUD_CDC) && (usb_serial_info[interface].task != NULL) && (usb_serial_info[interface].notifyMask & USB_SERIAL_LINE_CODING_UPDATE))
     {
         xTaskNotify(usb_serial_info[interface].task, USB_SERIAL_LINE_CODING_UPDATE, eSetBits);
     }
@@ -125,12 +124,12 @@ void tud_cdc_line_coding_cb(uint8_t interface, cdc_line_coding_t const* p_line_c
 
 bool gdb_serial_get_dtr(void)
 {
-    return gdb_serial_dtr;
+    return tud_cdc_n_get_line_state(0) & 0x01;
 }
 
 void usb_serial_init(void)
 {
-	for (uint16_t i = 0; i < CFG_TUD_CDC; i++)
+	/*for (uint16_t i = 0; i < CFG_TUD_CDC; i++)
 	{
 		BaseType_t status = xTaskCreate(usb_serial_info[i].thread,
 										usb_serial_info[i].name,
@@ -140,7 +139,7 @@ void usb_serial_init(void)
 										&(usb_serial_info[i].task));
 
         //vTaskCoreAffinitySet(usb_serial_info[i].task, 0x01);
-	}
+	}*/
 }
 
 void usb_task_init(void)
@@ -153,7 +152,7 @@ void usb_task_init(void)
                          PLATFORM_PRIORITY_HIGH,
                          &usb_task);
 
-    //vTaskCoreAffinitySet(usb_task, 0x01);
+    //vTaskCoreAffinitySet(usb_task, 0x02);
 }
 
 _Noreturn static void usb_task_thread(void *param)
@@ -186,7 +185,6 @@ _Noreturn static void gdb_thread(void* params)
 
 			if (notificationValue & USB_SERIAL_LINE_STATE_UPDATE)
             {
-				gdb_serial_dtr = (tud_cdc_n_get_line_state(interface) & 0x01);
             }
 
             if ((tud_cdc_n_connected(interface) == false) && (isConnected == true))
@@ -363,6 +361,8 @@ _Noreturn static void target_serial_thread(void* params)
 
 static void uart_dma_handler(void)
 {
+    traceISR_ENTER();
+
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
 	if (dma_tx_channel == -1)
@@ -381,6 +381,8 @@ static void uart_dma_handler(void)
 
 static void aux_serial_receive_isr(void)
 {
+    traceISR_ENTER();
+
 	uint32_t uart_int_status = UART_HW->mis;
 	uint32_t notify_bits = 0;
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
@@ -405,8 +407,11 @@ void debug_serial_send_stdout(const uint8_t *const data, const size_t len)
 {
 }
 
-#define USB_VID   (0x1209)
-#define USB_PID   (0x2730)
+//#define USB_VID   (0x1209)
+//#define USB_PID   (0x2730)
+
+#define USB_VID   (0x1d50)
+#define USB_PID   (0x6018)
 
 tusb_desc_device_t const desc_device =
 {

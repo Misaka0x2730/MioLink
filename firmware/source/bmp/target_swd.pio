@@ -1,0 +1,48 @@
+.program target_non_iso_swd
+.side_set 1 opt
+
+.wrap_target
+wait_for_command:
+    out pc, 32
+
+turnaround_in_to_out:
+    set pins, 1 side 1
+    set pindirs, 3 side 0
+
+seq_out:
+    out x, 32
+    seq_out_loop:
+        out pins, 1 side 0
+        jmp x-- seq_out_loop side 1
+
+    out null, 32 side 0
+    out pc, 32
+
+turnaround_out_to_in:
+    set pindirs, 1 side 1
+    set pins, 0 side 0
+
+seq_in:
+    out x, 32
+    seq_in_loop:
+        in pins, 1 side 0
+        jmp x-- seq_in_loop side 1
+
+    push side 0
+    out pc, 32
+
+turnaround_out_to_in_parity:
+    set pindirs, 1 side 1
+    set pins, 0 side 0
+
+seq_in_parity:
+    out x, 32
+    seq_in_parity_loop:
+        in pins, 1 side 0
+        jmp x-- seq_in_parity_loop side 1
+
+    push side 0
+    set pins, 1 side 1
+    set pindirs, 3 side 0
+
+    .wrap

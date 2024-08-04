@@ -52,7 +52,7 @@ static void bmp_poll_loop(void)
 	if (pbuf[0] != '\x04' || cur_target)
 		SET_IDLE_STATE(false);
 	gdb_main(pbuf, GDB_PACKET_BUFFER_SIZE, size);
-    vTaskDelay(5);
+    //vTaskDelay(5);
 }
 
 _Noreturn static void main_thread(void* params)
@@ -74,25 +74,30 @@ _Noreturn static void main_thread(void* params)
 
 void main(void)
 {
+    traceSTART();
+
+    //SEGGER_RTT_Init();
     platform_init();
     platform_timing_init();
     multiplexer_task_init();
     usb_task_init();
     usb_serial_init();
 
-    multicore_reset_core1();
+
+
+    //multicore_reset_core1();
 
     //portENABLE_INTERRUPTS();
 
     TaskHandle_t main_task;
     BaseType_t status = xTaskCreate(main_thread,
                                     "main",
-									128*4,
+									1024,
                                     NULL,
                                     PLATFORM_PRIORITY_NORMAL,
                                     &main_task);
 
-    //vTaskCoreAffinitySet(main_task, 0x01);
+    //vTaskCoreAffinitySet(main_task, 0x02);
 
     vTaskStartScheduler();
 

@@ -23,8 +23,12 @@
 #include "hardware/dma.h"
 #include "pico/unique_id.h"
 #include "timing_rp2040.h"
-
+#if ENABLE_DEBUG == 1
+#include "SEGGER_RTT.h"
+#endif
 #define PLATFORM_IDENT "(MioLink) "
+
+#define TARGET_NON_ISO_PIO (pio0)
 
 /* TODO: set correct firmware version */
 #define FIRMWARE_VERSION "1"
