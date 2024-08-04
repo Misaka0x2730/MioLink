@@ -63,13 +63,6 @@ static void usb_task_thread(void *param);
 static void gdb_thread(void* params);
 static void target_serial_thread(void* params);
 
-#define USB_SERIAL_DATA_RX                (0x01)
-#define USB_SERIAL_LINE_STATE_UPDATE      (0x02)
-#define USB_SERIAL_LINE_CODING_UPDATE     (0x04)
-#define USB_SERIAL_DATA_UART_RX_AVAILABLE (0x08)
-#define USB_SERIAL_DATA_UART_RX_FLUSH     (0x10)
-#define USB_SERIAL_DATA_UART_TX_COMPLETE  (0x20)
-
 typedef struct usb_serial_thread_info_s
 {
 	TaskHandle_t task;
@@ -93,25 +86,6 @@ static int dma_tx_channel = -1;
 uint16_t usb_get_config(void)
 {
     return tud_mounted() ? 1 : 0;
-}
-
-void tud_cdc_rx_cb(uint8_t interface)
-{
-    if ((interface < CFG_TUD_CDC) && (usb_serial_info[interface].task != NULL) && (usb_serial_info[interface].notifyMask & USB_SERIAL_DATA_RX))
-    {
-        xTaskNotify(usb_serial_info[interface].task, USB_SERIAL_DATA_RX, eSetBits);
-    }
-}
-
-void tud_cdc_line_state_cb(uint8_t interface, bool dtr, bool rts)
-{
-    (void) rts;
-    (void) dtr;
-
-    if ((interface < CFG_TUD_CDC) && (usb_serial_info[interface].task != NULL) && (usb_serial_info[interface].notifyMask & USB_SERIAL_LINE_STATE_UPDATE))
-    {
-        xTaskNotify(usb_serial_info[interface].task, USB_SERIAL_LINE_STATE_UPDATE, eSetBits);
-    }
 }
 
 void tud_cdc_line_coding_cb(uint8_t interface, cdc_line_coding_t const* p_line_coding)

@@ -58,6 +58,9 @@ target_sources(MioLink PUBLIC thirdParty/blackmagic/src/platforms/common/jtagtap
 target_sources(MioLink PUBLIC source/bmp/crc32.c)
 #target_sources(MioLink PUBLIC thirdParty/blackmagic/src/crc32.c)
 
+target_sources(MioLink PUBLIC source/bmp/adiv5_swd.c)
+#target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/adiv5_swd.c)
+
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/morse.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/gdb_main.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/gdb_packet.c)
@@ -70,7 +73,6 @@ target_sources(MioLink PUBLIC thirdParty/blackmagic/src/timing.c)
 
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/adiv5.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/adiv5_jtag.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/adiv5_swd.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/at32f43x.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/ch32f1.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/ch579.c)

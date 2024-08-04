@@ -291,3 +291,134 @@ static void __not_in_flash_func(swdptap_seq_out_parity)(const uint32_t tms_state
 
     hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_TX_BITS);
 }
+
+uint8_t __not_in_flash_func(rp2040_pio_adiv5_swd_write_no_check)(const uint8_t request, const uint32_t data)
+{
+    const bool parity = calculate_odd_parity(data);
+
+    hw_set_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+    hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+
+    if (olddir == SWDIO_STATUS_FLOAT)
+    {
+        TARGET_NON_ISO_PIO->txf[0] = SWD_FLOAT_TO_DRIVE_POS;
+        olddir = SWDIO_STATUS_DRIVE;
+    }
+    else
+    {
+        TARGET_NON_ISO_PIO->txf[0] = SWD_SEQ_OUT_POS;
+    }
+
+    TARGET_NON_ISO_PIO->txf[0] = 7;
+    TARGET_NON_ISO_PIO->txf[0] = request;
+    TARGET_NON_ISO_PIO->txf[0] = SWD_DRIVE_TO_FLOAT_POS;
+
+    while((TARGET_NON_ISO_PIO->fstat & (1u << PIO_FSTAT_TXFULL_LSB)) != 0);
+    TARGET_NON_ISO_PIO->txf[0] = 2;
+
+    while((TARGET_NON_ISO_PIO->fstat & (1u << PIO_FSTAT_TXFULL_LSB)) != 0);
+    TARGET_NON_ISO_PIO->txf[0] = SWD_FLOAT_TO_DRIVE_POS;
+
+    while((TARGET_NON_ISO_PIO->fstat & (1u << PIO_FSTAT_TXFULL_LSB)) != 0);
+    TARGET_NON_ISO_PIO->txf[0] = 40;
+
+    while((TARGET_NON_ISO_PIO->fstat & (1u << PIO_FSTAT_TXFULL_LSB)) != 0);
+    TARGET_NON_ISO_PIO->txf[0] = data;
+
+    while((TARGET_NON_ISO_PIO->fstat & (1u << PIO_FSTAT_TXFULL_LSB)) != 0);
+    TARGET_NON_ISO_PIO->txf[0] = (parity ? (1 << 0) : 0);
+
+    TARGET_NON_ISO_PIO->fdebug = (1ul << 24);
+    //while((TARGET_NON_ISO_PIO->irq & (1 << 0)) == 0);
+    while((TARGET_NON_ISO_PIO->fdebug & (1 << 24)) == 0);
+
+    const uint8_t ack = (uint8_t)((TARGET_NON_ISO_PIO->rxf[0] >> 29) & 0x7);
+
+    hw_set_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+    hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+
+    return ack;
+}
+
+uint8_t __not_in_flash_func(rp2040_pio_adiv5_swd_raw_access_req)(const uint8_t request)
+{
+    hw_set_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+    hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+
+    if (olddir == SWDIO_STATUS_FLOAT)
+    {
+        TARGET_NON_ISO_PIO->txf[0] = SWD_FLOAT_TO_DRIVE_POS;
+        olddir = SWDIO_STATUS_DRIVE;
+    }
+    else
+    {
+        TARGET_NON_ISO_PIO->txf[0] = SWD_SEQ_OUT_POS;
+    }
+
+    TARGET_NON_ISO_PIO->txf[0] = 7;
+    TARGET_NON_ISO_PIO->txf[0] = request;
+    TARGET_NON_ISO_PIO->txf[0] = SWD_DRIVE_TO_FLOAT_POS;
+
+    while((TARGET_NON_ISO_PIO->fstat & (1u << PIO_FSTAT_TXFULL_LSB)) != 0);
+    TARGET_NON_ISO_PIO->txf[0] = 2;
+
+    olddir = SWDIO_STATUS_FLOAT;
+
+    while((TARGET_NON_ISO_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB))) != 0);
+    const uint8_t ack = (uint8_t)((TARGET_NON_ISO_PIO->rxf[0] >> 29) & 0x7);
+
+    //hw_set_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+    //hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+
+    return ack;
+}
+
+bool __not_in_flash_func(rp2040_pio_adiv5_swd_raw_access_data)(const uint32_t data_out, uint32_t *data_in, const uint8_t rnw)
+{
+    uint32_t parity = false;
+
+    if (rnw)
+    {
+        hw_set_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+        hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+
+        TARGET_NON_ISO_PIO->txf[0] = SWD_SEQ_IN_PARITY_POS;
+        TARGET_NON_ISO_PIO->txf[0] = 32;
+        TARGET_NON_ISO_PIO->txf[0] = SWD_SEQ_OUT_POS;
+        TARGET_NON_ISO_PIO->txf[0] = 7;
+
+        while((TARGET_NON_ISO_PIO->fstat & (1u << PIO_FSTAT_TXFULL_LSB)) != 0);
+        TARGET_NON_ISO_PIO->txf[0] = 0;
+
+        while(((TARGET_NON_ISO_PIO->flevel & PIO_FLEVEL_RX0_BITS) >> PIO_FLEVEL_RX0_LSB) < 2);
+        //while((TARGET_NON_ISO_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB))) != 0);
+        *data_in = TARGET_NON_ISO_PIO->rxf[0];
+
+        //while((TARGET_NON_ISO_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB))) != 0);
+        parity = (TARGET_NON_ISO_PIO->rxf[0] != 0) == calculate_odd_parity(*data_in);
+
+        TARGET_NON_ISO_PIO->fdebug = (1ul << 24);
+        while((TARGET_NON_ISO_PIO->fdebug & (1 << 24)) == 0);
+    }
+    else
+    {
+        const bool parity = calculate_odd_parity(data_out);
+
+        hw_set_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_TX_BITS);
+
+        TARGET_NON_ISO_PIO->txf[0] = SWD_FLOAT_TO_DRIVE_POS;
+        TARGET_NON_ISO_PIO->txf[0] = 40;
+        TARGET_NON_ISO_PIO->txf[0] = data_out;
+        TARGET_NON_ISO_PIO->txf[0] = (parity ? (1 << 0) : 0);
+
+        TARGET_NON_ISO_PIO->fdebug = (1ul << 24);
+        //while((TARGET_NON_ISO_PIO->irq & (1 << 0)) == 0);
+        while((TARGET_NON_ISO_PIO->fdebug & (1 << 24)) == 0);
+
+        hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_TX_BITS);
+    }
+
+    olddir = SWDIO_STATUS_DRIVE;
+
+    return parity;
+}

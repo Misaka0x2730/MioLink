@@ -33,6 +33,13 @@ typedef enum usb_serial_interface_e
 	USB_SERIAL_NUM = CFG_TUD_CDC
 } usb_serial_interface_t;
 
+#define USB_SERIAL_DATA_RX                (0x01)
+#define USB_SERIAL_LINE_STATE_UPDATE      (0x02)
+#define USB_SERIAL_LINE_CODING_UPDATE     (0x04)
+#define USB_SERIAL_DATA_UART_RX_AVAILABLE (0x08)
+#define USB_SERIAL_DATA_UART_RX_FLUSH     (0x10)
+#define USB_SERIAL_DATA_UART_TX_COMPLETE  (0x20)
+
 uint16_t usb_get_config(void);
 void usb_task_init(void);
 bool gdb_serial_get_dtr(void);

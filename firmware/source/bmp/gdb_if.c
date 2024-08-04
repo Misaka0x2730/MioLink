@@ -67,7 +67,35 @@ void __not_in_flash_func(gdb_if_putchar)(const char c, const int flush)
 
 char __not_in_flash_func(gdb_if_getchar)(void)
 {
-	while (tud_cdc_n_available(USB_SERIAL_GDB) == 0)
+    uint32_t notificationValue = 0;
+
+    do
+    {
+        if (!gdb_serial_get_dtr())
+        {
+            return '\x04';
+        }
+
+        if (usb_get_config() != 1)
+        {
+            continue;
+        }
+
+        if (tud_cdc_n_available(USB_SERIAL_GDB) > 0)
+        {
+            return (char)tud_cdc_n_read_char(USB_SERIAL_GDB);
+        }
+
+        if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(portMAX_DELAY)) != pdFALSE)
+        {
+            if (notificationValue & USB_SERIAL_DATA_RX)
+            {
+                return (char)tud_cdc_n_read_char(USB_SERIAL_GDB);
+            }
+        }
+    } while (1);
+
+	/*while (tud_cdc_n_available(USB_SERIAL_GDB) == 0)
 	{
 		if (!gdb_serial_get_dtr())
 		{
@@ -82,15 +110,41 @@ char __not_in_flash_func(gdb_if_getchar)(void)
         taskYIELD();
 	}
 
-    return (char)tud_cdc_n_read_char(USB_SERIAL_GDB);
+    return (char)tud_cdc_n_read_char(USB_SERIAL_GDB);*/
 }
 
 char __not_in_flash_func(gdb_if_getchar_to)(const uint32_t timeout)
 {
-	platform_timeout_s receive_timeout;
+    uint32_t notificationValue = 0;
+
+    if (!gdb_serial_get_dtr())
+    {
+        return '\x04';
+    }
+
+    if (usb_get_config() != 1)
+    {
+        return -1;
+    }
+
+    if (tud_cdc_n_available(USB_SERIAL_GDB) > 0)
+    {
+        return (char)tud_cdc_n_read_char(USB_SERIAL_GDB);
+    }
+
+    if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(timeout)) != pdFALSE)
+    {
+        if (notificationValue & USB_SERIAL_DATA_RX)
+        {
+            return (char)tud_cdc_n_read_char(USB_SERIAL_GDB);
+        }
+    }
+
+    return -1;
+
+	/*platform_timeout_s receive_timeout;
 	platform_timeout_set(&receive_timeout, timeout);
 
-	/* Wait while we need more data or until the timeout expires */
 	while ((tud_cdc_n_available(USB_SERIAL_GDB) == 0) && !platform_timeout_is_expired(&receive_timeout))
 	{
         if (!gdb_serial_get_dtr())
@@ -104,5 +158,5 @@ char __not_in_flash_func(gdb_if_getchar_to)(const uint32_t timeout)
         //vTaskDelay(1);
 	}
 
-    return (tud_cdc_n_available(USB_SERIAL_GDB) > 0) ? (char)tud_cdc_n_read_char(USB_SERIAL_GDB) : -1;
+    return (tud_cdc_n_available(USB_SERIAL_GDB) > 0) ? (char)tud_cdc_n_read_char(USB_SERIAL_GDB) : -1;*/
 }

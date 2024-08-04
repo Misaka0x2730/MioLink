@@ -19,6 +19,8 @@
 
 static char BMD_ALIGN_DEF(8) pbuf[GDB_PACKET_BUFFER_SIZE + 1U];
 
+TaskHandle_t gdb_task;
+
 char *gdb_packet_buffer()
 {
     return pbuf;
@@ -55,6 +57,25 @@ static void bmp_poll_loop(void)
     //vTaskDelay(5);
 }
 
+void tud_cdc_rx_cb(uint8_t interface)
+{
+    if (interface == USB_SERIAL_GDB)
+    {
+        xTaskNotify(gdb_task, USB_SERIAL_DATA_RX, eSetBits);
+    }
+}
+
+void tud_cdc_line_state_cb(uint8_t interface, bool dtr, bool rts)
+{
+    (void) rts;
+    (void) dtr;
+
+    if (interface == USB_SERIAL_GDB)
+    {
+        xTaskNotify(gdb_task, USB_SERIAL_LINE_STATE_UPDATE, eSetBits);
+    }
+}
+
 _Noreturn static void main_thread(void* params)
 {
     while (1)
@@ -89,13 +110,12 @@ void main(void)
 
     //portENABLE_INTERRUPTS();
 
-    TaskHandle_t main_task;
     BaseType_t status = xTaskCreate(main_thread,
                                     "main",
 									1024,
                                     NULL,
                                     PLATFORM_PRIORITY_NORMAL,
-                                    &main_task);
+                                    &gdb_task);
 
     //vTaskCoreAffinitySet(main_task, 0x02);
 
