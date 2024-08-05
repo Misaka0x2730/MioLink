@@ -29,7 +29,13 @@
 #endif
 #define PLATFORM_IDENT "(MioLink) "
 
-#define TARGET_NON_ISO_PIO (pio0)
+#define TARGET_SWD_PIO    (pio0)
+#define TARGET_SWD_PIO_SM (0)
+
+#define TARGET_SWD_IDLE_CYCLES (8)
+#if (TARGET_SWD_IDLE_CYCLES <= 0)
+#error "TARGET_SWD_IDLE_CYCLES should be at least 1"
+#endif
 
 /* TODO: set correct firmware version */
 #define FIRMWARE_VERSION "1"

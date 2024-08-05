@@ -144,8 +144,8 @@ void platform_max_frequency_set(uint32_t freq)
         clkdiv_int = 0;
         clkdiv_fraq = 0;
     }
-    pio_sm_set_clkdiv_int_frac(TARGET_NON_ISO_PIO, 0, clkdiv_int, clkdiv_fraq);
-    pio_sm_clkdiv_restart(TARGET_NON_ISO_PIO, 0);
+    pio_sm_set_clkdiv_int_frac(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, clkdiv_int, clkdiv_fraq);
+    pio_sm_clkdiv_restart(TARGET_SWD_PIO, TARGET_SWD_PIO_SM);
 
     target_interface_frequency = freq;
 }
@@ -155,8 +155,8 @@ uint32_t platform_max_frequency_get(void)
     const uint32_t sys_freq = clock_get_hz(clk_sys);
     const uint32_t interface_freq = sys_freq / 2;
 
-    uint32_t clkdiv_int = (TARGET_NON_ISO_PIO->sm[0].clkdiv & PIO_SM0_CLKDIV_INT_BITS) >> PIO_SM0_CLKDIV_INT_LSB;
-    uint32_t clkdiv_frac = (TARGET_NON_ISO_PIO->sm[0].clkdiv & PIO_SM0_CLKDIV_FRAC_BITS) >> PIO_SM0_CLKDIV_FRAC_LSB;
+    uint32_t clkdiv_int = (TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].clkdiv & PIO_SM0_CLKDIV_INT_BITS) >> PIO_SM0_CLKDIV_INT_LSB;
+    uint32_t clkdiv_frac = (TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].clkdiv & PIO_SM0_CLKDIV_FRAC_BITS) >> PIO_SM0_CLKDIV_FRAC_LSB;
 
     if (clkdiv_int == 0)
     {

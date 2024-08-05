@@ -22,7 +22,6 @@
 
 #include "general.h"
 #include "platform.h"
-#include "timing.h"
 #include "swd.h"
 #include "maths_utils.h"
 
@@ -43,31 +42,24 @@ typedef enum swdio_status_e {
 
 swd_proc_s swd_proc;
 
-static void swdptap_turnaround(swdio_status_t dir) __attribute__((optimize(3)));
+static inline void swdtap_clear_fifos(void) __attribute__((always_inline));
+static inline bool swdtap_check_if_not_stalled(void) __attribute__((always_inline));
+static inline void swdtap_wait_for_tx_stall(void) __attribute__((always_inline));
+static inline void swdtap_wait_for_rx_level(const uint8_t level) __attribute__((always_inline));
+static inline void swdtap_set_push_pull_thresholds(const uint8_t push, const uint8_t pull) __attribute__((always_inline));
 static uint32_t swdptap_seq_in(size_t clock_cycles) __attribute__((optimize(3)));
 static bool swdptap_seq_in_parity(uint32_t *ret, size_t clock_cycles) __attribute__((optimize(3)));
 static void swdptap_seq_out(uint32_t tms_states, size_t clock_cycles) __attribute__((optimize(3)));
 static void swdptap_seq_out_parity(uint32_t tms_states, size_t clock_cycles) __attribute__((optimize(3)));
 
-/*
- * Overall strategy for timing consistency:
- *
- * - Each primitive ends with a falling clock edge
- * - Output is driven after the falling clock edge
- * - Input is read immediately before the rising clock edge
- * - Each primitive assumes it was immediately preceded by a falling clock edge
- *
- * This increases the chances of meeting setup and hold times when the target
- * connection is lower bandwidth (with adequately slower clocks configured).
- */
-
-#define SWD_START_PROG_POS            (0)
-#define SWD_FLOAT_TO_DRIVE_POS        (1)
-#define SWD_SEQ_OUT_POS               (3)
-#define SWD_DRIVE_TO_FLOAT_POS        (8)
-#define SWD_SEQ_IN_POS                (10)
-#define SWD_DRIVE_TO_FLOAT_PARITY_POS (15)
-#define SWD_SEQ_IN_PARITY_POS         (17)
+#define SWD_START_PROGRAM_POS                  (0)
+#define SWD_SEQ_OUT_TURNAROUND_IN_TO_OUT_POS   (1)
+#define SWD_SEQ_OUT_POS                        (3)
+#define SWD_SEQ_IN_TURNAROUND_OUT_TO_IN_POS    (8)
+#define SWD_SEQ_IN_POS                         (10)
+#define SWD_ADIV5_REQ_TURNAROUND_IN_TO_OUT_POS (15)
+#define SWD_ADIV5_REQ_POS                      (17)
+#define SWD_TURNAROUND_IN_TO_OUT_POS           (26)
 
 static swdio_status_t olddir = SWDIO_STATUS_FLOAT;
 
@@ -79,17 +71,19 @@ void swdptap_init(void)
     gpio_init(TARGET_TCK_PIN);
     gpio_init(TARGET_TMS_PIN);
 
-    pio_gpio_init(TARGET_NON_ISO_PIO, TARGET_TMS_DIR_PIN);
-    pio_gpio_init(TARGET_NON_ISO_PIO, TARGET_TCK_PIN);
-    pio_gpio_init(TARGET_NON_ISO_PIO, TARGET_TMS_PIN);
+    gpio_set_pulls(TARGET_TMS_PIN, true, false);
 
-	pio_sm_set_enabled(TARGET_NON_ISO_PIO, 0, false);
-	pio_clear_instruction_memory(TARGET_NON_ISO_PIO);
+    pio_gpio_init(TARGET_SWD_PIO, TARGET_TMS_DIR_PIN);
+    pio_gpio_init(TARGET_SWD_PIO, TARGET_TCK_PIN);
+    pio_gpio_init(TARGET_SWD_PIO, TARGET_TMS_PIN);
 
-    pio_sm_set_pindirs_with_mask(TARGET_NON_ISO_PIO, 0, (1 << TARGET_TMS_DIR_PIN) | (1 << TARGET_TCK_PIN), (1 << TARGET_TMS_DIR_PIN) | (1 << TARGET_TCK_PIN) | (1 << TARGET_TMS_PIN));
-    pio_sm_set_pins_with_mask(TARGET_NON_ISO_PIO, 0, 0, (1 << TARGET_TMS_DIR_PIN) | (1 << TARGET_TCK_PIN) | (1 << TARGET_TMS_PIN));
+	pio_sm_set_enabled(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, false);
+	pio_clear_instruction_memory(TARGET_SWD_PIO);
 
-    pio_add_program_at_offset(TARGET_NON_ISO_PIO, &target_non_iso_swd_program, 0);
+    pio_sm_set_pindirs_with_mask(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, (1 << TARGET_TMS_DIR_PIN) | (1 << TARGET_TCK_PIN), (1 << TARGET_TMS_DIR_PIN) | (1 << TARGET_TCK_PIN) | (1 << TARGET_TMS_PIN));
+    pio_sm_set_pins_with_mask(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, 0, (1 << TARGET_TMS_DIR_PIN) | (1 << TARGET_TCK_PIN) | (1 << TARGET_TMS_PIN));
+
+    pio_add_program_at_offset(TARGET_SWD_PIO, &target_non_iso_swd_program, 0);
     pio_sm_config prog_config = target_non_iso_swd_program_get_default_config(0);
     sm_config_set_out_pins(&prog_config, TARGET_TMS_PIN, 1);
     sm_config_set_in_pins(&prog_config, TARGET_TMS_PIN);
@@ -98,10 +92,10 @@ void swdptap_init(void)
     sm_config_set_out_shift(&prog_config, true, true, 0);
     sm_config_set_in_shift(&prog_config, true, true, 0);
 
-    TARGET_NON_ISO_PIO->input_sync_bypass |= (1u << TARGET_TMS_PIN);
+    TARGET_SWD_PIO->input_sync_bypass |= (1u << TARGET_TMS_PIN);
 
-    pio_sm_init(TARGET_NON_ISO_PIO, 0, 0, &prog_config);
-    pio_sm_set_enabled(TARGET_NON_ISO_PIO, 0, true);
+    pio_sm_init(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, 0, &prog_config);
+    pio_sm_set_enabled(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, true);
 
     platform_max_frequency_set(target_interface_frequency);
 
@@ -111,265 +105,184 @@ void swdptap_init(void)
 	swd_proc.seq_out_parity = swdptap_seq_out_parity;
 }
 
-/*static void swdptap_turnaround(const swdio_status_t dir)
+static void swdtap_clear_fifos(void)
 {
-	if (dir == olddir)
-		return;
-	olddir = dir;
+    hw_xor_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+    hw_xor_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+}
 
-#ifdef DEBUG_SWD_BITS
-	DEBUG_INFO("%s", dir ? "\n-> " : "\n<- ");
-#endif
+static bool swdtap_check_if_not_stalled(void)
+{
+    TARGET_SWD_PIO->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM));
+    return ((TARGET_SWD_PIO->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM))) == 0);
+}
 
-    pio_sm_clear_fifos(TARGET_NON_ISO_PIO, 0);
-    TARGET_NON_ISO_PIO->irq |= (1 << 0);
+static void swdtap_wait_for_tx_stall(void)
+{
+    TARGET_SWD_PIO->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM));
+    while((TARGET_SWD_PIO->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM))) == 0);
+}
 
-	if (dir == SWDIO_STATUS_FLOAT)
+static void swdtap_wait_for_rx_level(const uint8_t level)
+{
+    if ((level > 0) && (level <= 8))
     {
-        pio_sm_put_blocking(TARGET_NON_ISO_PIO, 0, SWD_DRIVE_TO_FLOAT_POS);
-        pio_sm_put_blocking(TARGET_NON_ISO_PIO, 0, SWD_START_PROG_POS);
-	}
-    else
-    {
-        pio_sm_put_blocking(TARGET_NON_ISO_PIO, 0, SWD_FLOAT_TO_DRIVE_FINAL_POS);
+        while (((TARGET_SWD_PIO->flevel & PIO_FLEVEL_RX0_BITS) >> PIO_FLEVEL_RX0_LSB) < level);
     }
-    while((TARGET_NON_ISO_PIO->irq & (1 << 0)) == 0);
-}*/
+}
+
+static void swdtap_set_push_pull_thresholds(const uint8_t push, const uint8_t pull)
+{
+    hw_write_masked(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl,
+                    ((uint32_t)(push) << PIO_SM0_SHIFTCTRL_PUSH_THRESH_LSB) |
+                    ((uint32_t)(pull) << PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB),
+                    PIO_SM0_SHIFTCTRL_PUSH_THRESH_BITS | PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS);
+}
 
 static uint32_t __not_in_flash_func(swdptap_seq_in)(size_t clock_cycles)
 {
-    hw_xor_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_xor_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-
-    //TARGET_NON_ISO_PIO->irq |= (1 << 0);
-
     if (olddir == SWDIO_STATUS_DRIVE)
     {
-        TARGET_NON_ISO_PIO->txf[0] = SWD_DRIVE_TO_FLOAT_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_SEQ_IN_TURNAROUND_OUT_TO_IN_POS;
         olddir = SWDIO_STATUS_FLOAT;
     }
     else
     {
-        TARGET_NON_ISO_PIO->txf[0] = SWD_SEQ_IN_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_SEQ_IN_POS;
     }
 
-    TARGET_NON_ISO_PIO->txf[0] = clock_cycles - 1;
-    TARGET_NON_ISO_PIO->txf[0] = SWD_START_PROG_POS;
-    //TARGET_NON_ISO_PIO->fdebug = (1ul << 24);
-    //while((TARGET_NON_ISO_PIO->fdebug & (1 << 24)) == 0);
-    //while((TARGET_NON_ISO_PIO->irq & (1 << 0)) == 0);
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = clock_cycles - 1;
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_START_PROGRAM_POS;
 
-    while((TARGET_NON_ISO_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB))) != 0);
-    uint32_t value = TARGET_NON_ISO_PIO->rxf[0];
-    value >>= (32U - clock_cycles);
+    swdtap_wait_for_rx_level(1);
+    const uint32_t value = (TARGET_SWD_PIO->rxf[TARGET_SWD_PIO_SM] >> (32U - clock_cycles));
+
+    swdtap_wait_for_tx_stall();
+    swdtap_clear_fifos();
 
     return value;
 }
 
 static bool __not_in_flash_func(swdptap_seq_in_parity)(uint32_t *ret, size_t clock_cycles)
 {
-    hw_set_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-
-    //TARGET_NON_ISO_PIO->irq |= (1 << 0);
-
     if (olddir == SWDIO_STATUS_DRIVE)
     {
-        TARGET_NON_ISO_PIO->txf[0] = SWD_DRIVE_TO_FLOAT_PARITY_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_SEQ_IN_TURNAROUND_OUT_TO_IN_POS;
         olddir = SWDIO_STATUS_FLOAT;
     }
     else
     {
-        TARGET_NON_ISO_PIO->txf[0] = SWD_SEQ_IN_PARITY_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_SEQ_IN_POS;
     }
 
-    TARGET_NON_ISO_PIO->txf[0] = clock_cycles;
-    //while((TARGET_NON_ISO_PIO->irq & (1 << 0)) == 0);
-    //TARGET_NON_ISO_PIO->fdebug = (1ul << 24);
-    //while((TARGET_NON_ISO_PIO->fdebug & (1 << 24)) == 0);
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = clock_cycles;
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_TURNAROUND_IN_TO_OUT_POS;
 
-    olddir = SWDIO_STATUS_DRIVE;
+    swdtap_wait_for_rx_level(1);
 
-    while((TARGET_NON_ISO_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB))) != 0);
-    uint32_t value = TARGET_NON_ISO_PIO->rxf[0];
-    value >>= (32U - clock_cycles);
+    const uint32_t value = (TARGET_SWD_PIO->rxf[TARGET_SWD_PIO_SM] >> (32U - clock_cycles));
 
     bool bit = false;
     if (clock_cycles == 32)
     {
-        while((TARGET_NON_ISO_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB))) != 0);
-        bit = (TARGET_NON_ISO_PIO->rxf[0] != 0);
+        swdtap_wait_for_rx_level(1);
+        bit = (TARGET_SWD_PIO->rxf[TARGET_SWD_PIO_SM] != 0);
     }
     else
     {
-        bit = ((value & (1ul << clock_cycles)) != 0);
+        bit = ((value & (1u << clock_cycles)) != 0);
     }
+
+    olddir = SWDIO_STATUS_DRIVE;
+    swdtap_wait_for_tx_stall();
+    swdtap_clear_fifos();
 
     const bool parity = calculate_odd_parity(value);
     *ret = value;
     return parity == bit;
-
-	/*const uint32_t result = swdptap_seq_in(clock_cycles);
-	const bool bit = swdptap_seq_in(1);
-
-	swdptap_turnaround(SWDIO_STATUS_DRIVE);
-
-	const bool parity = calculate_odd_parity(result);
-	*ret = result;
-	return parity == bit;*/
 }
 
 static void __not_in_flash_func(swdptap_seq_out)(const uint32_t tms_states, const size_t clock_cycles)
 {
-    hw_set_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_TX_BITS);
-    //TARGET_NON_ISO_PIO->irq |= (1 << 0);
-
     if (olddir == SWDIO_STATUS_FLOAT)
     {
-        TARGET_NON_ISO_PIO->txf[0] = SWD_FLOAT_TO_DRIVE_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_SEQ_OUT_TURNAROUND_IN_TO_OUT_POS;
         olddir = SWDIO_STATUS_DRIVE;
     }
     else
     {
-        TARGET_NON_ISO_PIO->txf[0] = SWD_SEQ_OUT_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_SEQ_OUT_POS;
     }
 
-    TARGET_NON_ISO_PIO->txf[0] = clock_cycles - 1;
-    TARGET_NON_ISO_PIO->txf[0] = tms_states;
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = clock_cycles - 1;
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = tms_states;
+
     if (clock_cycles == 32)
     {
-        TARGET_NON_ISO_PIO->txf[0] = 0;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
     }
-    TARGET_NON_ISO_PIO->fdebug = (1ul << 24);
-    //while((TARGET_NON_ISO_PIO->irq & (1 << 0)) == 0);
-    while((TARGET_NON_ISO_PIO->fdebug & (1 << 24)) == 0);
 
-    hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_TX_BITS);
+    swdtap_wait_for_tx_stall();
 }
 
 static void __not_in_flash_func(swdptap_seq_out_parity)(const uint32_t tms_states, const size_t clock_cycles)
 {
     const bool parity = calculate_odd_parity(tms_states);
 
-    hw_set_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_TX_BITS);
-    //(&TARGET_NON_ISO_PIO->fdebug, (1ul << 24));
-
-    TARGET_NON_ISO_PIO->irq |= (1 << 0);
-
     if (olddir == SWDIO_STATUS_FLOAT)
     {
-        TARGET_NON_ISO_PIO->txf[0] = SWD_FLOAT_TO_DRIVE_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_SEQ_OUT_TURNAROUND_IN_TO_OUT_POS;
         olddir = SWDIO_STATUS_DRIVE;
     }
     else
     {
-        TARGET_NON_ISO_PIO->txf[0] = SWD_SEQ_OUT_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_SEQ_OUT_POS;
     }
 
-    TARGET_NON_ISO_PIO->txf[0] = clock_cycles;
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = clock_cycles;
 
     if (clock_cycles <= 31)
     {
         uint32_t value = tms_states;
-        value |= (parity ? (1ul << clock_cycles) : 0);
-        TARGET_NON_ISO_PIO->txf[0] = value;
+        value |= (parity ? (1u << clock_cycles) : 0);
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = value;
 
         if (clock_cycles == 31)
         {
-            TARGET_NON_ISO_PIO->txf[0] = 0;
+            TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
         }
     }
     else
     {
-        TARGET_NON_ISO_PIO->txf[0] = tms_states;
-        TARGET_NON_ISO_PIO->txf[0] = parity;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = tms_states;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = parity;
     }
 
-    TARGET_NON_ISO_PIO->fdebug = (1ul << 24);
-    //while((TARGET_NON_ISO_PIO->irq & (1 << 0)) == 0);
-    while((TARGET_NON_ISO_PIO->fdebug & (1 << 24)) == 0);
-
-    hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_TX_BITS);
-}
-
-uint8_t __not_in_flash_func(rp2040_pio_adiv5_swd_write_no_check)(const uint8_t request, const uint32_t data)
-{
-    const bool parity = calculate_odd_parity(data);
-
-    hw_set_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-
-    if (olddir == SWDIO_STATUS_FLOAT)
-    {
-        TARGET_NON_ISO_PIO->txf[0] = SWD_FLOAT_TO_DRIVE_POS;
-        olddir = SWDIO_STATUS_DRIVE;
-    }
-    else
-    {
-        TARGET_NON_ISO_PIO->txf[0] = SWD_SEQ_OUT_POS;
-    }
-
-    TARGET_NON_ISO_PIO->txf[0] = 7;
-    TARGET_NON_ISO_PIO->txf[0] = request;
-    TARGET_NON_ISO_PIO->txf[0] = SWD_DRIVE_TO_FLOAT_POS;
-
-    while((TARGET_NON_ISO_PIO->fstat & (1u << PIO_FSTAT_TXFULL_LSB)) != 0);
-    TARGET_NON_ISO_PIO->txf[0] = 2;
-
-    while((TARGET_NON_ISO_PIO->fstat & (1u << PIO_FSTAT_TXFULL_LSB)) != 0);
-    TARGET_NON_ISO_PIO->txf[0] = SWD_FLOAT_TO_DRIVE_POS;
-
-    while((TARGET_NON_ISO_PIO->fstat & (1u << PIO_FSTAT_TXFULL_LSB)) != 0);
-    TARGET_NON_ISO_PIO->txf[0] = 40;
-
-    while((TARGET_NON_ISO_PIO->fstat & (1u << PIO_FSTAT_TXFULL_LSB)) != 0);
-    TARGET_NON_ISO_PIO->txf[0] = data;
-
-    while((TARGET_NON_ISO_PIO->fstat & (1u << PIO_FSTAT_TXFULL_LSB)) != 0);
-    TARGET_NON_ISO_PIO->txf[0] = (parity ? (1 << 0) : 0);
-
-    TARGET_NON_ISO_PIO->fdebug = (1ul << 24);
-    //while((TARGET_NON_ISO_PIO->irq & (1 << 0)) == 0);
-    while((TARGET_NON_ISO_PIO->fdebug & (1 << 24)) == 0);
-
-    const uint8_t ack = (uint8_t)((TARGET_NON_ISO_PIO->rxf[0] >> 29) & 0x7);
-
-    hw_set_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-
-    return ack;
+    swdtap_wait_for_tx_stall();
 }
 
 uint8_t __not_in_flash_func(rp2040_pio_adiv5_swd_raw_access_req)(const uint8_t request)
 {
-    hw_set_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+    swdtap_set_push_pull_thresholds(3, 8);
 
     if (olddir == SWDIO_STATUS_FLOAT)
     {
-        TARGET_NON_ISO_PIO->txf[0] = SWD_FLOAT_TO_DRIVE_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_ADIV5_REQ_TURNAROUND_IN_TO_OUT_POS;
         olddir = SWDIO_STATUS_DRIVE;
     }
     else
     {
-        TARGET_NON_ISO_PIO->txf[0] = SWD_SEQ_OUT_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_ADIV5_REQ_POS;
     }
 
-    TARGET_NON_ISO_PIO->txf[0] = 7;
-    TARGET_NON_ISO_PIO->txf[0] = request;
-    TARGET_NON_ISO_PIO->txf[0] = SWD_DRIVE_TO_FLOAT_POS;
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = request;
 
-    while((TARGET_NON_ISO_PIO->fstat & (1u << PIO_FSTAT_TXFULL_LSB)) != 0);
-    TARGET_NON_ISO_PIO->txf[0] = 2;
+    swdtap_wait_for_tx_stall();
 
     olddir = SWDIO_STATUS_FLOAT;
+    const uint8_t ack = (uint8_t)((TARGET_SWD_PIO->rxf[TARGET_SWD_PIO_SM] >> 29) & 0x7);
 
-    while((TARGET_NON_ISO_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB))) != 0);
-    const uint8_t ack = (uint8_t)((TARGET_NON_ISO_PIO->rxf[0] >> 29) & 0x7);
-
-    //hw_set_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    //hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-
+    swdtap_set_push_pull_thresholds(0, 0);
     return ack;
 }
 
@@ -379,46 +292,84 @@ bool __not_in_flash_func(rp2040_pio_adiv5_swd_raw_access_data)(const uint32_t da
 
     if (rnw)
     {
-        hw_set_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-        hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_SEQ_IN_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 32;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_SEQ_OUT_TURNAROUND_IN_TO_OUT_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = TARGET_SWD_IDLE_CYCLES - 1;
 
-        TARGET_NON_ISO_PIO->txf[0] = SWD_SEQ_IN_PARITY_POS;
-        TARGET_NON_ISO_PIO->txf[0] = 32;
-        TARGET_NON_ISO_PIO->txf[0] = SWD_SEQ_OUT_POS;
-        TARGET_NON_ISO_PIO->txf[0] = 7;
+        swdtap_wait_for_rx_level(2);
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
 
-        while((TARGET_NON_ISO_PIO->fstat & (1u << PIO_FSTAT_TXFULL_LSB)) != 0);
-        TARGET_NON_ISO_PIO->txf[0] = 0;
+        *data_in = TARGET_SWD_PIO->rxf[TARGET_SWD_PIO_SM];
+        parity = (TARGET_SWD_PIO->rxf[TARGET_SWD_PIO_SM] != 0) == calculate_odd_parity(*data_in);
 
-        while(((TARGET_NON_ISO_PIO->flevel & PIO_FLEVEL_RX0_BITS) >> PIO_FLEVEL_RX0_LSB) < 2);
-        //while((TARGET_NON_ISO_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB))) != 0);
-        *data_in = TARGET_NON_ISO_PIO->rxf[0];
-
-        //while((TARGET_NON_ISO_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB))) != 0);
-        parity = (TARGET_NON_ISO_PIO->rxf[0] != 0) == calculate_odd_parity(*data_in);
-
-        TARGET_NON_ISO_PIO->fdebug = (1ul << 24);
-        while((TARGET_NON_ISO_PIO->fdebug & (1 << 24)) == 0);
+        swdtap_wait_for_tx_stall();
+        swdtap_clear_fifos();
     }
     else
     {
         const bool parity = calculate_odd_parity(data_out);
 
-        hw_set_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_TX_BITS);
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_SEQ_OUT_TURNAROUND_IN_TO_OUT_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 32 + TARGET_SWD_IDLE_CYCLES;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = data_out;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (parity ? (1 << 0) : 0);
 
-        TARGET_NON_ISO_PIO->txf[0] = SWD_FLOAT_TO_DRIVE_POS;
-        TARGET_NON_ISO_PIO->txf[0] = 40;
-        TARGET_NON_ISO_PIO->txf[0] = data_out;
-        TARGET_NON_ISO_PIO->txf[0] = (parity ? (1 << 0) : 0);
-
-        TARGET_NON_ISO_PIO->fdebug = (1ul << 24);
-        //while((TARGET_NON_ISO_PIO->irq & (1 << 0)) == 0);
-        while((TARGET_NON_ISO_PIO->fdebug & (1 << 24)) == 0);
-
-        hw_clear_bits(&TARGET_NON_ISO_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_TX_BITS);
+        swdtap_wait_for_tx_stall();
     }
 
     olddir = SWDIO_STATUS_DRIVE;
 
     return parity;
+}
+
+uint8_t __not_in_flash_func(rp2040_pio_adiv5_swd_write_no_check)(const uint8_t request, const uint32_t data)
+{
+    const uint8_t ack = rp2040_pio_adiv5_swd_raw_access_req(request);
+    rp2040_pio_adiv5_swd_raw_access_data(data, NULL, 0);
+
+    return ack;
+}
+
+uint8_t __not_in_flash_func(rp2040_pio_adiv5_swd_read_no_check)(const uint8_t request, uint32_t *data)
+{
+    const uint8_t ack = rp2040_pio_adiv5_swd_raw_access_req(request);
+    rp2040_pio_adiv5_swd_raw_access_data(0, data, 1);
+
+    return ack;
+}
+
+void __not_in_flash_func(swdptap_seq_out_buffer)(const uint32_t *tms_states, const size_t clock_cycles)
+{
+    if (olddir == SWDIO_STATUS_FLOAT)
+    {
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_SEQ_OUT_TURNAROUND_IN_TO_OUT_POS;
+        olddir = SWDIO_STATUS_DRIVE;
+    }
+    else
+    {
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = SWD_SEQ_OUT_POS;
+    }
+
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = clock_cycles - 1;
+
+    uint32_t data_count = clock_cycles / 32;
+    if ((clock_cycles % 0x1f) != 0)
+    {
+        data_count++;
+    }
+
+    for (size_t i = 0; i < data_count; i++)
+    {
+        while((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = tms_states[i];
+    }
+
+    if ((clock_cycles % 0x1f) == 0)
+    {
+        while((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
+    }
+
+    swdtap_wait_for_tx_stall();
 }
