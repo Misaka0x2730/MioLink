@@ -30,11 +30,8 @@
 #include "tusb.h"
 #include "gdb_if.h"
 
-static uint32_t count_out;
 static uint32_t count_in;
-static uint32_t out_ptr;
-static char buffer_out[64];
-static char buffer_in[64];
+static char buffer_in[1024];
 
 void __not_in_flash_func(gdb_if_putchar)(const char c, const int flush)
 {
@@ -49,7 +46,30 @@ void __not_in_flash_func(gdb_if_putchar)(const char c, const int flush)
 			return;
 		}
 
-        while (tud_cdc_n_write_available(USB_SERIAL_GDB) < count_in);
+        uint32_t pos_in = 0;
+        while (count_in > 0)
+        {
+            const uint32_t avail = tud_cdc_n_write_available(USB_SERIAL_GDB);
+            if (avail == 0)
+            {
+                vTaskDelay(pdMS_TO_TICKS(1));
+            }
+            else if (avail >= count_in)
+            {
+                tud_cdc_n_write(USB_SERIAL_GDB, buffer_in + pos_in, count_in);
+                count_in = 0;
+            }
+            else
+            {
+                uint32_t written = tud_cdc_n_write(USB_SERIAL_GDB, buffer_in + pos_in, avail);
+                pos_in += written;
+                count_in -= avail;
+            }
+        }
+
+        tud_cdc_n_write_flush(USB_SERIAL_GDB);
+
+        /*while (tud_cdc_n_write_available(USB_SERIAL_GDB) < count_in);
 
         if (tud_cdc_n_write(USB_SERIAL_GDB, buffer_in, count_in) != count_in)
         {
@@ -61,9 +81,13 @@ void __not_in_flash_func(gdb_if_putchar)(const char c, const int flush)
 			tud_cdc_n_write_flush(USB_SERIAL_GDB);
 		}
 
-		count_in = 0;
+		count_in = 0;*/
 	}
 }
+
+uint8_t buffer_out[1024] = { 0 };
+uint32_t counter_out = 0;
+uint32_t pos_out = 0;
 
 char __not_in_flash_func(gdb_if_getchar)(void)
 {
@@ -81,16 +105,28 @@ char __not_in_flash_func(gdb_if_getchar)(void)
             continue;
         }
 
+        if (pos_out != counter_out)
+        {
+            return (char)buffer_out[pos_out++];
+        }
+        else
+        {
+            pos_out = 0;
+            counter_out = 0;
+        }
+
         if (tud_cdc_n_available(USB_SERIAL_GDB) > 0)
         {
-            return (char)tud_cdc_n_read_char(USB_SERIAL_GDB);
+            counter_out = tud_cdc_n_read(USB_SERIAL_GDB, buffer_out, sizeof(buffer_out));
+            continue;
         }
 
         if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(portMAX_DELAY)) != pdFALSE)
         {
             if (notificationValue & USB_SERIAL_DATA_RX)
             {
-                return (char)tud_cdc_n_read_char(USB_SERIAL_GDB);
+                counter_out = tud_cdc_n_read(USB_SERIAL_GDB, buffer_out, sizeof(buffer_out));
+                continue;
             }
         }
     } while (1);
@@ -127,16 +163,34 @@ char __not_in_flash_func(gdb_if_getchar_to)(const uint32_t timeout)
         return -1;
     }
 
+    if (pos_out != counter_out)
+    {
+        return (char)buffer_out[pos_out++];
+    }
+    else
+    {
+        pos_out = 0;
+        counter_out = 0;
+    }
+
     if (tud_cdc_n_available(USB_SERIAL_GDB) > 0)
     {
-        return (char)tud_cdc_n_read_char(USB_SERIAL_GDB);
+        counter_out = tud_cdc_n_read(USB_SERIAL_GDB, buffer_out, sizeof(buffer_out));
+        if (counter_out > 0)
+        {
+            return (char)buffer_out[pos_out++];
+        }
     }
 
     if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(timeout)) != pdFALSE)
     {
         if (notificationValue & USB_SERIAL_DATA_RX)
         {
-            return (char)tud_cdc_n_read_char(USB_SERIAL_GDB);
+            counter_out = tud_cdc_n_read(USB_SERIAL_GDB, buffer_out, sizeof(buffer_out));
+            if (counter_out > 0)
+            {
+                return (char)buffer_out[pos_out++];
+            }
         }
     }
 
