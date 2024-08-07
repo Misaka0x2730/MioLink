@@ -148,7 +148,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 add_compile_definitions(DFU_SERIAL_LENGTH=PICO_UNIQUE_BOARD_ID_SIZE_BYTES+1)
 add_compile_definitions(PC_HOSTED=0)
-add_compile_definitions(SYSTICKHZ=100)
+add_compile_definitions(SYSTICKHZ=1000)
 
 target_link_options(MioLink PRIVATE -Xlinker --print-memory-usage)
 

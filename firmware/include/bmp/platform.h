@@ -32,6 +32,9 @@
 #define TARGET_SWD_PIO    (pio0)
 #define TARGET_SWD_PIO_SM (0)
 
+#define TARGET_PIO_TX_PUSH_DATA(data)   do {TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (data);} while (0)
+#define TARGET_PIO_RX_GET_DATA          TARGET_SWD_PIO->rxf[TARGET_SWD_PIO_SM]
+
 #define TARGET_SWD_IDLE_CYCLES (8)
 #if (TARGET_SWD_IDLE_CYCLES <= 0)
 #error "TARGET_SWD_IDLE_CYCLES should be at least 1"

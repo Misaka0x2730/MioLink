@@ -1,4 +1,4 @@
-.program target_non_iso_swd
+.program target_swd
 .side_set 1 opt
 
 ; Pin mapping for SWD:
@@ -29,7 +29,7 @@ swd_seq_out:                            ; TMS sequence out program
         out pins, 1 side 0              ; set TMS pin state and falling edge on TCK
         jmp x-- swd_seq_out_loop side 1 ; decrement cycle counter and set rising edge on TCK
 
-    out null, 32 side 0                 ; flush remaining data in osr and set falling edge on TCK
+    pull block side 0                   ; flush remaining data in osr and set falling edge on TCK
     out pc, 32                          ; wait for next command
 
 swd_seq_in_turnaround_out_to_in:        ; TMS turnaround from drive to float state

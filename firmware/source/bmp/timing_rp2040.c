@@ -34,7 +34,7 @@
 
 bool running_status = false;
 static volatile uint32_t time_ms = 0;
-uint32_t target_clk_divider = 2;
+uint32_t target_clk_divider = UINT32_MAX;
 
 static size_t morse_tick = 0;
 #if defined(PLATFORM_HAS_POWER_SWITCH)
@@ -44,7 +44,7 @@ static uint8_t monitor_error_count = 0;
 
 uint32_t target_interface_frequency = PLATFORM_DEFAULT_FREQUENCY;
 
-static void __not_in_flash_func(sys_timer_callback)(TimerHandle_t xTimer)
+void __not_in_flash_func(vApplicationTickHook)( void )
 {
     time_ms += SYSTICKMS;
     if (morse_tick >= MORSECNT)
@@ -105,8 +105,6 @@ static void __not_in_flash_func(sys_timer_callback)(TimerHandle_t xTimer)
 
 void platform_timing_init(void)
 {
-    TimerHandle_t system_timer = xTimerCreate("system", pdMS_TO_TICKS(SYSTICKMS), pdTRUE, NULL, sys_timer_callback);
-    xTimerStart(system_timer, 0);
 }
 
 void platform_delay(uint32_t ms)

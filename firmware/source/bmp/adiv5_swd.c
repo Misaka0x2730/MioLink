@@ -30,12 +30,13 @@
 #include "swd.h"
 #include "target.h"
 #include "target_internal.h"
+#include "platform.h"
 
 extern void swdptap_seq_out_buffer(const uint32_t *tms_states, const size_t clock_cycles);
 extern uint8_t rp2040_pio_adiv5_swd_write_no_check(const uint8_t request, const uint32_t data);
 extern uint8_t rp2040_pio_adiv5_swd_read_no_check(const uint8_t request, uint32_t *data);
 
-uint8_t make_packet_request(uint8_t rnw, uint16_t addr)
+uint8_t __not_in_flash_func(make_packet_request)(uint8_t rnw, uint16_t addr)
 {
 	bool is_ap = addr & ADIV5_APnDP;
 
@@ -58,7 +59,7 @@ uint8_t make_packet_request(uint8_t rnw, uint16_t addr)
 
 /* Provide bare DP access functions without timeout and exception */
 
-static void swd_line_reset_sequence(const bool idle_cycles)
+static void __not_in_flash_func(swd_line_reset_sequence)(const bool idle_cycles)
 {
 	/*
 	 * A line reset is achieved by holding the SWDIOTMS HIGH for at least 50 SWCLKTCK cycles, followed by at least two idle cycles
@@ -71,7 +72,7 @@ static void swd_line_reset_sequence(const bool idle_cycles)
 }
 
 /* Switch out of dormant state into SWD */
-static void dormant_to_swd_sequence(void)
+static void __not_in_flash_func(dormant_to_swd_sequence)(void)
 {
 	/*
 	 * ARM Debug Interface Architecture Specification, ADIv5.0 to ADIv5.2. ARM IHI 0031C
@@ -105,7 +106,7 @@ static void dormant_to_swd_sequence(void)
 }
 
 /* Deprecated JTAG-to-SWD select sequence */
-static void jtag_to_swd_sequence(void)
+static void __not_in_flash_func(jtag_to_swd_sequence)(void)
 {
 	/*
 	 * ARM Debug Interface Architecture Specification, ADIv5.0 to ADIv5.2. ARM IHI 0031C
@@ -128,13 +129,13 @@ static void jtag_to_swd_sequence(void)
 	swd_line_reset_sequence(true);
 }
 
-bool adiv5_swd_write_no_check(const uint16_t addr, const uint32_t data)
+bool __not_in_flash_func(adiv5_swd_write_no_check)(const uint16_t addr, const uint32_t data)
 {
 	const uint8_t request = make_packet_request(ADIV5_LOW_WRITE, addr);
 	return rp2040_pio_adiv5_swd_write_no_check(request, data) != SWDP_ACK_OK;
 }
 
-uint32_t adiv5_swd_read_no_check(const uint16_t addr)
+uint32_t __not_in_flash_func(adiv5_swd_read_no_check)(const uint16_t addr)
 {
 	const uint8_t request = make_packet_request(ADIV5_LOW_READ, addr);
     uint32_t data = 0;
@@ -326,7 +327,7 @@ void adiv5_swd_multidrop_scan(adiv5_debug_port_s *const dp, const uint32_t targe
 	free(dp);
 }
 
-uint32_t adiv5_swd_read(adiv5_debug_port_s *dp, uint16_t addr)
+uint32_t __not_in_flash_func(adiv5_swd_read)(adiv5_debug_port_s *dp, uint16_t addr)
 {
 	if (addr & ADIV5_APnDP) {
 		adiv5_dp_recoverable_access(dp, ADIV5_LOW_READ, addr, 0);
@@ -335,7 +336,7 @@ uint32_t adiv5_swd_read(adiv5_debug_port_s *dp, uint16_t addr)
 	return adiv5_dp_recoverable_access(dp, ADIV5_LOW_READ, addr, 0);
 }
 
-uint32_t adiv5_swd_clear_error(adiv5_debug_port_s *const dp, const bool protocol_recovery)
+uint32_t __not_in_flash_func(adiv5_swd_clear_error)(adiv5_debug_port_s *const dp, const bool protocol_recovery)
 {
 	/* Only do the comms reset dance on DPv2+ w/ fault or to perform protocol recovery. */
 	if ((dp->version >= 2U && dp->fault) || protocol_recovery) {
@@ -434,7 +435,7 @@ uint32_t __not_in_flash_func(adiv5_swd_raw_access)(adiv5_debug_port_s *dp, const
 	return response;
 }
 
-void adiv5_swd_abort(adiv5_debug_port_s *dp, uint32_t abort)
+void __not_in_flash_func(adiv5_swd_abort)(adiv5_debug_port_s *dp, uint32_t abort)
 {
 	adiv5_dp_write(dp, ADIV5_DP_ABORT, abort);
 }

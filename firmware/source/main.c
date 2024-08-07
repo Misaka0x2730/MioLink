@@ -17,6 +17,10 @@
 
 #include "multiplexer_task.h"
 
+#if ENABLE_DEBUG
+#include "SEGGER_RTT.h"
+#endif
+
 static char BMD_ALIGN_DEF(8) pbuf[GDB_PACKET_BUFFER_SIZE + 1U];
 
 TaskHandle_t gdb_task;
@@ -95,16 +99,15 @@ _Noreturn static void main_thread(void* params)
 
 void main(void)
 {
+#if ENABLE_DEBUG
+    SEGGER_RTT_Init();
     traceSTART();
-
-    //SEGGER_RTT_Init();
+#endif
     platform_init();
     platform_timing_init();
     multiplexer_task_init();
     usb_task_init();
     usb_serial_init();
-
-
 
     //multicore_reset_core1();
 
