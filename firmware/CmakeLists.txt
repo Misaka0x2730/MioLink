@@ -52,8 +52,8 @@ target_sources(MioLink PUBLIC source/bmp/swdptap.c)
 #target_sources(MioLink PUBLIC thirdParty/blackmagic/src/platforms/common/swdptap.c)
 #target_sources(MioLink PUBLIC source/bmp/traceswoasync.c)
 
-#target_sources(MioLink PUBLIC source/bmp/jtagtap.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/platforms/common/jtagtap.c)
+target_sources(MioLink PUBLIC source/bmp/jtagtap.c)
+#target_sources(MioLink PUBLIC thirdParty/blackmagic/src/platforms/common/jtagtap.c)
 
 target_sources(MioLink PUBLIC source/bmp/crc32.c)
 #target_sources(MioLink PUBLIC thirdParty/blackmagic/src/crc32.c)
@@ -153,6 +153,7 @@ add_compile_definitions(SYSTICKHZ=1000)
 target_link_options(MioLink PRIVATE -Xlinker --print-memory-usage)
 
 pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/target_swd.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/target_jtag.pio)
 
 pico_set_linker_script(MioLink ${CMAKE_CURRENT_LIST_DIR}/memmap_default.ld)
 
