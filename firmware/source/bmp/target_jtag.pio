@@ -2,52 +2,55 @@
 .side_set 1 opt
 
 .wrap_target
-
-jtag_program_start:
     out pc, 32
 
-jtag_out_seq_set_1:
-    set pins, 1
-    jmp jtag_out_seq
-
-jtag_out_seq_set_0:
+jtag_tdi_seq:
+    out x, 32
+    out y, 32
     set pins, 0
 
-jtag_out_seq:
-    out x, 32
-    jtag_out_seq_loop:
+    jtag_tdi_seq_loop:
         out pins, 1 side 0
-        jmp x-- jtag_out_seq_loop side 1
-    pull block side 0
-    out pc, 32
+        jmp x-- jtag_tdi_seq_loop side 1
+    jmp jtag_tdi_tdo_seq_before_final
 
 jtag_tdi_tdo_seq:
     out x, 32
     out y, 32
-
     set pins, 0
+
     jtag_tdi_tdo_seq_loop:
         out pins, 1 side 0
         in pins, 1 side 1
         jmp x-- jtag_tdi_tdo_seq_loop
 
-    jtag_tdi_tdo_seq_after_loop:
-        jmp !y jtag_final_tms_0
+    jtag_tdi_tdo_seq_before_final:
+        mov x, y
+        jmp jtag_tms_seq_inital_tdi
 
-    jtag_final_tms_1:
-        set pins, 1
-        jmp jtag_final_tms_finalize
-
-    jtag_final_tms_0:
-        set pins, 0
-
-    jtag_final_tms_finalize:
-        out pins, 1 side 0
-        in pins, 1 side 1
-
-    push side 0
+jtag_tms_seq:
+    out x, 32
+jtag_tms_seq_inital_tdi:
+    out pins, 1
     pull block
-    out pc, 32
+
+    jtag_tms_seq_loop:
+        out y, 1
+        jmp !y jtag_tms_seq_loop_tms_0
+
+        set pins, 1 side 0
+        jmp jtag_tms_seq_loop_read_tdo
+
+        jtag_tms_seq_loop_tms_0:
+            set pins, 0 side 0
+
+        jtag_tms_seq_loop_read_tdo:
+            in pins, 1 side 1
+            jmp x-- jtag_tms_seq_loop
+
+        push side 0
+        pull block
+        out pc, 32
 
 jtag_cycle:
     out x, 32

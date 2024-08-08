@@ -38,14 +38,11 @@ static void jtagtap_tdi_seq(bool final_tms, const uint8_t *data_in, size_t clock
 static bool jtagtap_next(bool tms, bool tdi);
 static void jtagtap_cycle(bool tms, bool tdi, size_t clock_cycles);
 
-#define JTAG_START_PROGRAM_POS        (0)
-#define JTAG_OUT_SEQ_SET_1_POS        (1)
-#define JTAG_OUT_SEQ_SET_0_POS        (3)
-#define JTAG_OUT_SEQ_POS              (4)
-#define JTAG_TDI_TDO_SEQ_POS          (9)
-#define JTAG_FINAL_TMS_1_POS          (16)
-#define JTAG_FINAL_TMS_0_POS          (18)
-#define JTAG_CYCLE_POS                (24)
+#define JTAG_TDI_SEQ_POS                   (1)
+#define JTAG_TDI_TDO_SEQ_POS               (7)
+#define JTAG_TDI_TDO_SEQ_BEFORE_FINAL_POS  (13)
+#define JTAG_TMS_SEQ_POS                   (15)
+#define JTAG_CYCLE_POS                     (28)
 
 extern uint32_t target_interface_frequency;
 
@@ -93,6 +90,8 @@ void jtagtap_init(void)
     pio_sm_init(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, 0, &prog_config);
     pio_sm_set_enabled(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, true);
 
+    //pio_sm_exec_wait_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, 0x1000 | target_jtag_wrap_target);
+
     platform_max_frequency_set(target_interface_frequency);
 
 	jtag_proc.jtagtap_reset = jtagtap_reset;
@@ -124,19 +123,18 @@ static void jtagtap_reset(void)
 
 static bool jtagtap_next(const bool tms, const bool tdi)
 {
+    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
+    {
+        panic("Wrong start address!");
+    }
+
     hw_set_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
     hw_clear_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
 
-    if (tms)
-    {
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_FINAL_TMS_1_POS;
-    }
-    else
-    {
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_FINAL_TMS_0_POS;
-    }
-
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_TMS_SEQ_POS;
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
     TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (tdi ? (1 << 0) : 0);
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (tms ? (1 << 0) : 0);
 
     TARGET_SWD_PIO->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM));
     while((TARGET_SWD_PIO->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM))) == 0);
@@ -146,49 +144,69 @@ static bool jtagtap_next(const bool tms, const bool tdi)
     hw_set_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
     hw_clear_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
 
+    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
+    {
+        panic("Wrong end address!");
+    }
+
     return result;
 }
 
 static void jtagtap_tms_seq(const uint32_t tms_states, const size_t ticks)
 {
+    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
+    {
+        panic("Wrong start address!");
+    }
+
     hw_set_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
     hw_clear_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-
-    pio_sm_set_set_pins(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, TARGET_TDI_PIN, 1);
-    pio_sm_set_out_pins(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, TARGET_TMS_PIN, 1);
 
     hw_write_masked(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl,
                     ((uint32_t)(0) << PIO_SM0_SHIFTCTRL_PUSH_THRESH_LSB) |
                     ((uint32_t)(0) << PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB),
                     PIO_SM0_SHIFTCTRL_PUSH_THRESH_BITS | PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS);
 
-    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_OUT_SEQ_SET_1_POS;
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_TMS_SEQ_POS;
     TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (ticks - 1);
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 1;
     TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = tms_states;
 
-    /*if (ticks == 32)
-    {
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
-    }*/
+    volatile uint32_t rx_data = 0;
 
     TARGET_SWD_PIO->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM));
-    while((TARGET_SWD_PIO->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM))) == 0);
+    while((TARGET_SWD_PIO->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM))) == 0)
+    {
+        if ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + TARGET_SWD_PIO_SM))) == 0)
+        {
+            rx_data = TARGET_SWD_PIO->rxf[TARGET_SWD_PIO_SM];
+        }
+    }
+
+    hw_set_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+    hw_clear_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+
+    //pio_sm_set_set_pins(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, TARGET_TMS_PIN, 1);
+    //pio_sm_set_out_pins(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, TARGET_TDI_PIN, 1);
 
     hw_write_masked(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl,
                     ((uint32_t)(8) << PIO_SM0_SHIFTCTRL_PUSH_THRESH_LSB) |
                     ((uint32_t)(8) << PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB),
                     PIO_SM0_SHIFTCTRL_PUSH_THRESH_BITS | PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS);
-
-    hw_set_bits(&TARGET_SWD_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_clear_bits(&TARGET_SWD_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-
-    pio_sm_set_set_pins(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, TARGET_TMS_PIN, 1);
-    pio_sm_set_out_pins(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, TARGET_TDI_PIN, 1);
+    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
+    {
+        panic("Wrong end address!");
+    }
 }
 
 static void jtagtap_tdi_tdo_seq(
 	uint8_t *const data_out, const bool final_tms, const uint8_t *const data_in, size_t clock_cycles)
 {
+    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
+    {
+        panic("Wrong start address!");
+    }
+
     if (clock_cycles == 0)
     {
         return;
@@ -199,16 +217,10 @@ static void jtagtap_tdi_tdo_seq(
 
     if (clock_cycles == 1)
     {
-        if (final_tms)
-        {
-            TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_FINAL_TMS_1_POS;
-        }
-        else
-        {
-            TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_FINAL_TMS_0_POS;
-        }
-
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_TMS_SEQ_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
         TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = data_in[0];
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (final_tms ? (1 << 0) : 0);
 
         while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + TARGET_SWD_PIO_SM))) != 0);
         data_out[0] = (TARGET_SWD_PIO->rxf[TARGET_SWD_PIO_SM]) ? (1 << 0) : 0;
@@ -217,7 +229,7 @@ static void jtagtap_tdi_tdo_seq(
     {
         TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_TDI_TDO_SEQ_POS;
         TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = clock_cycles - 2;
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (final_tms ? 1 : 0);
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
 
         size_t data_bytes = clock_cycles / 8;
         if (clock_cycles % 8)
@@ -239,6 +251,9 @@ static void jtagtap_tdi_tdo_seq(
                 data_out[data_out_cnt++] = (uint8_t) ((TARGET_SWD_PIO->rxf[TARGET_SWD_PIO_SM] >> 24) & 0xFF);
             }
         }
+
+        while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (final_tms ? 1 : 0);
 
         while (data_out_cnt < data_bytes)
         {
@@ -262,10 +277,20 @@ static void jtagtap_tdi_tdo_seq(
 
     hw_set_bits(&TARGET_SWD_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
     hw_clear_bits(&TARGET_SWD_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+
+    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
+    {
+        panic("Wrong end address!");
+    }
 }
 
 static void jtagtap_tdi_seq(const bool final_tms, const uint8_t *const data_in, const size_t clock_cycles)
 {
+    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
+    {
+        panic("Wrong start address!");
+    }
+
     if (clock_cycles == 0)
     {
         return;
@@ -275,58 +300,31 @@ static void jtagtap_tdi_seq(const bool final_tms, const uint8_t *const data_in, 
 
     if (clock_cycles == 1)
     {
-        if (final_tms)
-        {
-            TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_FINAL_TMS_1_POS;
-        }
-        else
-        {
-            TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_FINAL_TMS_0_POS;
-        }
-
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_TMS_SEQ_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
         TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = data_in[0];
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (final_tms ? (1 << 0) : 0);
     }
     else
     {
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_OUT_SEQ_SET_0_POS;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_TDI_SEQ_POS;
         TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = clock_cycles - 2;
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
 
-        const size_t clock_cycles_no_final = (clock_cycles - 1);
-        size_t data_bytes_no_final = clock_cycles_no_final / 8;
-        if (clock_cycles_no_final % 8)
-        {
-            data_bytes_no_final++;
-        }
-        size_t final_tdi_byte = (clock_cycles / 8);
+        size_t data_bytes = (clock_cycles) / 8;
         if (clock_cycles % 8)
         {
-            final_tdi_byte++;
+            data_bytes++;
         }
-        bool final_tdi = ((data_in[final_tdi_byte - 1] & (1 << ((clock_cycles - 1) % 8))) != 0);
-        for (size_t i = 0; i < data_bytes_no_final; i++)
+
+        for (size_t i = 0; i < data_bytes; i++)
         {
             while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
             TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = data_in[i];
         }
 
-        if ((clock_cycles_no_final % 8) == 0)
-        {
-            /*while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
-            TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;*/
-        }
-
         while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
-
-        if (final_tms)
-        {
-            TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_FINAL_TMS_1_POS;
-        }
-        else
-        {
-            TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_FINAL_TMS_0_POS;
-        }
-        while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (final_tdi ? 1 : 0);
+        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (final_tms ? (1 << 0) : 0);
     }
 
     TARGET_SWD_PIO->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM));
@@ -334,10 +332,20 @@ static void jtagtap_tdi_seq(const bool final_tms, const uint8_t *const data_in, 
 
     hw_set_bits(&TARGET_SWD_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
     hw_clear_bits(&TARGET_SWD_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+
+    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
+    {
+        panic("Wrong end address!");
+    }
 }
 
 static void jtagtap_cycle(const bool tms, const bool tdi, const size_t clock_cycles)
 {
+    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
+    {
+        panic("Wrong start address!");
+    }
+
     if (clock_cycles == 0)
     {
         return;
@@ -346,17 +354,14 @@ static void jtagtap_cycle(const bool tms, const bool tdi, const size_t clock_cyc
     hw_set_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
     hw_clear_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
 
-    if (tms)
-    {
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_FINAL_TMS_1_POS;
-    }
-    else
-    {
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_FINAL_TMS_0_POS;
-    }
-
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_TMS_SEQ_POS;
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
     TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (tdi ? (1 << 0) : 0);
+    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (tms ? (1 << 0) : 0);
+    while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
     TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_CYCLE_POS;
+
+    while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
     TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (clock_cycles - 1);
 
     TARGET_SWD_PIO->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM));
@@ -364,4 +369,9 @@ static void jtagtap_cycle(const bool tms, const bool tdi, const size_t clock_cyc
 
     hw_set_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
     hw_clear_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+
+    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
+    {
+        panic("Wrong end address!");
+    }
 }
