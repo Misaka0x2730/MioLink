@@ -32,6 +32,8 @@
 #include "FreeRTOS.h"
 #include "timers.h"
 
+#include "tap_pio_common.h"
+
 bool running_status = false;
 static volatile uint32_t time_ms = 0;
 uint32_t target_clk_divider = UINT32_MAX;
@@ -142,8 +144,23 @@ void platform_max_frequency_set(uint32_t freq)
         clkdiv_int = 0;
         clkdiv_fraq = 0;
     }
-    pio_sm_set_clkdiv_int_frac(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, clkdiv_int, clkdiv_fraq);
-    pio_sm_clkdiv_restart(TARGET_SWD_PIO, TARGET_SWD_PIO_SM);
+    pio_sm_set_clkdiv_int_frac(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, clkdiv_int, clkdiv_fraq);
+    pio_sm_clkdiv_restart(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ);
+
+    pio_sm_set_clkdiv_int_frac(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_ADIV5, clkdiv_int, clkdiv_fraq);
+    pio_sm_clkdiv_restart(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_ADIV5);
+
+    pio_sm_set_clkdiv_int_frac(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, clkdiv_int, clkdiv_fraq);
+    pio_sm_clkdiv_restart(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
+
+    pio_sm_set_clkdiv_int_frac(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, clkdiv_int, clkdiv_fraq);
+    pio_sm_clkdiv_restart(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ);
+
+    pio_sm_set_clkdiv_int_frac(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, clkdiv_int, clkdiv_fraq);
+    pio_sm_clkdiv_restart(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
+
+    pio_sm_set_clkdiv_int_frac(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, clkdiv_int, clkdiv_fraq);
+    pio_sm_clkdiv_restart(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ);
 
     target_interface_frequency = freq;
 }
@@ -153,8 +170,8 @@ uint32_t platform_max_frequency_get(void)
     const uint32_t sys_freq = clock_get_hz(clk_sys);
     const uint32_t interface_freq = sys_freq / 2;
 
-    uint32_t clkdiv_int = (TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].clkdiv & PIO_SM0_CLKDIV_INT_BITS) >> PIO_SM0_CLKDIV_INT_LSB;
-    uint32_t clkdiv_frac = (TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].clkdiv & PIO_SM0_CLKDIV_FRAC_BITS) >> PIO_SM0_CLKDIV_FRAC_LSB;
+    uint32_t clkdiv_int = (TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM_SEQ].clkdiv & PIO_SM0_CLKDIV_INT_BITS) >> PIO_SM0_CLKDIV_INT_LSB;
+    uint32_t clkdiv_frac = (TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM_SEQ].clkdiv & PIO_SM0_CLKDIV_FRAC_BITS) >> PIO_SM0_CLKDIV_FRAC_LSB;
 
     if (clkdiv_int == 0)
     {

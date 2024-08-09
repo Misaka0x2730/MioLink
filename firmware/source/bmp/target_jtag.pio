@@ -1,61 +1,64 @@
 .program target_jtag
 .side_set 1 opt
 
-.wrap_target
+jtag_program_start:
+    pull block side 0
+    out x, 32
     out pc, 32
 
-jtag_tdi_seq:
-    out x, 32
-    out y, 32
+jtag_tdi_seq:    ; machine 3 start
     set pins, 0
+    out y, 32
 
     jtag_tdi_seq_loop:
         out pins, 1 side 0
         jmp x-- jtag_tdi_seq_loop side 1
-    jmp jtag_tdi_tdo_seq_before_final
 
-jtag_tdi_tdo_seq:
-    out x, 32
-    out y, 32
+    jmp !y jtag_tdi_tdo_seq_final_tms_0
+    jmp jtag_tdi_tdo_seq_final_tms_1
+
+jtag_tdi_tdo_seq: ; machine 2 start
     set pins, 0
+    out y, 32
 
     jtag_tdi_tdo_seq_loop:
         out pins, 1 side 0
         in pins, 1 side 1
         jmp x-- jtag_tdi_tdo_seq_loop
 
-    jtag_tdi_tdo_seq_before_final:
-        mov x, y
-        jmp jtag_tms_seq_inital_tdi
+jtag_tdi_tdo_seq_final:
+    jmp !y jtag_tdi_tdo_seq_final_tms_0
 
-jtag_tms_seq:
-    out x, 32
-jtag_tms_seq_inital_tdi:
-    out pins, 1
-    pull block
+jtag_tdi_tdo_seq_final_tms_1:
+    set pins, 1
+    jmp jtag_tdi_tdo_seq_final_clock
+
+jtag_tdi_tdo_seq_final_tms_0:
+    set pins, 0
+
+jtag_tdi_tdo_seq_final_clock:
+    out pins, 1 side 0
+    in pins, 1 side 1
+    push side 0  ; wrap for machine 2, machine 3
+
+jtag_tms_seq:     ; machine 1 start
+    set pins, 1
 
     jtag_tms_seq_loop:
-        out y, 1
-        jmp !y jtag_tms_seq_loop_tms_0
+        out pins, 1 side 0
+        jmp x-- jtag_tms_seq_loop side 1    ; machine 1 wrap
 
-        set pins, 1 side 0
-        jmp jtag_tms_seq_loop_read_tdo
+jtag_next_cycle_initial_set_1: ; machine 0 start
+    set pins, 1
+    jmp jtag_next_cycle
 
-        jtag_tms_seq_loop_tms_0:
-            set pins, 0 side 0
+jtag_next_cycle_initial_set_0:
+    set pins, 0
 
-        jtag_tms_seq_loop_read_tdo:
-            in pins, 1 side 1
-            jmp x-- jtag_tms_seq_loop
-
-        push side 0
-        pull block
-        out pc, 32
-
-jtag_cycle:
-    out x, 32
+jtag_next_cycle:
+    out pins, 1 side 0
     jtag_cycle_loop:
-        nop side 1
+        in pins, 1 side 1
         jmp x-- jtag_cycle_loop side 0
 
-.wrap
+    push ; machine 0 wrap

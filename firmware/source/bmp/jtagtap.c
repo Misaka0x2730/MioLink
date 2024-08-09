@@ -26,6 +26,7 @@
 
 #include "general.h"
 #include "platform.h"
+#include "tap_pio_common.h"
 #include "jtagtap.h"
 #include "target_jtag.pio.h"
 
@@ -38,16 +39,32 @@ static void jtagtap_tdi_seq(bool final_tms, const uint8_t *data_in, size_t clock
 static bool jtagtap_next(bool tms, bool tdi);
 static void jtagtap_cycle(bool tms, bool tdi, size_t clock_cycles);
 
-#define JTAG_TDI_SEQ_POS                   (1)
-#define JTAG_TDI_TDO_SEQ_POS               (7)
-#define JTAG_TDI_TDO_SEQ_BEFORE_FINAL_POS  (13)
-#define JTAG_TMS_SEQ_POS                   (15)
-#define JTAG_CYCLE_POS                     (28)
+#define JTAG_PROGRAM_START_POS             (0)
+#define JTAG_TDI_SEQ_POS                   (3)
+#define JTAG_TDI_TDO_SEQ_POS               (9)
+#define JTAG_TDI_TDO_SEQ_POS               (9)
+#define JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS   (15)
+#define JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS   (17)
+#define JTAG_TMS_SEQ_POS                   (21)
+#define JTAG_NEXT_CYCLE_INITIAL_SET_1_POS  (24)
+#define JTAG_NEXT_CYCLE_INITIAL_SET_0_POS  (26)
+
+#define JTAG_SM_NEXT_CYCLE_WRAP            (30)
+#define JTAG_SM_TMS_SEQ_WRAP               (JTAG_NEXT_CYCLE_INITIAL_SET_1_POS - 1)
+#define JTAG_SM_TDI_TDO_SEQ_WRAP           (JTAG_TMS_SEQ_POS - 1)
+#define JTAG_SM_TDI_SEQ_WRAP               (JTAG_TMS_SEQ_POS - 1)
 
 extern uint32_t target_interface_frequency;
 
 void jtagtap_init(void)
 {
+    pio_sm_set_enabled(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, false);
+    pio_sm_set_enabled(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_ADIV5, false);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, false);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, false);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, false);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, false);
+
     gpio_init(TARGET_TCK_PIN);
     gpio_set_dir(TARGET_TCK_PIN, GPIO_OUT);
 
@@ -65,19 +82,34 @@ void jtagtap_init(void)
 
     gpio_set_pulls(TARGET_TDO_PIN, true, false);
 
-    pio_gpio_init(TARGET_SWD_PIO, TARGET_TCK_PIN);
-    pio_gpio_init(TARGET_SWD_PIO, TARGET_TDO_PIN);
-    pio_gpio_init(TARGET_SWD_PIO, TARGET_TDI_PIN);
-    pio_gpio_init(TARGET_SWD_PIO, TARGET_TMS_PIN);
+    pio_gpio_init(TARGET_JTAG_PIO, TARGET_TCK_PIN);
+    pio_gpio_init(TARGET_JTAG_PIO, TARGET_TDO_PIN);
+    pio_gpio_init(TARGET_JTAG_PIO, TARGET_TDI_PIN);
+    pio_gpio_init(TARGET_JTAG_PIO, TARGET_TMS_PIN);
 
-    pio_sm_set_enabled(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, false);
-    pio_clear_instruction_memory(TARGET_SWD_PIO);
+    pio_clear_instruction_memory(TARGET_JTAG_PIO);
 
-    pio_sm_set_pindirs_with_mask(TARGET_SWD_PIO, TARGET_SWD_PIO_SM,  (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN) | (1 << TARGET_TMS_PIN), (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN)  | (1 << TARGET_TDO_PIN) | (1 << TARGET_TMS_PIN));
-    pio_sm_set_pins_with_mask(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, 0, (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN) | (1 << TARGET_TMS_PIN));
+    pio_sm_set_pindirs_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE,  (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN) | (1 << TARGET_TMS_PIN), (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN)  | (1 << TARGET_TDO_PIN) | (1 << TARGET_TMS_PIN));
+    pio_sm_set_pins_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, 0, (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN) | (1 << TARGET_TMS_PIN));
 
-    pio_add_program_at_offset(TARGET_SWD_PIO, &target_jtag_program, 0);
-    pio_sm_config prog_config = target_jtag_program_get_default_config(0);
+    pio_sm_set_pindirs_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ,  (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN) | (1 << TARGET_TMS_PIN), (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN)  | (1 << TARGET_TDO_PIN) | (1 << TARGET_TMS_PIN));
+    pio_sm_set_pins_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, 0, (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN) | (1 << TARGET_TMS_PIN));
+
+    pio_sm_set_pindirs_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ,  (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN) | (1 << TARGET_TMS_PIN), (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN)  | (1 << TARGET_TDO_PIN) | (1 << TARGET_TMS_PIN));
+    pio_sm_set_pins_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, 0, (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN) | (1 << TARGET_TMS_PIN));
+
+    pio_sm_set_pindirs_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ,  (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN) | (1 << TARGET_TMS_PIN), (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN)  | (1 << TARGET_TDO_PIN) | (1 << TARGET_TMS_PIN));
+    pio_sm_set_pins_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, 0, (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN) | (1 << TARGET_TMS_PIN));
+
+    pio_add_program_at_offset(TARGET_JTAG_PIO, &target_jtag_program, 0);
+
+    tap_pio_common_disable_input_sync(TARGET_JTAG_PIO, TARGET_TDO_PIN);
+
+    pio_sm_config prog_config = pio_get_default_sm_config();
+
+    /* JTAG next and cycle SM */
+    sm_config_set_wrap(&prog_config, JTAG_PROGRAM_START_POS, JTAG_SM_NEXT_CYCLE_WRAP);
+    sm_config_set_sideset(&prog_config, 2, true, false);
     sm_config_set_out_pins(&prog_config, TARGET_TDI_PIN, 1);
     sm_config_set_in_pins(&prog_config, TARGET_TDO_PIN);
     sm_config_set_sideset_pins(&prog_config, TARGET_TCK_PIN);
@@ -85,12 +117,47 @@ void jtagtap_init(void)
     sm_config_set_out_shift(&prog_config, true, true, 8);
     sm_config_set_in_shift(&prog_config, true, true, 8);
 
-    TARGET_SWD_PIO->input_sync_bypass |= (1u << TARGET_TDO_PIN);
+    pio_sm_init(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, 0, &prog_config);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, false);
 
-    pio_sm_init(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, 0, &prog_config);
-    pio_sm_set_enabled(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, true);
+    /* JTAG TMS sequence SM */
+    sm_config_set_wrap(&prog_config, JTAG_PROGRAM_START_POS, JTAG_SM_TMS_SEQ_WRAP);
+    sm_config_set_sideset(&prog_config, 2, true, false);
+    sm_config_set_out_pins(&prog_config, TARGET_TMS_PIN, 1);
+    sm_config_set_in_pins(&prog_config, TARGET_TDO_PIN);
+    sm_config_set_sideset_pins(&prog_config, TARGET_TCK_PIN);
+    sm_config_set_set_pins(&prog_config, TARGET_TDI_PIN, 1);
+    sm_config_set_out_shift(&prog_config, true, true, 32);
+    sm_config_set_in_shift(&prog_config, true, true, 32);
 
-    //pio_sm_exec_wait_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, 0x1000 | target_jtag_wrap_target);
+    pio_sm_init(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, 0, &prog_config);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, false);
+
+    /* JTAG TDI/TDO sequence SM */
+    sm_config_set_wrap(&prog_config, JTAG_PROGRAM_START_POS, JTAG_SM_TDI_TDO_SEQ_WRAP);
+    sm_config_set_sideset(&prog_config, 2, true, false);
+    sm_config_set_out_pins(&prog_config, TARGET_TDI_PIN, 1);
+    sm_config_set_in_pins(&prog_config, TARGET_TDO_PIN);
+    sm_config_set_sideset_pins(&prog_config, TARGET_TCK_PIN);
+    sm_config_set_set_pins(&prog_config, TARGET_TMS_PIN, 1);
+    sm_config_set_out_shift(&prog_config, true, true, 8);
+    sm_config_set_in_shift(&prog_config, true, true, 8);
+
+    pio_sm_init(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, 0, &prog_config);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, false);
+
+    /* JTAG TDI sequence SM */
+    sm_config_set_wrap(&prog_config, JTAG_PROGRAM_START_POS, JTAG_SM_TDI_SEQ_WRAP);
+    sm_config_set_sideset(&prog_config, 2, true, false);
+    sm_config_set_out_pins(&prog_config, TARGET_TDI_PIN, 1);
+    sm_config_set_in_pins(&prog_config, TARGET_TDO_PIN);
+    sm_config_set_sideset_pins(&prog_config, TARGET_TCK_PIN);
+    sm_config_set_set_pins(&prog_config, TARGET_TMS_PIN, 1);
+    sm_config_set_out_shift(&prog_config, true, true, 8);
+    sm_config_set_in_shift(&prog_config, true, true, 8);
+
+    pio_sm_init(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, 0, &prog_config);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, false);
 
     platform_max_frequency_set(target_interface_frequency);
 
@@ -110,126 +177,77 @@ void jtagtap_init(void)
 
 static void jtagtap_reset(void)
 {
-#ifdef TRST_PORT
-	if (platform_hwversion() == 0) {
-		gpio_clear(TRST_PORT, TRST_PIN);
-		for (volatile size_t i = 0; i < 10000U; i++)
-			continue;
-		gpio_set(TRST_PORT, TRST_PIN);
-	}
-#endif
 	jtagtap_soft_reset();
 }
 
-static bool jtagtap_next(const bool tms, const bool tdi)
+static bool __not_in_flash_func(jtagtap_next)(const bool tms, const bool tdi)
 {
-    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
+    tap_pio_common_enable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
+
+    tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, 0); /* Number of cycles - 1 */
+
+    if (tms)
     {
-        panic("Wrong start address!");
+        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_1_POS);
+    }
+    else
+    {
+        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_0_POS);
     }
 
-    hw_set_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_clear_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+    tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (tdi ? (1 << 0) : 0));
+    tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
 
-    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_TMS_SEQ_POS;
-    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
-    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (tdi ? (1 << 0) : 0);
-    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (tms ? (1 << 0) : 0);
+    const bool result = (tap_pio_common_read_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE) != 0);
 
-    TARGET_SWD_PIO->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM));
-    while((TARGET_SWD_PIO->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM))) == 0);
-
-    const bool result = (TARGET_SWD_PIO->rxf[0] != 0);
-
-    hw_set_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_clear_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-
-    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
-    {
-        panic("Wrong end address!");
-    }
+    tap_pio_common_disable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
 
     return result;
 }
 
-static void jtagtap_tms_seq(const uint32_t tms_states, const size_t ticks)
+static void __not_in_flash_func(jtagtap_tms_seq)(const uint32_t tms_states, const size_t ticks)
 {
-    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
-    {
-        panic("Wrong start address!");
-    }
+    tap_pio_common_enable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ);
 
-    hw_set_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_clear_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+    tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, (ticks - 1));
+    tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, JTAG_TMS_SEQ_POS);
+    tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, tms_states);
 
-    hw_write_masked(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl,
-                    ((uint32_t)(0) << PIO_SM0_SHIFTCTRL_PUSH_THRESH_LSB) |
-                    ((uint32_t)(0) << PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB),
-                    PIO_SM0_SHIFTCTRL_PUSH_THRESH_BITS | PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS);
+    tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ);
 
-    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_TMS_SEQ_POS;
-    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (ticks - 1);
-    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 1;
-    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = tms_states;
-
-    volatile uint32_t rx_data = 0;
-
-    TARGET_SWD_PIO->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM));
-    while((TARGET_SWD_PIO->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM))) == 0)
-    {
-        if ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + TARGET_SWD_PIO_SM))) == 0)
-        {
-            rx_data = TARGET_SWD_PIO->rxf[TARGET_SWD_PIO_SM];
-        }
-    }
-
-    hw_set_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_clear_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-
-    //pio_sm_set_set_pins(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, TARGET_TMS_PIN, 1);
-    //pio_sm_set_out_pins(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, TARGET_TDI_PIN, 1);
-
-    hw_write_masked(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl,
-                    ((uint32_t)(8) << PIO_SM0_SHIFTCTRL_PUSH_THRESH_LSB) |
-                    ((uint32_t)(8) << PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB),
-                    PIO_SM0_SHIFTCTRL_PUSH_THRESH_BITS | PIO_SM0_SHIFTCTRL_PULL_THRESH_BITS);
-    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
-    {
-        panic("Wrong end address!");
-    }
+    tap_pio_common_disable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ);
 }
 
-static void jtagtap_tdi_tdo_seq(
+static void __not_in_flash_func(jtagtap_tdi_tdo_seq)(
 	uint8_t *const data_out, const bool final_tms, const uint8_t *const data_in, size_t clock_cycles)
 {
-    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
-    {
-        panic("Wrong start address!");
-    }
-
     if (clock_cycles == 0)
     {
         return;
     }
 
-    hw_set_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_clear_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+    tap_pio_common_enable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
 
     if (clock_cycles == 1)
     {
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_TMS_SEQ_POS;
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = data_in[0];
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (final_tms ? (1 << 0) : 0);
+        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, 0);
+        if (final_tms)
+        {
+            tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS);
+        }
+        else
+        {
+            tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS);
+        }
+        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, data_in[0]);
 
-        while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + TARGET_SWD_PIO_SM))) != 0);
-        data_out[0] = (TARGET_SWD_PIO->rxf[TARGET_SWD_PIO_SM]) ? (1 << 0) : 0;
+        data_out[0] = (tap_pio_common_read_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) != 0) ? (1 << 0) : 0;
     }
     else
     {
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_TDI_TDO_SEQ_POS;
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = clock_cycles - 2;
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
+        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, (clock_cycles - 2));
+        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, JTAG_TDI_TDO_SEQ_POS);
+        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, (final_tms ? 1 : 0));
 
         size_t data_bytes = clock_cycles / 8;
         if (clock_cycles % 8)
@@ -240,76 +258,59 @@ static void jtagtap_tdi_tdo_seq(
         size_t data_out_cnt = 0;
         for (size_t i = 0; i < data_bytes; i++)
         {
-            while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
-            TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = data_in[i];
+            tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, data_in[i]);
 
-            /*while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + TARGET_SWD_PIO_SM))) != 0);
-            data_out[data_out_cnt++] = (uint8_t) ((TARGET_SWD_PIO->rxf[TARGET_SWD_PIO_SM] >> 24) & 0xFF);*/
-
-            if ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + TARGET_SWD_PIO_SM))) == 0)
+            if (tap_pio_common_rx_is_not_empty(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ))
             {
-                data_out[data_out_cnt++] = (uint8_t) ((TARGET_SWD_PIO->rxf[TARGET_SWD_PIO_SM] >> 24) & 0xFF);
+                data_out[data_out_cnt++] = (uint8_t) ((tap_pio_common_read_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) >> 24) & 0xFF);
             }
         }
 
-        while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (final_tms ? 1 : 0);
-
         while (data_out_cnt < data_bytes)
         {
-            while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_RXEMPTY_LSB + TARGET_SWD_PIO_SM))) != 0);
-            data_out[data_out_cnt++] = (uint8_t) ((TARGET_SWD_PIO->rxf[TARGET_SWD_PIO_SM] >> 24) & 0xFF);
+            data_out[data_out_cnt++] = (uint8_t) ((tap_pio_common_read_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) >> 24) & 0xFF);
         }
 
-        if ((clock_cycles % 8) == 0)
-        {
-            /*while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
-            TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;*/
-        }
-        else
+        if ((clock_cycles % 8) != 0)
         {
             data_out[data_out_cnt - 1] >>= (8 - (clock_cycles % 8));
         }
     }
 
-    TARGET_SWD_PIO->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM));
-    while((TARGET_SWD_PIO->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM))) == 0);
+    tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
 
-    hw_set_bits(&TARGET_SWD_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_clear_bits(&TARGET_SWD_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+    tap_pio_common_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
 
-    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
-    {
-        panic("Wrong end address!");
-    }
+    tap_pio_common_disable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
 }
 
-static void jtagtap_tdi_seq(const bool final_tms, const uint8_t *const data_in, const size_t clock_cycles)
+static void __not_in_flash_func(jtagtap_tdi_seq)(const bool final_tms, const uint8_t *const data_in, const size_t clock_cycles)
 {
-    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
-    {
-        panic("Wrong start address!");
-    }
-
     if (clock_cycles == 0)
     {
         return;
     }
-    hw_set_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_clear_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+
+    tap_pio_common_enable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ);
 
     if (clock_cycles == 1)
     {
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_TMS_SEQ_POS;
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = data_in[0];
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (final_tms ? (1 << 0) : 0);
+        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, 0);
+        if (final_tms)
+        {
+            tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS);
+        }
+        else
+        {
+            tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS);
+        }
+        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, data_in[0]);
     }
     else
     {
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_TDI_SEQ_POS;
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = clock_cycles - 2;
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
+        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, (clock_cycles - 2));
+        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, JTAG_TDI_SEQ_POS);
+        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, (final_tms ? 1 : 0));
 
         size_t data_bytes = (clock_cycles) / 8;
         if (clock_cycles % 8)
@@ -319,59 +320,50 @@ static void jtagtap_tdi_seq(const bool final_tms, const uint8_t *const data_in, 
 
         for (size_t i = 0; i < data_bytes; i++)
         {
-            while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
-            TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = data_in[i];
+            tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, data_in[i]);
         }
-
-        while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
-        TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (final_tms ? (1 << 0) : 0);
     }
 
-    TARGET_SWD_PIO->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM));
-    while((TARGET_SWD_PIO->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM))) == 0);
+    tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ);
 
-    hw_set_bits(&TARGET_SWD_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_clear_bits(&TARGET_SWD_PIO->sm[0].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+    tap_pio_common_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ);
 
-    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
-    {
-        panic("Wrong end address!");
-    }
+    tap_pio_common_disable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ);
 }
 
-static void jtagtap_cycle(const bool tms, const bool tdi, const size_t clock_cycles)
+static void __not_in_flash_func(jtagtap_cycle)(const bool tms, const bool tdi, const size_t clock_cycles)
 {
-    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
-    {
-        panic("Wrong start address!");
-    }
+    tap_pio_common_enable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
 
     if (clock_cycles == 0)
     {
         return;
     }
 
-    hw_set_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_clear_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
+    tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (clock_cycles - 1)); /* Number of cycles */
 
-    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_TMS_SEQ_POS;
-    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = 0;
-    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (tdi ? (1 << 0) : 0);
-    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (tms ? (1 << 0) : 0);
-    while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
-    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = JTAG_CYCLE_POS;
-
-    while ((TARGET_SWD_PIO->fstat & (1u << (PIO_FSTAT_TXFULL_LSB + TARGET_SWD_PIO_SM))) != 0);
-    TARGET_SWD_PIO->txf[TARGET_SWD_PIO_SM] = (clock_cycles - 1);
-
-    TARGET_SWD_PIO->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM));
-    while((TARGET_SWD_PIO->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + TARGET_SWD_PIO_SM))) == 0);
-
-    hw_set_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-    hw_clear_bits(&TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].shiftctrl, PIO_SM0_SHIFTCTRL_FJOIN_RX_BITS);
-
-    if ((TARGET_SWD_PIO->sm[0].addr != 0) && (TARGET_SWD_PIO->sm[0].addr != 26) && (TARGET_SWD_PIO->sm[0].addr != 27))
+    if (tms)
     {
-        panic("Wrong end address!");
+        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_1_POS);
     }
+    else
+    {
+        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_0_POS);
+    }
+
+    tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (tdi ? (1 << 0) : 0));
+
+    volatile uint32_t rx_data = 0;
+
+    while(tap_pio_common_is_not_tx_stalled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE))
+    {
+        if (tap_pio_common_rx_is_not_empty(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE))
+        {
+            rx_data = tap_pio_common_read_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
+        }
+    }
+
+    tap_pio_common_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
+
+    tap_pio_common_disable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
 }
