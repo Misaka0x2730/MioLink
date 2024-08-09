@@ -32,12 +32,12 @@
 
 jtag_proc_s jtag_proc;
 
-static void jtagtap_reset(void);
-static void jtagtap_tms_seq(uint32_t tms_states, size_t ticks);
-static void jtagtap_tdi_tdo_seq(uint8_t *data_out, bool final_tms, const uint8_t *data_in, size_t clock_cycles);
-static void jtagtap_tdi_seq(bool final_tms, const uint8_t *data_in, size_t clock_cycles);
-static bool jtagtap_next(bool tms, bool tdi);
-static void jtagtap_cycle(bool tms, bool tdi, size_t clock_cycles);
+static void jtagtap_reset(void) __attribute__((optimize(3)));
+static void jtagtap_tms_seq(uint32_t tms_states, size_t ticks) __attribute__((optimize(3)));
+static void jtagtap_tdi_tdo_seq(uint8_t *data_out, bool final_tms, const uint8_t *data_in, size_t clock_cycles) __attribute__((optimize(3)));
+static void jtagtap_tdi_seq(bool final_tms, const uint8_t *data_in, size_t clock_cycles) __attribute__((optimize(3)));
+static bool jtagtap_next(bool tms, bool tdi) __attribute__((optimize(3)));
+static void jtagtap_cycle(bool tms, bool tdi, size_t clock_cycles) __attribute__((optimize(3)));
 
 #define JTAG_PROGRAM_START_POS             (0)
 #define JTAG_TDI_SEQ_POS                   (3)
@@ -101,9 +101,9 @@ void jtagtap_init(void)
     pio_sm_set_pindirs_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ,  (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN) | (1 << TARGET_TMS_PIN), (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN)  | (1 << TARGET_TDO_PIN) | (1 << TARGET_TMS_PIN));
     pio_sm_set_pins_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, 0, (1 << TARGET_TCK_PIN) | (1 << TARGET_TDI_PIN) | (1 << TARGET_TMS_PIN));
 
-    pio_add_program_at_offset(TARGET_JTAG_PIO, &target_jtag_program, 0);
-
     tap_pio_common_disable_input_sync(TARGET_JTAG_PIO, TARGET_TDO_PIN);
+
+    pio_add_program_at_offset(TARGET_JTAG_PIO, &target_jtag_program, 0);
 
     pio_sm_config prog_config = pio_get_default_sm_config();
 

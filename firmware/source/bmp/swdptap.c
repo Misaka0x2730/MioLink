@@ -82,13 +82,15 @@ void swdptap_init(void)
     pio_gpio_init(TARGET_SWD_PIO, TARGET_TCK_PIN);
     pio_gpio_init(TARGET_SWD_PIO, TARGET_TMS_PIN);
 
-	pio_sm_set_enabled(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, false);
 	pio_clear_instruction_memory(TARGET_SWD_PIO);
 
     pio_sm_set_pindirs_with_mask(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, (1 << TARGET_TMS_DIR_PIN) | (1 << TARGET_TCK_PIN), (1 << TARGET_TMS_DIR_PIN) | (1 << TARGET_TCK_PIN) | (1 << TARGET_TMS_PIN));
     pio_sm_set_pins_with_mask(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, 0, (1 << TARGET_TMS_DIR_PIN) | (1 << TARGET_TCK_PIN) | (1 << TARGET_TMS_PIN));
 
+    tap_pio_common_disable_input_sync(TARGET_SWD_PIO, TARGET_TMS_PIN);
+
     pio_add_program_at_offset(TARGET_SWD_PIO, &target_swd_program, 0);
+
     pio_sm_config prog_config = target_swd_program_get_default_config(0);
     sm_config_set_out_pins(&prog_config, TARGET_TMS_PIN, 1);
     sm_config_set_in_pins(&prog_config, TARGET_TMS_PIN);
@@ -96,8 +98,6 @@ void swdptap_init(void)
     sm_config_set_set_pins(&prog_config, TARGET_TMS_DIR_PIN, 2);
     sm_config_set_out_shift(&prog_config, true, true, 32);
     sm_config_set_in_shift(&prog_config, true, true, 32);
-
-    tap_pio_common_disable_input_sync(TARGET_SWD_PIO, TARGET_TMS_PIN);
 
     pio_sm_init(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, 0, &prog_config);
     pio_sm_set_enabled(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, true);
