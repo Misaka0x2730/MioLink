@@ -74,11 +74,12 @@ typedef struct usb_serial_thread_info_s
     uint32_t notifyMask;
 } usb_serial_thread_info_t;
 
+TaskHandle_t uart_task;
 
-static usb_serial_thread_info_t usb_serial_info[CFG_TUD_CDC] =
+static usb_serial_thread_info_t usb_serial_info[1] =
 {
-	{0, gdb_thread, "GDB", configMINIMAL_STACK_SIZE, PLATFORM_PRIORITY_NORMAL, 0, 0},
-	{0, target_serial_thread, "Target", configMINIMAL_STACK_SIZE, PLATFORM_PRIORITY_NORMAL, 1, 0x3F}
+	//{0, gdb_thread, "GDB", configMINIMAL_STACK_SIZE, PLATFORM_PRIORITY_NORMAL, 0, 0},
+	{0, target_serial_thread, "Target", configMINIMAL_STACK_SIZE, PLATFORM_PRIORITY_HIGH, 1, 0x3F}
 };
 
 static int dma_tx_channel = -1;
@@ -90,9 +91,9 @@ uint16_t usb_get_config(void)
 
 void tud_cdc_line_coding_cb(uint8_t interface, cdc_line_coding_t const* p_line_coding)
 {
-    if ((interface < CFG_TUD_CDC) && (usb_serial_info[interface].task != NULL) && (usb_serial_info[interface].notifyMask & USB_SERIAL_LINE_CODING_UPDATE))
+    if (interface == USB_SERIAL_TARGET)
     {
-        xTaskNotify(usb_serial_info[interface].task, USB_SERIAL_LINE_CODING_UPDATE, eSetBits);
+        xTaskNotify(uart_task, USB_SERIAL_LINE_CODING_UPDATE, eSetBits);
     }
 }
 
@@ -103,7 +104,7 @@ bool gdb_serial_get_dtr(void)
 
 void usb_serial_init(void)
 {
-	/*for (uint16_t i = 0; i < CFG_TUD_CDC; i++)
+	for (uint16_t i = 0; i < sizeof(usb_serial_info)/sizeof(usb_serial_info[0]); i++)
 	{
 		BaseType_t status = xTaskCreate(usb_serial_info[i].thread,
 										usb_serial_info[i].name,
@@ -112,8 +113,10 @@ void usb_serial_init(void)
 										usb_serial_info[i].priority,
 										&(usb_serial_info[i].task));
 
+        uart_task = usb_serial_info[i].task;
+
         //vTaskCoreAffinitySet(usb_serial_info[i].task, 0x01);
-	}*/
+	}
 }
 
 void usb_task_init(void)
@@ -126,7 +129,7 @@ void usb_task_init(void)
                          PLATFORM_PRIORITY_HIGH,
                          &usb_task);
 
-    //vTaskCoreAffinitySet(usb_task, 0x02);
+    //vTaskCoreAffinitySet(usb_task, 0x01);
 }
 
 _Noreturn static void usb_task_thread(void *param)
@@ -184,6 +187,9 @@ _Noreturn static void gdb_thread(void* params)
     }
 }
 
+uint8_t data_rx[1024] = { 0 };
+uint32_t data_pos = 0;
+
 _Noreturn static void target_serial_thread(void* params)
 {
 	const uint8_t interface = *((uint8_t*)(params));
@@ -195,8 +201,12 @@ _Noreturn static void target_serial_thread(void* params)
 	UART_PIN_SETUP();
 
 	uart_init(UART_INSTANCE, 38400);
+    //uart_set_irq_enables(UART_INSTANCE, true, false);
+    //hw_write_masked(&UART_HW->ifls, 1u << UART_UARTIFLS_RXIFLSEL_LSB,
+    //               UART_UARTIFLS_RXIFLSEL_BITS);
 
-	uart_set_irq_enables(UART_INSTANCE, true, false);
+    UART_HW->imsc = (1u << UART_UARTIMSC_RXIM_LSB) |
+                    (1u << UART_UARTIMSC_RTIM_LSB);
 
 	irq_set_exclusive_handler(UART_IRQ, aux_serial_receive_isr);
 	irq_set_enabled(UART_IRQ, true);
@@ -212,11 +222,12 @@ _Noreturn static void target_serial_thread(void* params)
     irq_set_enabled(DMA_IRQ_0, true);
 
 	uint8_t rx_buf[128] = { 0 };
-	uint32_t wait_time = portMAX_DELAY;
+	uint32_t wait_time = 5;
 
 	while (1)
     {
-        if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(wait_time)) != pdFALSE)
+        //if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(wait_time)) != pdFALSE)
+        xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(5));
         {
             if (notificationValue & USB_SERIAL_LINE_CODING_UPDATE)
             {
@@ -273,19 +284,39 @@ _Noreturn static void target_serial_thread(void* params)
 
 			if (notificationValue & (USB_SERIAL_DATA_UART_RX_AVAILABLE | USB_SERIAL_DATA_UART_RX_FLUSH))
 			{
-				while (uart_is_readable(UART_INSTANCE) && (tud_cdc_n_write_available(interface) > 0))
+                irq_set_enabled(UART_IRQ, false);
+
+                if (data_pos > 0)
+                {
+                    tud_cdc_n_write(interface, data_rx, data_pos);
+                    data_pos = 0;
+                }
+
+                irq_set_enabled(UART_IRQ, true);
+
+				/*while (uart_is_readable(UART_INSTANCE) && (tud_cdc_n_write_available(interface) > 0))
 				{
 					tud_cdc_n_write_char(interface, (char)(UART_HW->dr));
-				}
+				}*/
 
 				if (notificationValue & USB_SERIAL_DATA_UART_RX_FLUSH)
 				{
+                    while ((UART_HW->fr & UART_UARTFR_RXFE_BITS) == 0)
+                    {
+                        tud_cdc_n_write_char(interface, (char)UART_HW->dr);
+                    }
 					tud_cdc_n_write_flush(interface);
+
+                    UART_HW->imsc |= (1u << UART_UARTIMSC_RTIM_LSB);
+
+                    gpio_clear(PICO_GPIO_PORT, LED_SER_PIN);
 				}
+
+                //uart_set_irq_enables(UART_INSTANCE, true, false);
 			}
 
 			if (notificationValue & USB_SERIAL_DATA_UART_TX_COMPLETE)
-			{
+			{  
 				dma_channel_cleanup(dma_tx_channel);
 
 				uart_tx_dma_finished = true;
@@ -300,9 +331,11 @@ _Noreturn static void target_serial_thread(void* params)
 				}
 				else
 				{
-					wait_time = portMAX_DELAY;
+					wait_time = 5;
 					uart_tx_ongoing = false;
 					uart_tx_dma_finished = false;
+
+                    gpio_clear(PICO_GPIO_PORT, LED_SER_PIN);
 				}
 			}
 
@@ -310,13 +343,17 @@ _Noreturn static void target_serial_thread(void* params)
 			{
 				while (tud_cdc_n_available(interface))
 				{
+                    gpio_set(PICO_GPIO_PORT, LED_SER_PIN);
+
 					const uint32_t read_count = tud_cdc_n_read(interface, rx_buf, sizeof(rx_buf));
 					if (read_count == 0)
 					{
 						break;
 					}
 
-                    dma_channel_acknowledge_irq0(dma_tx_channel);
+                    uart_write_blocking(UART_INSTANCE, rx_buf, read_count);
+
+                    /*dma_channel_acknowledge_irq0(dma_tx_channel);
                     dma_channel_set_irq0_enabled(dma_tx_channel, true);
 
                     dma_channel_configure(dma_tx_channel, &tx_config,
@@ -326,7 +363,7 @@ _Noreturn static void target_serial_thread(void* params)
                                           true              // start immediately
                     );
 
-					uart_tx_ongoing = true;
+					uart_tx_ongoing = true;*/
 				}
 			}
         }
@@ -348,7 +385,7 @@ static void uart_dma_handler(void)
         dma_channel_set_irq0_enabled(dma_tx_channel, false);
 		dma_channel_acknowledge_irq0(dma_tx_channel);
 
-		xTaskNotifyFromISR(usb_serial_info[USB_SERIAL_TARGET].task, USB_SERIAL_DATA_UART_TX_COMPLETE, eSetBits, &xHigherPriorityTaskWoken);
+		xTaskNotifyFromISR(uart_task, USB_SERIAL_DATA_UART_TX_COMPLETE, eSetBits, &xHigherPriorityTaskWoken);
 		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
 }
@@ -363,17 +400,44 @@ static void aux_serial_receive_isr(void)
 
 	if (uart_int_status & UART_UARTMIS_RXMIS_BITS)
 	{
-		UART_HW->icr |= UART_UARTICR_RXIC_BITS;
-		notify_bits |= USB_SERIAL_DATA_UART_RX_AVAILABLE;
+        for (uint8_t i = 0; i < 15; i++)
+        {
+            if (UART_HW->fr & UART_UARTFR_RXFE_BITS)
+            {
+                break;
+            }
+            data_rx[data_pos++] = (uint8_t) UART_HW->dr;
+            if (data_pos >= sizeof(data_rx))
+            {
+                data_pos = 0;
+            }
+
+            /*while ((UART_HW->fr & UART_UARTFR_RXFE_BITS) == 0)
+            {
+                data_rx[data_pos++] = (uint8_t) UART_HW->dr;
+                if (data_pos >= sizeof(data_rx))
+                {
+                    data_pos = 0;
+                }
+            }*/
+
+            UART_HW->icr |= UART_UARTICR_RXIC_BITS;
+            notify_bits |= USB_SERIAL_DATA_UART_RX_AVAILABLE;
+
+            gpio_set(PICO_GPIO_PORT, LED_SER_PIN);
+        }
 	}
 
 	if (uart_int_status & UART_UARTMIS_RTMIS_BITS)
 	{
 		UART_HW->icr |= UART_UARTICR_RTIC_BITS;
+        UART_HW->imsc &= ~(1u << UART_UARTIMSC_RTIM_LSB);
 		notify_bits |= USB_SERIAL_DATA_UART_RX_FLUSH;
 	}
 
-	xTaskNotifyFromISR(usb_serial_info[USB_SERIAL_TARGET].task, notify_bits, eSetBits, &xHigherPriorityTaskWoken);
+    //uart_set_irq_enables(UART_INSTANCE, false, false);
+
+	xTaskNotifyFromISR(uart_task, notify_bits, eSetBits, &xHigherPriorityTaskWoken);
 	portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
