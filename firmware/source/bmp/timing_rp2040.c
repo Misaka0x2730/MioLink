@@ -39,10 +39,8 @@ static volatile uint32_t time_ms = 0;
 uint32_t target_clk_divider = UINT32_MAX;
 
 static size_t morse_tick = 0;
-#if defined(PLATFORM_HAS_POWER_SWITCH)
 static uint8_t monitor_ticks = 0;
 static uint8_t monitor_error_count = 0;
-#endif
 
 uint32_t target_interface_frequency = PLATFORM_DEFAULT_FREQUENCY;
 
@@ -53,9 +51,7 @@ void __not_in_flash_func(vApplicationTickHook)( void )
     {
         if (running_status)
         {
-#if defined(LED_ACT_PIN)
             gpio_xor_mask(1 << LED_ACT_PIN);
-#endif
         }
         //TODO: Update this
         //usb_config_morse_msg_update();
@@ -67,8 +63,6 @@ void __not_in_flash_func(vApplicationTickHook)( void )
         ++morse_tick;
     }
 
-#if defined(PLATFORM_MIOLINK)
-#if defined(PLATFORM_HAS_POWER_SWITCH)
     /* First check if target power is presently enabled */
     if (platform_target_get_power())
     {
@@ -101,8 +95,6 @@ void __not_in_flash_func(vApplicationTickHook)( void )
     {
         monitor_ticks = 0;
     }
-#endif
-#endif
 }
 
 void platform_timing_init(void)

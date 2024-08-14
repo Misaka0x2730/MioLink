@@ -20,30 +20,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/*
- * This file implements a the USB Communications Device Class - Abstract
- * Control Model (CDC-ACM) as defined in CDC PSTN subclass 1.2.
- * A Device Firmware Upgrade (DFU 1.1) class interface is provided for
- * field firmware upgrade.
- *
- * The device's unique id is used as the USB serial number string.
- *
- * Endpoint Usage
- *
- *     0 Control Endpoint
- * IN  1 GDB CDC DATA
- * OUT 1 GDB CDC DATA
- * IN  2 GDB CDC CTR
- * IN  3 UART CDC DATA
- * OUT 3 UART CDC DATA
- * OUT 4 UART CDC CTRL
- * In  5 Trace Capture
- *
- */
-
 #include "general.h"
 #include "platform.h"
-#include "gdb_if.h"
 #include "usb_serial.h"
 #ifdef PLATFORM_HAS_TRACESWO
 #include "traceswo.h"
@@ -51,583 +29,616 @@
 #include "rtt.h"
 #include "rtt_if.h"
 #include "tusb.h"
-#include "serialno.h"
 
-static void aux_serial_receive_isr(void);
-static void uart_dma_handler(void);
-
-#include "tusb.h"
+#include "atomic.h"
+#include "timers.h"
 #include "task.h"
 
-static void usb_task_thread(void *param);
-static void gdb_thread(void* params);
-static void target_serial_thread(void* params);
+#define USB_UART_TASK_CORE_AFFINITY     (0x01) /* Core 0 only */
 
-typedef struct usb_serial_thread_info_s
+#define UART_RX_INT_FIFO_LEVEL          (16)
+
+#define UART_DMA_RX_TOTAL_BUFFERS_SIZE  (16 * 1024)
+#define UART_DMA_RX_NUMBER_OF_BUFFERS   (32)
+#define UART_DMA_RX_BUFFER_SIZE   (UART_DMA_RX_TOTAL_BUFFERS_SIZE / UART_DMA_RX_NUMBER_OF_BUFFERS)
+
+#if (UART_DMA_RX_NUMBER_OF_BUFFERS < 4)
+#error "UART_DMA_RX_NUMBER_OF_BUFFERS should be at least 4"
+#endif
+
+#define UART_DMA_TX_BUFFER_SIZE   (256)
+
+#define UART_DMA_RX_BAUDRATE_THRESHOLD   (38400)
+#define UART_DMA_RX_MIN_TIMEOUT          (5)
+#define UART_DMA_RX_MAX_TIMEOUT          (200)
+
+#define UART_DMA_TX_CHECK_FINISHED_PERIOD (2)
+
+#define UART_NOTIFY_WAIT_PERIOD           (portMAX_DELAY)
+
+static uint8_t uart_rx_buf[UART_DMA_RX_NUMBER_OF_BUFFERS][UART_DMA_RX_BUFFER_SIZE] = { 0 };
+static uint32_t uart_rx_int_buf_pos = 0;
+static uint32_t uart_rx_dma_buffer_full_mask = 0;
+static uint32_t uart_rx_dma_current_buffer = 0;
+static bool uart_rx_use_dma = false;
+static xTimerHandle uart_rx_dma_timeout_timer;
+static int uart_dma_rx_channel = -1;
+static bool uart_rx_ongoing = false;
+
+static int uart_dma_tx_channel = -1;
+uint8_t uart_tx_dma_buf[UART_DMA_TX_BUFFER_SIZE] = { 0 };
+bool uart_tx_dma_finished = false;
+static bool uart_tx_ongoing = false;
+
+TaskHandle_t usb_uart_task;
+
+static void __not_in_flash_func(update_serial_led)(void)
 {
-	TaskHandle_t task;
-	TaskFunction_t thread;
-	char* name;
-	configSTACK_DEPTH_TYPE stack_size;
-	UBaseType_t priority;
-	uint8_t interface_number;
-    uint32_t notifyMask;
-} usb_serial_thread_info_t;
-
-TaskHandle_t uart_task;
-
-static usb_serial_thread_info_t usb_serial_info[1] =
-{
-	//{0, gdb_thread, "GDB", configMINIMAL_STACK_SIZE, PLATFORM_PRIORITY_NORMAL, 0, 0},
-	{0, target_serial_thread, "Target", configMINIMAL_STACK_SIZE, PLATFORM_PRIORITY_HIGH, 1, 0x3F}
-};
-
-static int dma_tx_channel = -1;
-
-uint16_t usb_get_config(void)
-{
-    return tud_mounted() ? 1 : 0;
-}
-
-void tud_cdc_line_coding_cb(uint8_t interface, cdc_line_coding_t const* p_line_coding)
-{
-    if (interface == USB_SERIAL_TARGET)
+    if (tud_cdc_n_connected(USB_SERIAL_TARGET) == false)
     {
-        xTaskNotify(uart_task, USB_SERIAL_LINE_CODING_UPDATE, eSetBits);
+        gpio_clear(PICO_GPIO_PORT, LED_SER_PIN);
+    }
+    else if ((uart_rx_ongoing) || (uart_tx_ongoing))
+    {
+        gpio_set(PICO_GPIO_PORT, LED_SER_PIN);
+    }
+    else
+    {
+        gpio_clear(PICO_GPIO_PORT, LED_SER_PIN);
     }
 }
 
-bool gdb_serial_get_dtr(void)
+static bool __not_in_flash_func(send_to_usb)(uint8_t *data, const size_t len)
 {
-    return tud_cdc_n_get_line_state(0) & 0x01;
+    if (tud_cdc_n_connected(USB_SERIAL_TARGET) == false)
+    {
+        return true;
+    }
+    else if (tud_cdc_n_write_available(USB_SERIAL_TARGET) < len)
+    {
+        return false;
+    }
+    else
+    {
+        return (tud_cdc_n_write(USB_SERIAL_TARGET, data, len) == len);
+    }
 }
+
+static void __not_in_flash_func(uart_rx_dma_timeout_callback)(TimerHandle_t xTimer)
+{
+    (void)(xTimer);
+    xTaskNotify(usb_uart_task, USB_SERIAL_DATA_UART_RX_TIMEOUT, eSetBits);
+}
+
+static void __not_in_flash_func(uart_rx_dma_init)(const uint32_t baudrate)
+{
+    UART_HW->dmacr = UART_UARTDMACR_TXDMAE_BITS;
+    UART_HW->imsc = 0;
+    UART_HW->ifls = 0;
+
+    dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
+    dma_channel_abort(uart_dma_rx_channel);
+    dma_channel_acknowledge_irq0(uart_dma_rx_channel);
+
+    dma_channel_config rx_config = dma_channel_get_default_config(uart_dma_rx_channel);
+    channel_config_set_transfer_data_size(&rx_config, DMA_SIZE_8);
+    channel_config_set_read_increment(&rx_config, false);
+    channel_config_set_write_increment(&rx_config, true);
+    channel_config_set_dreq(&rx_config, DREQ_UART1_RX);
+
+    dma_channel_configure(uart_dma_rx_channel,
+                          &rx_config,
+                          uart_rx_buf,
+                          &(UART_HW->dr),
+                          UART_DMA_RX_BUFFER_SIZE,
+                          false);
+
+    uart_rx_use_dma = true;
+
+    /* Calculate timer period - time to fill 3 rx buffers */
+    uint32_t timer_period = (UART_DMA_RX_BUFFER_SIZE * 3 * 1000); /* 1000 - because we need milliseconds */
+    timer_period /= (baudrate / 10);  /* byte rate, 1 data byte = 10 bits (8 data, 1 start and 1 stop) */
+    if (timer_period < UART_DMA_RX_MIN_TIMEOUT)
+    {
+        timer_period = UART_DMA_RX_MIN_TIMEOUT;
+    }
+    else if (timer_period > UART_DMA_RX_MAX_TIMEOUT)
+    {
+        timer_period = UART_DMA_RX_MAX_TIMEOUT;
+    }
+
+    xTimerChangePeriod(uart_rx_dma_timeout_timer, pdMS_TO_TICKS(timer_period), portMAX_DELAY);
+
+    UART_HW->imsc = UART_UARTIMSC_RXIM_BITS | UART_UARTIMSC_RTIM_BITS;
+}
+
+static BaseType_t __not_in_flash_func(uart_rx_dma_start_receiving)(void)
+{
+    if (uart_rx_ongoing != false)
+    {
+        panic("Invalid uart_rx_ongoing!");
+    }
+    else
+    {
+        dma_channel_acknowledge_irq0(uart_dma_rx_channel);
+        dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
+
+        dma_channel_set_read_addr(uart_dma_rx_channel, &(UART_HW->dr), false);
+        dma_channel_set_write_addr(uart_dma_rx_channel, uart_rx_buf[0], false);
+        dma_channel_set_trans_count(uart_dma_rx_channel, sizeof(uart_rx_buf[0]), true);
+
+        dma_channel_acknowledge_irq0(uart_dma_rx_channel);
+        dma_channel_set_irq0_enabled(uart_dma_rx_channel, true);
+
+        uart_rx_dma_current_buffer = 0;
+        uart_rx_dma_buffer_full_mask = 0;
+        uart_rx_ongoing = true;
+
+        UART_HW->imsc = 0;
+        UART_HW->dmacr = UART_UARTDMACR_TXDMAE_BITS | UART_UARTDMACR_RXDMAE_BITS;
+
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+        xTimerResetFromISR(uart_rx_dma_timeout_timer, &xHigherPriorityTaskWoken);
+        return xHigherPriorityTaskWoken;
+    }
+}
+
+static void __not_in_flash_func(uart_rx_dma_process_buffers)(void)
+{
+    const uint32_t buffer_state = uart_rx_dma_buffer_full_mask;
+    uint32_t clear_mask = 0;
+
+    xTimerReset(uart_rx_dma_timeout_timer, pdMS_TO_TICKS(0));
+
+    for (uint32_t i = 0; i < UART_DMA_RX_NUMBER_OF_BUFFERS; i++)
+    {
+        const uint32_t buffer_bit = (1u << i);
+        if (buffer_state & buffer_bit)
+        {
+            if (send_to_usb(uart_rx_buf[i], sizeof(uart_rx_buf[i])) != false)
+            {
+                tud_cdc_n_write_flush(USB_SERIAL_TARGET);
+                clear_mask |= buffer_bit;
+            }
+        }
+    }
+
+    Atomic_AND_u32(&uart_rx_dma_buffer_full_mask, ~clear_mask);
+}
+
+static bool __not_in_flash_func(uart_rx_dma_finish_receiving)(void)
+{
+    if (uart_rx_ongoing == false)
+    {
+        panic("Invalid uart_rx_ongoing!");
+    }
+    else
+    {
+        UART_HW->dmacr = UART_UARTDMACR_TXDMAE_BITS;
+
+        dma_channel_acknowledge_irq0(uart_dma_rx_channel);
+        dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
+
+        const uint32_t buffer_state = uart_rx_dma_buffer_full_mask;
+        uint32_t clear_mask = 0;
+
+        for (uint32_t i = 0; i < UART_DMA_RX_NUMBER_OF_BUFFERS; i++)
+        {
+            const uint32_t buffer_bit = (1u << i);
+            if (buffer_state & buffer_bit)
+            {
+                while (send_to_usb(uart_rx_buf[i], sizeof(uart_rx_buf[i])) == false)
+                {
+                    vTaskDelay(pdMS_TO_TICKS(1));
+                }
+                tud_cdc_n_write_flush(USB_SERIAL_TARGET);
+                clear_mask |= buffer_bit;
+            }
+        }
+
+        const uint32_t remaining = dma_hw->ch[uart_dma_rx_channel].transfer_count;
+        const uint32_t data_in_buffer = sizeof(uart_rx_buf[0]) - remaining;
+
+        while (send_to_usb(uart_rx_buf[uart_rx_dma_current_buffer], data_in_buffer) == false)
+        {
+            vTaskDelay(pdMS_TO_TICKS(1));
+        }
+        tud_cdc_n_write_flush(USB_SERIAL_TARGET);
+
+        dma_channel_abort(uart_dma_rx_channel);
+        dma_channel_acknowledge_irq0(uart_dma_rx_channel);
+
+        uart_rx_dma_current_buffer = 0;
+        uart_rx_dma_buffer_full_mask = 0;
+        uart_rx_ongoing = false;
+
+        xTimerStop(uart_rx_dma_timeout_timer, pdMS_TO_TICKS(0));
+
+        UART_HW->imsc = UART_UARTIMSC_RXIM_BITS | UART_UARTIMSC_RTIM_BITS;
+    }
+
+    return false;
+}
+
+static void __not_in_flash_func(uart_rx_int_init)(void)
+{
+    uart_rx_use_dma = false;
+
+    /* Set RX FIFO level to 1/2 */
+    UART_HW->ifls = (2u << UART_UARTIFLS_RXIFLSEL_LSB) | (0 << UART_UARTIFLS_TXIFLSEL_LSB);
+    UART_HW->imsc = UART_UARTIMSC_RXIM_BITS | UART_UARTIMSC_RTIM_BITS;
+}
+
+static void __not_in_flash_func(uart_rx_int_process)(void)
+{
+    if (uart_rx_int_buf_pos > 0)
+    {
+        if (send_to_usb((uint8_t *) (uart_rx_buf), uart_rx_int_buf_pos) != false)
+        {
+            uart_rx_int_buf_pos = 0;
+        }
+
+        uart_rx_ongoing = true;
+    }
+
+    UART_HW->imsc |= UART_UARTIMSC_RXIM_BITS;
+}
+
+static void __not_in_flash_func(uart_rx_int_finish)(void)
+{
+    if (uart_rx_int_buf_pos > 0)
+    {
+        while (send_to_usb((uint8_t*)(uart_rx_buf), uart_rx_int_buf_pos) == false)
+        {
+            vTaskDelay(pdMS_TO_TICKS(1));
+        }
+
+        uart_rx_int_buf_pos = 0;
+    }
+
+    while ((UART_HW->fr & UART_UARTFR_RXFE_BITS) == 0)
+    {
+        ((uint8_t*)uart_rx_buf)[uart_rx_int_buf_pos++] = (uint8_t) UART_HW->dr;
+    }
+
+    if (uart_rx_int_buf_pos > 0)
+    {
+        while (send_to_usb((uint8_t*)(uart_rx_buf), uart_rx_int_buf_pos) == false)
+        {
+            vTaskDelay(pdMS_TO_TICKS(1));
+        }
+        uart_rx_int_buf_pos = 0;
+    }
+    tud_cdc_n_write_flush(USB_SERIAL_TARGET);
+
+    uart_rx_ongoing = false;
+    UART_HW->imsc |= UART_UARTIMSC_RTIM_BITS;
+}
+
+static void __not_in_flash_func(uart_tx_dma_send)(void)
+{
+    if (tud_cdc_n_available(USB_SERIAL_TARGET))
+    {
+        const uint32_t read_count = tud_cdc_n_read(USB_SERIAL_TARGET, uart_tx_dma_buf, sizeof(uart_tx_dma_buf));
+        if (read_count != 0)
+        {
+            dma_channel_acknowledge_irq0(uart_dma_tx_channel);
+            dma_channel_set_irq0_enabled(uart_dma_tx_channel, true);
+
+            dma_channel_set_read_addr(uart_dma_tx_channel, uart_tx_dma_buf, false);
+            dma_channel_set_write_addr(uart_dma_tx_channel, &(UART_HW->dr), false);
+            dma_channel_set_trans_count(uart_dma_tx_channel, read_count, true);
+
+            uart_tx_ongoing = true;
+
+            dma_channel_set_irq0_enabled(uart_dma_tx_channel, true);
+        }
+        else if (uart_tx_ongoing)
+        {
+            uart_tx_dma_finished = true;
+        }
+    }
+    else if (uart_tx_ongoing)
+    {
+        uart_tx_dma_finished = true;
+    }
+}
+
+static bool __not_in_flash_func(uart_tx_dma_check_uart_finished)(void)
+{
+    if (UART_HW->fr & UART_UARTFR_BUSY_BITS)
+    {
+        return false;
+    }
+    else
+    {
+        return true;
+    }
+}
+
+
+static void __not_in_flash_func(uart_update_config)(cdc_line_coding_t *line_coding)
+{
+    uint32_t stop_bits = 2;
+    switch (line_coding->stop_bits)
+    {
+        case 0:
+        case 1:
+            stop_bits = 1;
+            break;
+        case 2:
+        default:
+            break;
+    }
+
+    uart_parity_t parity = UART_PARITY_NONE;
+    switch (line_coding->parity)
+    {
+        case 0:
+        default:
+            break;
+        case 1:
+            parity = UART_PARITY_ODD;
+            break;
+        case 2:
+            parity = UART_PARITY_EVEN;
+            break;
+    }
+
+    uint8_t data_bits = 8;
+
+    if (line_coding->data_bits <= 8)
+    {
+        data_bits = line_coding->data_bits;
+    }
+
+    /* Re-initialize UART */
+    dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
+    dma_channel_abort(uart_dma_rx_channel);
+    dma_channel_acknowledge_irq0(uart_dma_rx_channel);
+
+    dma_channel_set_irq0_enabled(uart_dma_tx_channel, false);
+    dma_channel_abort(uart_dma_tx_channel);
+    dma_channel_acknowledge_irq0(uart_dma_tx_channel);
+
+    UART_PIN_SETUP();
+    uart_init(UART_INSTANCE, line_coding->bit_rate);
+    uart_set_format(UART_INSTANCE, data_bits, stop_bits, parity);
+
+    if (line_coding->bit_rate >= UART_DMA_RX_BAUDRATE_THRESHOLD)
+    {
+        uart_rx_dma_init(line_coding->bit_rate);
+    }
+    else
+    {
+        uart_rx_int_init();
+    }
+}
+
+_Noreturn static void __not_in_flash_func(target_serial_thread)(void* params);
 
 void usb_serial_init(void)
 {
-	for (uint16_t i = 0; i < sizeof(usb_serial_info)/sizeof(usb_serial_info[0]); i++)
-	{
-		BaseType_t status = xTaskCreate(usb_serial_info[i].thread,
-										usb_serial_info[i].name,
-										usb_serial_info[i].stack_size*4,
-										(void*)(&(usb_serial_info[i].interface_number)),
-										usb_serial_info[i].priority,
-										&(usb_serial_info[i].task));
+    BaseType_t status = xTaskCreate(target_serial_thread,
+                                    "Target UART",
+                                    128*4,
+                                    NULL,
+                                    PLATFORM_PRIORITY_HIGH,
+                                    &usb_uart_task);
 
-        uart_task = usb_serial_info[i].task;
-
-        //vTaskCoreAffinitySet(usb_serial_info[i].task, 0x01);
-	}
+#if configUSE_CORE_AFFINITY
+    vTaskCoreAffinitySet(uart_task, USB_UART_TASK_CORE_AFFINITY);
+#endif
 }
 
-void usb_task_init(void)
+static void __not_in_flash_func(aux_serial_receive_isr)(void);
+static void __not_in_flash_func(uart_dma_handler)(void);
+
+_Noreturn static void __not_in_flash_func(target_serial_thread)(void* params)
 {
-    TaskHandle_t usb_task;
-    BaseType_t status = xTaskCreate(usb_task_thread,
-                         "usb_task",
-                         configMINIMAL_STACK_SIZE*4,
-                         NULL,
-                         PLATFORM_PRIORITY_HIGH,
-                         &usb_task);
-
-    //vTaskCoreAffinitySet(usb_task, 0x01);
-}
-
-_Noreturn static void usb_task_thread(void *param)
-{
-    (void) param;
-
-    tusb_init();
-
-    while (1)
-    {
-        tud_task();
-    }
-}
-
-_Noreturn static void gdb_thread(void* params)
-{
-	const uint8_t interface = *((uint8_t*)(params));
 	uint32_t notificationValue = 0;
-	bool isConnected = false;
-    uint8_t rx_buf[128] = { 0 };
 
-	while (1)
-    {
-        if (xTaskNotifyWait(pdFALSE, pdTRUE, &notificationValue, pdMS_TO_TICKS(portMAX_DELAY)) != pdFALSE)
-        {
-			/* Ignore line coding on GDB interface */
-            if (notificationValue & USB_SERIAL_LINE_CODING_UPDATE)
-            {
-            }
-
-			if (notificationValue & USB_SERIAL_LINE_STATE_UPDATE)
-            {
-            }
-
-            if ((tud_cdc_n_connected(interface) == false) && (isConnected == true))
-            {
-                isConnected = false;
-                continue;
-            }
-
-            if ((tud_cdc_n_connected(interface) == true) && (isConnected == false))
-            {
-                isConnected = true;
-            }
-
-            /*while (tud_cdc_n_available(interface))
-            {
-                const uint32_t read_count = tud_cdc_n_read(interface, rx_buf, sizeof(rx_buf));
-                if (read_count == 0)
-                {
-                    break;
-                }
-            }*/
-        }
-    }
-}
-
-uint8_t data_rx[1024] = { 0 };
-uint32_t data_pos = 0;
-
-_Noreturn static void target_serial_thread(void* params)
-{
-	const uint8_t interface = *((uint8_t*)(params));
-	uint32_t notificationValue = 0;
-	bool isConnected = false;
-	bool uart_tx_dma_finished = false;
-	bool uart_tx_ongoing = false;
-
-	UART_PIN_SETUP();
-
-	uart_init(UART_INSTANCE, 38400);
-    //uart_set_irq_enables(UART_INSTANCE, true, false);
-    //hw_write_masked(&UART_HW->ifls, 1u << UART_UARTIFLS_RXIFLSEL_LSB,
-    //               UART_UARTIFLS_RXIFLSEL_BITS);
-
-    UART_HW->imsc = (1u << UART_UARTIMSC_RXIM_LSB) |
-                    (1u << UART_UARTIMSC_RTIM_LSB);
+    uart_rx_dma_timeout_timer = xTimerCreate("UART_RX",
+                                         pdMS_TO_TICKS(UART_DMA_RX_MAX_TIMEOUT),
+                                         pdFALSE,
+                                         NULL,
+                                         uart_rx_dma_timeout_callback);
 
 	irq_set_exclusive_handler(UART_IRQ, aux_serial_receive_isr);
 	irq_set_enabled(UART_IRQ, true);
 
-    dma_tx_channel = dma_claim_unused_channel(true);
-    dma_channel_config tx_config = dma_channel_get_default_config(dma_tx_channel);
+    uart_dma_tx_channel = dma_claim_unused_channel(true);
+    dma_channel_config tx_config = dma_channel_get_default_config(uart_dma_tx_channel);
     channel_config_set_transfer_data_size(&tx_config, DMA_SIZE_8);
     channel_config_set_read_increment(&tx_config, true);
     channel_config_set_write_increment(&tx_config, false);
     channel_config_set_dreq(&tx_config, DREQ_UART1_TX);
 
+    dma_channel_configure(uart_dma_tx_channel,
+                           &tx_config,
+                           &(UART_HW->dr),
+                           uart_tx_dma_buf,
+                           sizeof(uart_tx_dma_buf),
+                           false);
+
+    uart_dma_rx_channel = dma_claim_unused_channel(true);
+
     irq_set_exclusive_handler(DMA_IRQ_0, uart_dma_handler);
     irq_set_enabled(DMA_IRQ_0, true);
 
-	uint8_t rx_buf[128] = { 0 };
-	uint32_t wait_time = 5;
+	uint32_t wait_time = UART_NOTIFY_WAIT_PERIOD;
 
 	while (1)
     {
-        //if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(wait_time)) != pdFALSE)
-        xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(5));
+        if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(wait_time)) == pdPASS)
         {
             if (notificationValue & USB_SERIAL_LINE_CODING_UPDATE)
             {
-                cdc_line_coding_t line_coding = {0};
-                tud_cdc_n_get_line_coding(interface, &line_coding);
+                cdc_line_coding_t line_coding = { 0 };
+                tud_cdc_n_get_line_coding(USB_SERIAL_TARGET, &line_coding);
 
-                uint32_t stop_bits = 2;
-                switch (line_coding.stop_bits)
-                {
-                    case 0:
-                    case 1:
-                        stop_bits = 1;
-                        break;
-                    case 2:
-                    default:
-                        break;
-                }
-
-                uart_parity_t parity = UART_PARITY_NONE;
-                switch (line_coding.parity)
-                {
-                    case 0:
-                    default:
-                        break;
-                    case 1:
-                        parity = UART_PARITY_ODD;
-                        break;
-                    case 2:
-                        parity = UART_PARITY_EVEN;
-                        break;
-                }
-
-                uint8_t data_bits = 8;
-
-                if (line_coding.data_bits <= 8)
-                {
-                    data_bits = line_coding.data_bits;
-                }
-
-                uart_set_baudrate(UART_INSTANCE, line_coding.bit_rate);
-                uart_set_format(UART_INSTANCE, data_bits, stop_bits, parity);
-            }
-
-            if ((tud_cdc_n_connected(interface) == false) && (isConnected == true))
-            {
-                isConnected = false;
-                continue;
-            }
-
-            if ((tud_cdc_n_connected(interface) == true) && (isConnected == false))
-            {
-                isConnected = true;
+                uart_update_config(&line_coding);
             }
 
 			if (notificationValue & (USB_SERIAL_DATA_UART_RX_AVAILABLE | USB_SERIAL_DATA_UART_RX_FLUSH))
 			{
-                irq_set_enabled(UART_IRQ, false);
-
-                if (data_pos > 0)
+                if (notificationValue & USB_SERIAL_DATA_UART_RX_AVAILABLE)
                 {
-                    tud_cdc_n_write(interface, data_rx, data_pos);
-                    data_pos = 0;
+                    if (uart_rx_use_dma == false)
+                    {
+                        uart_rx_int_process();
+                    }
+                    else
+                    {
+                        panic("Invalid notification!");
+                    }
                 }
-
-                irq_set_enabled(UART_IRQ, true);
-
-				/*while (uart_is_readable(UART_INSTANCE) && (tud_cdc_n_write_available(interface) > 0))
-				{
-					tud_cdc_n_write_char(interface, (char)(UART_HW->dr));
-				}*/
 
 				if (notificationValue & USB_SERIAL_DATA_UART_RX_FLUSH)
 				{
-                    while ((UART_HW->fr & UART_UARTFR_RXFE_BITS) == 0)
+                    if (uart_rx_use_dma == false)
                     {
-                        tud_cdc_n_write_char(interface, (char)UART_HW->dr);
+                        uart_rx_int_finish();
                     }
-					tud_cdc_n_write_flush(interface);
-
-                    UART_HW->imsc |= (1u << UART_UARTIMSC_RTIM_LSB);
-
-                    gpio_clear(PICO_GPIO_PORT, LED_SER_PIN);
+                    else
+                    {
+                        uart_rx_dma_process_buffers();
+                    }
 				}
-
-                //uart_set_irq_enables(UART_INSTANCE, true, false);
-			}
+            }
 
 			if (notificationValue & USB_SERIAL_DATA_UART_TX_COMPLETE)
-			{  
-				dma_channel_cleanup(dma_tx_channel);
-
-				uart_tx_dma_finished = true;
-			}
-
-			if (uart_tx_dma_finished)
 			{
-				if (UART_HW->fr & UART_UARTFR_BUSY_BITS)
-				{
-					wait_time = 2;
-					continue;
-				}
-				else
-				{
-					wait_time = 5;
-					uart_tx_ongoing = false;
-					uart_tx_dma_finished = false;
-
-                    gpio_clear(PICO_GPIO_PORT, LED_SER_PIN);
-				}
+                uart_tx_dma_send();
 			}
 
-			if (uart_tx_ongoing == false)
-			{
-				while (tud_cdc_n_available(interface))
-				{
-                    gpio_set(PICO_GPIO_PORT, LED_SER_PIN);
+            if ((notificationValue & USB_SERIAL_DATA_UART_RX_TIMEOUT) && (uart_rx_ongoing != false))
+            {
+                uart_rx_dma_finish_receiving();
+            }
 
-					const uint32_t read_count = tud_cdc_n_read(interface, rx_buf, sizeof(rx_buf));
-					if (read_count == 0)
-					{
-						break;
-					}
-
-                    uart_write_blocking(UART_INSTANCE, rx_buf, read_count);
-
-                    /*dma_channel_acknowledge_irq0(dma_tx_channel);
-                    dma_channel_set_irq0_enabled(dma_tx_channel, true);
-
-                    dma_channel_configure(dma_tx_channel, &tx_config,
-                                          &(UART_HW->dr),
-                                          rx_buf,
-                                          read_count,  // transfer count
-                                          true              // start immediately
-                    );
-
-					uart_tx_ongoing = true;*/
-				}
-			}
+            if ((notificationValue & USB_SERIAL_DATA_RX) && (uart_tx_ongoing == false))
+            {
+                uart_tx_dma_send();
+            }
         }
+
+        if (uart_tx_dma_finished)
+        {
+            if (uart_tx_dma_check_uart_finished())
+            {
+                wait_time = UART_NOTIFY_WAIT_PERIOD;
+
+                uart_tx_ongoing = false;
+                uart_tx_dma_finished = false;
+            }
+            else
+            {
+                wait_time = UART_DMA_TX_CHECK_FINISHED_PERIOD;
+            }
+        }
+
+        update_serial_led();
     }
 }
 
-static void uart_dma_handler(void)
+static void __not_in_flash_func(aux_serial_receive_isr)(void)
+{
+    traceISR_ENTER();
+
+    uint32_t uart_int_status = UART_HW->mis;
+    uint32_t notify_bits = 0;
+
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    if (uart_rx_use_dma == false)
+    {
+        if (uart_int_status & UART_UARTMIS_RXMIS_BITS)
+        {
+            for (uint32_t i = 0; i < (UART_RX_INT_FIFO_LEVEL - 1); i++)
+            {
+                if (UART_HW->fr & UART_UARTFR_RXFE_BITS)
+                {
+                    break;
+                }
+
+                ((uint8_t*)uart_rx_buf)[uart_rx_int_buf_pos] = (uint8_t) UART_HW->dr;
+                if (++uart_rx_int_buf_pos >= sizeof(uart_rx_buf))
+                {
+                    uart_rx_int_buf_pos = 0;
+                }
+            }
+
+            UART_HW->icr |= UART_UARTICR_RXIC_BITS;
+            UART_HW->imsc &= ~UART_UARTIMSC_RXIM_BITS;
+            notify_bits |= USB_SERIAL_DATA_UART_RX_AVAILABLE;
+        }
+
+        if (uart_int_status & UART_UARTMIS_RTMIS_BITS)
+        {
+            UART_HW->icr |= UART_UARTICR_RTIC_BITS;
+            UART_HW->imsc &= ~UART_UARTIMSC_RTIM_BITS;
+            notify_bits |= USB_SERIAL_DATA_UART_RX_FLUSH;
+        }
+    }
+    else
+    {
+        xHigherPriorityTaskWoken = uart_rx_dma_start_receiving();
+
+        update_serial_led();
+
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+
+        return;
+    }
+
+    xTaskNotifyFromISR(usb_uart_task, notify_bits, eSetBits, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
+static void __not_in_flash_func(uart_dma_handler)(void)
 {
     traceISR_ENTER();
 
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-	if (dma_tx_channel == -1)
+	if (uart_dma_tx_channel == -1)
 	{
-		return;
+        panic("uart_dma_tx_channel is -1!");
 	}
-	else if (dma_channel_get_irq0_status(dma_tx_channel))
+	else if (dma_channel_get_irq0_status(uart_dma_tx_channel))
 	{
-        dma_channel_set_irq0_enabled(dma_tx_channel, false);
-		dma_channel_acknowledge_irq0(dma_tx_channel);
+        dma_channel_set_irq0_enabled(uart_dma_tx_channel, false);
+		dma_channel_acknowledge_irq0(uart_dma_tx_channel);
 
-		xTaskNotifyFromISR(uart_task, USB_SERIAL_DATA_UART_TX_COMPLETE, eSetBits, &xHigherPriorityTaskWoken);
+		xTaskNotifyFromISR(usb_uart_task, USB_SERIAL_DATA_UART_TX_COMPLETE, eSetBits, &xHigherPriorityTaskWoken);
 		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
-}
 
-static void aux_serial_receive_isr(void)
-{
-    traceISR_ENTER();
-
-	uint32_t uart_int_status = UART_HW->mis;
-	uint32_t notify_bits = 0;
-	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-
-	if (uart_int_status & UART_UARTMIS_RXMIS_BITS)
-	{
-        for (uint8_t i = 0; i < 15; i++)
-        {
-            if (UART_HW->fr & UART_UARTFR_RXFE_BITS)
-            {
-                break;
-            }
-            data_rx[data_pos++] = (uint8_t) UART_HW->dr;
-            if (data_pos >= sizeof(data_rx))
-            {
-                data_pos = 0;
-            }
-
-            /*while ((UART_HW->fr & UART_UARTFR_RXFE_BITS) == 0)
-            {
-                data_rx[data_pos++] = (uint8_t) UART_HW->dr;
-                if (data_pos >= sizeof(data_rx))
-                {
-                    data_pos = 0;
-                }
-            }*/
-
-            UART_HW->icr |= UART_UARTICR_RXIC_BITS;
-            notify_bits |= USB_SERIAL_DATA_UART_RX_AVAILABLE;
-
-            gpio_set(PICO_GPIO_PORT, LED_SER_PIN);
-        }
-	}
-
-	if (uart_int_status & UART_UARTMIS_RTMIS_BITS)
-	{
-		UART_HW->icr |= UART_UARTICR_RTIC_BITS;
-        UART_HW->imsc &= ~(1u << UART_UARTIMSC_RTIM_LSB);
-		notify_bits |= USB_SERIAL_DATA_UART_RX_FLUSH;
-	}
-
-    //uart_set_irq_enables(UART_INSTANCE, false, false);
-
-	xTaskNotifyFromISR(uart_task, notify_bits, eSetBits, &xHigherPriorityTaskWoken);
-	portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-}
-
-void debug_serial_send_stdout(const uint8_t *const data, const size_t len)
-{
-}
-
-//#define USB_VID   (0x1209)
-//#define USB_PID   (0x2730)
-
-#define USB_VID   (0x1d50)
-#define USB_PID   (0x6018)
-
-tusb_desc_device_t const desc_device =
-{
-    .bLength            = sizeof(tusb_desc_device_t),
-    .bDescriptorType    = TUSB_DESC_DEVICE,
-    .bcdUSB             = 0x0200,
-
-    // Use Interface Association Descriptor (IAD) for CDC
-    // As required by USB Specs IAD's subclass must be common class (2) and protocol must be IAD (1)
-    .bDeviceClass       = TUSB_CLASS_MISC,
-    .bDeviceSubClass    = MISC_SUBCLASS_COMMON,
-    .bDeviceProtocol    = MISC_PROTOCOL_IAD,
-    .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
-
-    .idVendor           = USB_VID,
-    .idProduct          = USB_PID,
-    .bcdDevice          = 0x0100,
-
-    .iManufacturer      = 0x01,
-    .iProduct           = 0x02,
-    .iSerialNumber      = 0x03,
-
-    .bNumConfigurations = 0x01
-};
-
-// Invoked when received GET DEVICE DESCRIPTOR
-// Application return pointer to descriptor
-uint8_t const * tud_descriptor_device_cb(void)
-{
-    return (uint8_t const *)(&desc_device);
-}
-
-#define EPNUM_CDC_0_NOTIF   0x81
-#define EPNUM_CDC_0_OUT     0x02
-#define EPNUM_CDC_0_IN      0x82
-
-#define EPNUM_CDC_1_NOTIF   0x83
-#define EPNUM_CDC_1_OUT     0x04
-#define EPNUM_CDC_1_IN      0x84
-
-#ifdef PLATFORM_HAS_TRACESWO
-#define EPNUM_CDC_2_NOTIF   0x85
-#define EPNUM_CDC_2_OUT     0x06
-#define EPNUM_CDC_2_IN      0x86
-#endif
-
-enum
-{
-    ITF_NUM_CDC_0 = 0,
-    ITF_NUM_CDC_0_DATA,
-    ITF_NUM_CDC_1,
-    ITF_NUM_CDC_1_DATA,
-#ifdef PLATFORM_HAS_TRACESWO
-    ITF_NUM_CDC_2,
-	ITF_NUM_CDC_2_DATA,
-#endif
-    ITF_NUM_TOTAL
-};
-
-#define ITF_CONFIG_LEN   (TUD_CONFIG_DESC_LEN + ((ITF_NUM_TOTAL / 2) * TUD_CDC_DESC_LEN))
-
-static uint8_t const desc_fs_configuration[] =
-{
-    /* Config number, interface count, string index, total length, attribute, power in mA */
-    TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, ITF_CONFIG_LEN, 0x00, 500),
-
-    /* 1st CDC: Interface number, string index, EP notification address and size, EP data address (out, in) and size. */
-    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC_0, 4, EPNUM_CDC_0_NOTIF, 8, EPNUM_CDC_0_OUT, EPNUM_CDC_0_IN, 64),
-
-    /* 2nd CDC: Interface number, string index, EP notification address and size, EP data address (out, in) and size. */
-    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC_1, 5, EPNUM_CDC_1_NOTIF, 8, EPNUM_CDC_1_OUT, EPNUM_CDC_1_IN, 64),
-
-#ifdef PLATFORM_HAS_TRACESWO
-    /* 2rd CDC: Interface number, string index, EP notification address and size, EP data address (out, in) and size. */
-	TUD_CDC_DESCRIPTOR(ITF_NUM_CDC_2, 6, EPNUM_CDC_2_NOTIF, 8, EPNUM_CDC_2_OUT, EPNUM_CDC_2_IN, 64),
-#endif
-};
-
-uint8_t const * tud_descriptor_configuration_cb(uint8_t index)
-{
-    (void)index;
-    return desc_fs_configuration;
-}
-
-#define BOARD_IDENT "Black Magic Probe " PLATFORM_IDENT "" FIRMWARE_VERSION
-
-static char const *string_desc_arr[] =
-        {
-        (const char[]) { 0x09, 0x04, 0x00 }, // 0: is supported language is English (0x0409)
-        "Black Magic Debug",
-        BOARD_IDENT,
-        serial_no,
-        "Black Magic GDB Server",
-        "Black Magic UART Port",
-#ifdef PLATFORM_HAS_TRACESWO
-        "Black Magic Trace Capture",
-#endif
-        };
-
-static uint16_t _desc_str[64 + 1];
-
-uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
-{
-    (void)langid;
-
-    if (index >= (sizeof(string_desc_arr) / sizeof(string_desc_arr[0])))
+    if (uart_dma_rx_channel == -1)
     {
-        return NULL;
+        panic("uart_dma_rx_channel is -1!");
     }
-    else
+    else if (dma_channel_get_irq0_status(uart_dma_rx_channel))
     {
-        const char *str = string_desc_arr[index];
-        size_t chr_count = strlen(str);
-        const size_t max_count = (sizeof(_desc_str) / sizeof(_desc_str[0])) - 1;
-        if (chr_count > max_count)
+        dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
+        dma_channel_acknowledge_irq0(uart_dma_rx_channel);
+
+        uart_rx_dma_buffer_full_mask |= (1u << uart_rx_dma_current_buffer);
+
+        if (++uart_rx_dma_current_buffer >= UART_DMA_RX_NUMBER_OF_BUFFERS)
         {
-            chr_count = max_count;
+            uart_rx_dma_current_buffer = 0;
         }
 
-        for (size_t i = 0; i < chr_count; i++)
-        {
-            _desc_str[1 + i] = str[i];
-        }
+        dma_channel_set_read_addr(uart_dma_rx_channel, &(UART_HW->dr), false);
+        dma_channel_set_write_addr(uart_dma_rx_channel, uart_rx_buf[uart_rx_dma_current_buffer], false);
+        dma_channel_set_trans_count(uart_dma_rx_channel, sizeof(uart_rx_buf[uart_rx_dma_current_buffer]), true);
 
-        // first byte is length (including header), second byte is string type
-        _desc_str[0] = (uint16_t) ((TUSB_DESC_STRING << 8) | (2 * chr_count + 2));
+        dma_channel_set_irq0_enabled(uart_dma_rx_channel, true);
+
+        xTaskNotifyFromISR(usb_uart_task, USB_SERIAL_DATA_UART_RX_FLUSH, eSetBits, &xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
-
-    /*switch ( index )
-    {
-        case STRID_LANGID:
-            memcpy(&(_desc_str[1]), string_desc_arr[0], 2);
-            chr_count = 1;
-            break;
-
-        case STRID_SERIAL:
-        {
-            chr_count = DFU_SERIAL_LENGTH - 1;
-            const size_t const max_count = sizeof(_desc_str) / sizeof(_desc_str[0]) - 1; // -1 for string type
-            if (chr_count > max_count)
-            {
-                chr_count = max_count;
-            }
-            for (size_t i = 0; i < chr_count; i++)
-            {
-                _desc_str[1 + i] = serial_no[i];
-            }
-            break;
-        }
-
-        default:
-        {
-            // Note: the 0xEE index string is a Microsoft OS 1.0 Descriptors.
-            // https://docs.microsoft.com/en-us/windows-hardware/drivers/usbcon/microsoft-defined-usb-descriptors
-
-            if (index >= (sizeof(string_desc_arr) / sizeof(string_desc_arr[0])))
-            {
-                return NULL;
-            }
-
-            const char *str = string_desc_arr[index];
-
-            // Cap at max char
-            chr_count = strlen(str);
-            const size_t const max_count = sizeof(_desc_str) / sizeof(_desc_str[0]) - 1; // -1 for string type
-            if (chr_count > max_count)
-            {
-                chr_count = max_count;
-            }
-
-            // Convert ASCII string into UTF-16
-            for (size_t i = 0; i < chr_count; i++)
-            {
-                _desc_str[1 + i] = str[i];
-            }
-            break;
-        }
-    }*/
-
-    return _desc_str;
 }

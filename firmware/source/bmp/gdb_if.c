@@ -33,6 +33,16 @@
 static uint32_t count_in;
 static char buffer_in[1024];
 
+bool __not_in_flash_func(gdb_serial_get_dtr)(void)
+{
+    return tud_cdc_n_get_line_state(USB_SERIAL_GDB) & 0x01;
+}
+
+uint16_t __not_in_flash_func(usb_get_config)(void)
+{
+    return tud_mounted() ? 1 : 0;
+}
+
 void __not_in_flash_func(gdb_if_putchar)(const char c, const int flush)
 {
 	buffer_in[count_in++] = c;

@@ -37,12 +37,11 @@
 /* TODO: set correct firmware version */
 #define FIRMWARE_VERSION "1"
 
-//#define PLATFORM_MIOLINK
-#define PLATFORM_RUBYLINK_REV_C
+#define PLATFORM_MIOLINK
 
 #define PICO_GPIO_PORT                (0)
 
-#if defined(PLATFORM_MIOLINK)
+#define PLATFORM_HAS_CUSTOM_COMMANDS
 #define PLATFORM_HAS_POWER_SWITCH
 
 #define HWVERSION_PIN_0               (14)
@@ -63,21 +62,6 @@
 #define TARGET_TDI_PIN                (28)
 #define TARGET_TMS_PIN                (26)
 #define TARGET_TMS_DIR_PIN            (27)
-#endif
-
-#if defined(PLATFORM_RUBYLINK_REV_C)
-#define PLATFORM_HAS_CUSTOM_COMMANDS
-#define PLATFORM_HAS_POWER_SWITCH
-#define TARGET_TCK_PIN                (16)
-#define TARGET_TDO_PIN                (12)
-#define TARGET_TDI_PIN                (17)
-#define TARGET_TMS_PIN                (15)
-#define TARGET_TMS_DIR_PIN            (14)
-
-#define NRST_PIN                      (7)
-#define TARGET_VOLTAGE_ENABLE_PIN     (6)
-#define TARGET_VOLTAGE_FAULT_PIN      (13)
-#endif
 
 #define TDI_PORT                      (PICO_GPIO_PORT)
 #define TMS_PORT                      (PICO_GPIO_PORT)
@@ -117,34 +101,14 @@
 #define gpio_set_val(port, pin, state)  gpio_put(pin, state)
 
 #define SET_RUN_STATE(state)   running_status = (state)
-
-#if defined(LED_ACT_PIN)
 #define SET_IDLE_STATE(state)  gpio_set_val(PICO_GPIO_PORT, LED_ACT_PIN, state)
-#else
-#define SET_IDLE_STATE(state)   ((void)state)
-#endif
-
-#if defined(LED_ERR_PIN)
 #define SET_ERROR_STATE(state) gpio_set_val(PICO_GPIO_PORT, LED_ERR_PIN, state)
-#else
-#define SET_ERROR_STATE(state) ((void)state)
-#endif
 
-#if defined(PLATFORM_MIOLINK)
 #define UART_NUMBER            (1)
 #define UART_TX_PIN            (8)
 #define UART_RX_PIN            (21)
 #define UART_IRQ               (UART1_IRQ)
 #define UART_DMA_IRQ           (DMA_IRQ_0)
-#endif
-
-#if defined(PLATFORM_RUBYLINK_REV_C)
-#define UART_NUMBER            (1)
-#define UART_TX_PIN            (8)
-#define UART_RX_PIN            (9)
-#define UART_IRQ               (UART1_IRQ)
-#define UART_DMA_IRQ           (DMA_IRQ_0)
-#endif
 
 #define UART_INSTANCE          (uart_get_instance(UART_NUMBER))
 #define UART_HW                (uart_get_hw(UART_INSTANCE))
@@ -162,8 +126,6 @@
 #define PLATFORM_PRIORITY_HIGH        (configMAX_PRIORITIES - 2)
 #define PLATFORM_PRIORITY_HIGHEST     (configMAX_PRIORITIES - 1)
 
-#if defined(PLATFORM_HAS_POWER_SWITCH)
 bool platform_target_is_power_ok(void);
-#endif
 
 #endif /* PLATFORMS_MIOLINK_PLATFORM_H */

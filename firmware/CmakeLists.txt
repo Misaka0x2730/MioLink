@@ -46,9 +46,8 @@ target_sources(MioLink PUBLIC source/bmp/timing_rp2040.c)
 target_sources(MioLink PUBLIC source/bmp/serialno.c)
 target_sources(MioLink PUBLIC source/bmp/usb_serial.c)
 target_sources(MioLink PUBLIC source/bmp/gdb_if.c)
-target_sources(MioLink PUBLIC source/bmp/device_i2c.c)
-target_sources(MioLink PUBLIC source/bmp/multiplexer_task.c)
 target_sources(MioLink PUBLIC source/bmp/swdptap.c)
+target_sources(MioLink PUBLIC source/bmp/usb.c)
 #target_sources(MioLink PUBLIC thirdParty/blackmagic/src/platforms/common/swdptap.c)
 #target_sources(MioLink PUBLIC source/bmp/traceswoasync.c)
 
@@ -155,6 +154,6 @@ target_link_options(MioLink PRIVATE -Xlinker --print-memory-usage)
 pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/target_swd.pio)
 pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/target_jtag.pio)
 
-pico_set_linker_script(MioLink ${CMAKE_CURRENT_LIST_DIR}/memmap_default.ld)
+#pico_set_linker_script(MioLink ${CMAKE_CURRENT_LIST_DIR}/memmap_default.ld)
 
 pico_add_extra_outputs(MioLink)

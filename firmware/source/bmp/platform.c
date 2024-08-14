@@ -31,16 +31,10 @@
 #include "target_internal.h"
 #include "gdb_packet.h"
 
-#if defined(PLATFORM_RUBYLINK_REV_C)
-#include "multiplexer_task.h"
-#endif
-
 extern void trace_tick(void);
 
-#if defined(PLATFORM_MIOLINK)
 static int adc_target_voltage_dma_chan = -1;
 static uint8_t adc_target_voltage_buf[250] = { 0 };
-#endif
 static uint16_t target_voltage = 0;
 
 bool cmd_test(target_s *t, int argc, const char **argv)
@@ -75,7 +69,6 @@ int platform_hwversion(void)
 {
     static int hwversion = -1;
 
-#if defined(PLATFORM_MIOLINK)
     if (hwversion == -1)
     {
         gpio_init(HWVERSION_PIN_0);
@@ -83,13 +76,13 @@ int platform_hwversion(void)
 
         hwversion = gpio_get(PICO_GPIO_PORT, HWVERSION_PIN_1) ? (1 << 1) : 0;
         hwversion |= gpio_get(PICO_GPIO_PORT, HWVERSION_PIN_0) ? (1 << 0) : 0;
+
+        hwversion++;
     }
-#endif
 
     return hwversion;
 }
 
-#if defined(PLATFORM_MIOLINK)
 static void __not_in_flash_func(adc_target_voltage_dma_handler)(void)
 {
     uint32_t temp = 0;
@@ -109,10 +102,11 @@ static void __not_in_flash_func(adc_target_voltage_dma_handler)(void)
 
     target_voltage = (uint16_t)(temp);
 
-    dma_channel_acknowledge_irq0(adc_target_voltage_dma_chan);
-    dma_channel_set_read_addr(adc_target_voltage_dma_chan, adc_target_voltage_buf, true);
+    dma_channel_acknowledge_irq1(adc_target_voltage_dma_chan);
+    dma_channel_set_read_addr(adc_target_voltage_dma_chan, &adc_hw->fifo, false);
+    dma_channel_set_write_addr(adc_target_voltage_dma_chan, adc_target_voltage_buf, false);
+    dma_channel_set_trans_count(adc_target_voltage_dma_chan, sizeof(adc_target_voltage_buf), true);
 }
-#endif
 
 void platform_init(void)
 {
@@ -130,41 +124,24 @@ void platform_init(void)
     gpio_init(TARGET_TMS_DIR_PIN);
     gpio_set_dir(TARGET_TMS_DIR_PIN, GPIO_OUT);
 
-#if defined(LED_ACT_PIN)
     gpio_init(LED_ACT_PIN);
     gpio_set_dir(LED_ACT_PIN, GPIO_OUT);
-#endif
 
-#if defined(LED_ERR_PIN)
     gpio_init(LED_ERR_PIN);
     gpio_set_dir(LED_ERR_PIN, GPIO_OUT);
-#endif
 
-#if defined(LED_SER_PIN)
     gpio_init(LED_SER_PIN);
     gpio_set_dir(LED_SER_PIN, GPIO_OUT);
-#endif
 
-#if defined(PLATFORM_MIOLINK)
-#if defined(NRST_PIN)
     gpio_init(NRST_PIN);
     gpio_set_dir(NRST_PIN, GPIO_OUT);
-#endif
-#endif
 
-#if defined(PLATFORM_MIOLINK)
-#if defined(TARGET_VOLTAGE_ENABLE_PIN)
     gpio_init(TARGET_VOLTAGE_ENABLE_PIN);
     gpio_set_dir(TARGET_VOLTAGE_ENABLE_PIN, GPIO_OUT);
-#endif
-#endif
 
-#if defined(TARGET_VOLTAGE_FAULT_PIN)
     gpio_init(TARGET_VOLTAGE_FAULT_PIN);
     gpio_set_pulls(TARGET_VOLTAGE_FAULT_PIN, true, false);
-#endif
 
-#if defined(PLATFORM_MIOLINK)
     /* Init Vref voltage ADC */
     if (adc_target_voltage_dma_chan == -1)
     {
@@ -198,59 +175,35 @@ void platform_init(void)
                               true            // start immediately
         );
 
-        dma_channel_set_irq0_enabled(adc_target_voltage_dma_chan, true);
+        dma_channel_acknowledge_irq0(adc_target_voltage_dma_chan);
+        dma_channel_set_irq1_enabled(adc_target_voltage_dma_chan, true);
 
-        irq_set_exclusive_handler(DMA_IRQ_0, adc_target_voltage_dma_handler);
-        irq_set_enabled(DMA_IRQ_0, true);
+        irq_set_exclusive_handler(DMA_IRQ_1, adc_target_voltage_dma_handler);
+        irq_set_enabled(DMA_IRQ_1, true);
 
         adc_run(true);
     }
-#endif
 
     platform_timing_init();
 }
 
 void platform_nrst_set_val(bool assert)
 {
-#if defined(NRST_PIN)
-#if defined(PLATFORM_MIOLINK)
     gpio_put(NRST_PIN, assert);
 	if (assert)
     {
         platform_delay(10);
 	}
-#endif
-#if defined(PLATFORM_RUBYLINK_REV_C)
-    multiplexer_pin_set_value(NRST_PIN, assert);
-    platform_delay(10);
-#endif
-#endif
 }
 
 bool platform_nrst_get_val(void)
 {
-#if defined(NRST_PIN)
-#if defined(PLATFORM_MIOLINK)
 	return gpio_get (PICO_GPIO_PORT, NRST_PIN);
-#endif
-#if defined(PLATFORM_RUBYLINK_REV_C)
-    return multiplexer_pin_get(NRST_PIN);
-#endif
-#else
-    return false;
-#endif
 }
 
-#if defined(PLATFORM_HAS_POWER_SWITCH)
 bool platform_target_get_power(void)
 {
-#if defined(PLATFORM_MIOLINK)
     return gpio_get(PICO_GPIO_PORT, TARGET_VOLTAGE_ENABLE_PIN);
-#endif
-
-#if defined(PLATFORM_RUBYLINK_REV_C)
-    return multiplexer_pin_get(TARGET_VOLTAGE_ENABLE_PIN);
-#endif
 }
 
 bool platform_target_is_power_ok(void)
@@ -260,34 +213,13 @@ bool platform_target_is_power_ok(void)
 
 bool platform_target_set_power(const bool power)
 {
-#if defined(PLATFORM_MIOLINK)
     gpio_set_val(PICO_GPIO_PORT, TARGET_VOLTAGE_ENABLE_PIN, power);
     return true;
-#endif
-
-#if defined(PLATFORM_RUBYLINK_REV_C)
-    multiplexer_pin_set_value(TARGET_VOLTAGE_ENABLE_PIN, power);
-    multiplexer_pin_set_value(5, power);
-    return true;
-#endif
 }
 
 uint32_t platform_target_voltage_sense(void)
 {
-#if defined(PLATFORM_MIOLINK)
     return target_voltage;
-#endif
-
-#if defined(PLATFORM_RUBYLINK_REV_C)
-    if (platform_target_get_power())
-    {
-        return 33;
-    }
-    else
-    {
-        return 0;
-    }
-#endif
 }
 
 const char *platform_target_voltage(void)
@@ -304,12 +236,6 @@ const char *platform_target_voltage(void)
 
     return ret;
 }
-#else
-const char *platform_target_voltage(void)
-{
-    return NULL;
-}
-#endif
 
 void platform_target_clk_output_enable(bool enable)
 {
@@ -338,4 +264,8 @@ uint8_t platform_spi_xfer(const spi_bus_e bus, const uint8_t value)
 {
 	(void)bus;
 	return value;
+}
+
+void debug_serial_send_stdout(const uint8_t *const data, const size_t len)
+{
 }

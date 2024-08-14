@@ -97,7 +97,7 @@
 #define configTIMER_TASK_PRIORITY               ( configMAX_PRIORITIES - 1 )
 #define configTIMER_QUEUE_LENGTH                10
 #define configTIMER_TASK_STACK_DEPTH            128
-//#define configUSE_CORE_AFFINITY                 1
+
 /* Interrupt nesting behaviour configuration. */
 /*
 #define configKERNEL_INTERRUPT_PRIORITY         [dependent of processor]
@@ -108,12 +108,16 @@
 /* SMP port only */
 #define configNUMBER_OF_CORES                   1
 #define configTICK_CORE                         0
-#define configRUN_MULTIPLE_PRIORITIES           0
+#define configRUN_MULTIPLE_PRIORITIES           1
 #define configUSE_PASSIVE_IDLE_HOOK             0
 
 /* RP2040 specific */
 #define configSUPPORT_PICO_SYNC_INTEROP         0
 #define configSUPPORT_PICO_TIME_INTEROP         0
+
+#if (configNUMBER_OF_CORES > 1)
+#define configUSE_CORE_AFFINITY                 1
+#endif
 
 //extern void System_Assert(const char* file, const int line);
 

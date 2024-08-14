@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2022 1BitSquared <info@1bitsquared.com>
  * Written by Rachel Mant <git@dragonmux.network>
+ * Modified 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,31 +19,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef PLATFORMS_COMMON_USB_SERIAL_H
-#define PLATFORMS_COMMON_USB_SERIAL_H
+#ifndef BMP_USB_H
+#define BMP_USB_H
 
 #include <stdint.h>
-#include <stdbool.h>
 
-#include "tusb.h"
+void blackmagic_usb_init(void);
 
-typedef enum usb_serial_interface_e
-{
-	USB_SERIAL_GDB = 0,
-	USB_SERIAL_TARGET,
-	USB_SERIAL_NUM = CFG_TUD_CDC
-} usb_serial_interface_t;
-
-#define USB_SERIAL_DATA_RX                (0x01)
-#define USB_SERIAL_LINE_STATE_UPDATE      (0x02)
-#define USB_SERIAL_LINE_CODING_UPDATE     (0x04)
-#define USB_SERIAL_DATA_UART_RX_AVAILABLE (0x08)
-#define USB_SERIAL_DATA_UART_RX_FLUSH     (0x10)
-#define USB_SERIAL_DATA_UART_RX_TIMEOUT   (0x20)
-#define USB_SERIAL_DATA_UART_TX_COMPLETE  (0x40)
-
-uint16_t usb_get_config(void);
-bool gdb_serial_get_dtr(void);
-void usb_serial_init(void);
-
-#endif /* PLATFORMS_COMMON_USB_SERIAL_H */
+#endif /* BMP_USB_H */

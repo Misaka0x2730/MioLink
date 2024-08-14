@@ -95,7 +95,7 @@ void swdptap_init(void)
     sm_config_set_out_pins(&prog_config, TARGET_TMS_PIN, 1);
     sm_config_set_in_pins(&prog_config, TARGET_TMS_PIN);
     sm_config_set_sideset_pins(&prog_config, TARGET_TCK_PIN);
-    sm_config_set_set_pins(&prog_config, TARGET_TMS_DIR_PIN, 2);
+    sm_config_set_set_pins(&prog_config, TARGET_TMS_PIN, 2);
     sm_config_set_out_shift(&prog_config, true, true, 32);
     sm_config_set_in_shift(&prog_config, true, true, 32);
 

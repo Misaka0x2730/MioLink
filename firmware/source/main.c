@@ -15,7 +15,7 @@
 #endif
 #include "pico/multicore.h"
 
-#include "multiplexer_task.h"
+#include "usb.h"
 
 #if ENABLE_DEBUG
 #include "SEGGER_RTT.h"
@@ -61,11 +61,17 @@ static void bmp_poll_loop(void)
     //vTaskDelay(5);
 }
 
+extern TaskHandle_t usb_uart_task;
+
 void tud_cdc_rx_cb(uint8_t interface)
 {
     if (interface == USB_SERIAL_GDB)
     {
         xTaskNotify(gdb_task, USB_SERIAL_DATA_RX, eSetBits);
+    }
+    else if (interface == USB_SERIAL_TARGET)
+    {
+        xTaskNotify(usb_uart_task, USB_SERIAL_DATA_RX, eSetBits);
     }
 }
 
@@ -77,6 +83,18 @@ void tud_cdc_line_state_cb(uint8_t interface, bool dtr, bool rts)
     if (interface == USB_SERIAL_GDB)
     {
         xTaskNotify(gdb_task, USB_SERIAL_LINE_STATE_UPDATE, eSetBits);
+    }
+    else if (interface == USB_SERIAL_TARGET)
+    {
+        xTaskNotify(usb_uart_task, USB_SERIAL_LINE_STATE_UPDATE, eSetBits);
+    }
+}
+
+void tud_cdc_line_coding_cb(uint8_t interface, cdc_line_coding_t const* p_line_coding)
+{
+    if (interface == USB_SERIAL_TARGET)
+    {
+        xTaskNotify(usb_uart_task, USB_SERIAL_LINE_CODING_UPDATE, eSetBits);
     }
 }
 
@@ -105,11 +123,11 @@ void main(void)
 #endif
     platform_init();
     platform_timing_init();
-    multiplexer_task_init();
-    usb_task_init();
+    blackmagic_usb_init();
+    usb_serial_init();
     usb_serial_init();
 
-    //multicore_reset_core1();
+    multicore_reset_core1();
 
     //portENABLE_INTERRUPTS();
 
