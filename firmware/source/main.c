@@ -23,6 +23,8 @@
 
 static char BMD_ALIGN_DEF(8) pbuf[GDB_PACKET_BUFFER_SIZE + 1U];
 
+#define GDB_TASK_CORE_AFFINITY     (0x01) /* Core 0 only */
+
 TaskHandle_t gdb_task;
 
 char *gdb_packet_buffer()
@@ -129,8 +131,6 @@ void main(void)
 
     multicore_reset_core1();
 
-    //portENABLE_INTERRUPTS();
-
     BaseType_t status = xTaskCreate(main_thread,
                                     "main",
 									1024,
@@ -138,8 +138,9 @@ void main(void)
                                     PLATFORM_PRIORITY_NORMAL,
                                     &gdb_task);
 
-    //vTaskCoreAffinitySet(main_task, 0x02);
-
+#if configUSE_CORE_AFFINITY
+    vTaskCoreAffinitySet(main_task, GDB_TASK_CORE_AFFINITY);
+#endif
     vTaskStartScheduler();
 
 	while(1)
@@ -156,4 +157,6 @@ void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName )
     /* Run time stack overflow checking is performed if
     configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2.  This hook
     function is called if a stack overflow is detected. */
+
+    panic("Stack overflow!");
 }

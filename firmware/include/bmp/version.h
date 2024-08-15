@@ -1,1 +1,4 @@
-#define FIRMWARE_VERSION "1"
+#include "git_thirdParty_version.h"
+
+#define MIOLINK_PORT_VERSION "1"
+#define FIRMWARE_VERSION MIOLINK_PORT_VERSION ", BMP " GIT_BMP_VERSION ", FreeRTOS " GIT_FREERTOS_VERSION

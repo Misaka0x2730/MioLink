@@ -26,8 +26,10 @@
 #ifdef PLATFORM_HAS_TRACESWO
 #include "traceswo.h"
 #endif
+#ifdef ENABLE_RTT
 #include "rtt.h"
 #include "rtt_if.h"
+#endif
 #include "tusb.h"
 
 #include "atomic.h"
@@ -403,8 +405,8 @@ static void __not_in_flash_func(uart_update_config)(cdc_line_coding_t *line_codi
     dma_channel_acknowledge_irq0(uart_dma_tx_channel);
 
     UART_PIN_SETUP();
-    uart_init(UART_INSTANCE, line_coding->bit_rate);
-    uart_set_format(UART_INSTANCE, data_bits, stop_bits, parity);
+    uart_init(UART_INSTANCE(UART_NUMBER), line_coding->bit_rate);
+    uart_set_format(UART_INSTANCE(UART_NUMBER), data_bits, stop_bits, parity);
 
     if (line_coding->bit_rate >= UART_DMA_RX_BAUDRATE_THRESHOLD)
     {
@@ -434,6 +436,10 @@ void usb_serial_init(void)
 
 static void __not_in_flash_func(aux_serial_receive_isr)(void);
 static void __not_in_flash_func(uart_dma_handler)(void);
+
+#ifdef ENABLE_RTT
+extern void rtt_serial_receive_callback(void);
+#endif
 
 _Noreturn static void __not_in_flash_func(target_serial_thread)(void* params)
 {
@@ -520,7 +526,18 @@ _Noreturn static void __not_in_flash_func(target_serial_thread)(void* params)
 
             if ((notificationValue & USB_SERIAL_DATA_RX) && (uart_tx_ongoing == false))
             {
+#ifdef ENABLE_RTT
+                if (rtt_enabled)
+                {
+		            rtt_serial_receive_callback();
+	            }
+                else
+                {
+                    uart_tx_dma_send();
+                }
+#else
                 uart_tx_dma_send();
+#endif
             }
         }
 

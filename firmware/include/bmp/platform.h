@@ -34,8 +34,10 @@
 #error "TARGET_SWD_IDLE_CYCLES should be at least 1"
 #endif
 
-/* TODO: set correct firmware version */
-#define FIRMWARE_VERSION "1"
+#if ENABLE_DEBUG == 1
+#define PLATFORM_HAS_DEBUG
+extern bool debug_bmp;
+#endif
 
 #define PLATFORM_MIOLINK
 
@@ -110,8 +112,7 @@
 #define UART_IRQ               (UART1_IRQ)
 #define UART_DMA_IRQ           (DMA_IRQ_0)
 
-#define UART_INSTANCE          (uart_get_instance(UART_NUMBER))
-#define UART_HW                (uart_get_hw(UART_INSTANCE))
+#define UART_HW                (uart_get_hw(UART_INSTANCE(UART_NUMBER)))
 
 
 #define UART_PIN_SETUP()                                  \

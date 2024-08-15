@@ -60,6 +60,9 @@ target_sources(MioLink PUBLIC source/bmp/crc32.c)
 target_sources(MioLink PUBLIC source/bmp/adiv5_swd.c)
 #target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/adiv5_swd.c)
 
+target_sources(MioLink PUBLIC source/bmp/rtt_if.c)
+target_sources(MioLink PUBLIC thirdParty/blackmagic/src/rtt.c)
+
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/morse.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/gdb_main.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/gdb_packet.c)
@@ -149,11 +152,20 @@ add_compile_definitions(DFU_SERIAL_LENGTH=PICO_UNIQUE_BOARD_ID_SIZE_BYTES+1)
 add_compile_definitions(PC_HOSTED=0)
 add_compile_definitions(SYSTICKHZ=1000)
 
+add_compile_definitions(ENABLE_RTT=1)
+
+
 target_link_options(MioLink PRIVATE -Xlinker --print-memory-usage)
 
 pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/target_swd.pio)
 pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/target_jtag.pio)
 
-#pico_set_linker_script(MioLink ${CMAKE_CURRENT_LIST_DIR}/memmap_default.ld)
+pico_set_linker_script(MioLink ${CMAKE_CURRENT_LIST_DIR}/memmap_default.ld)
+
+execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ../thirdParty/blackmagic/.git describe --tags --always
+        OUTPUT_VARIABLE GIT_BMP_REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ../thirdParty/FreeRTOS-Kernel/.git describe --tags --always
+        OUTPUT_VARIABLE GIT_FREERTOS_REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+configure_file("git_thirdParty_version.h.in" "git_thirdParty_version.h")
 
 pico_add_extra_outputs(MioLink)

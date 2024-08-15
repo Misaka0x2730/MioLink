@@ -24,6 +24,7 @@
 #include "tusb.h"
 #include "task.h"
 #include "serialno.h"
+#include "version.h"
 
 #define USB_TASK_CORE_AFFINITY     (0x01) /* Core 0 only */
 
