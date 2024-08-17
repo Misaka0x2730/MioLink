@@ -56,7 +56,7 @@
 
 #define UART_DMA_TX_CHECK_FINISHED_PERIOD (2)
 
-#define UART_NOTIFY_WAIT_PERIOD           (portMAX_DELAY)
+#define UART_NOTIFY_WAIT_PERIOD           (2000)
 
 static uint8_t uart_rx_buf[UART_DMA_RX_NUMBER_OF_BUFFERS][UART_DMA_RX_BUFFER_SIZE] = { 0 };
 static uint32_t uart_rx_int_buf_pos = 0;
@@ -73,6 +73,15 @@ bool uart_tx_dma_finished = false;
 static bool uart_tx_ongoing = false;
 
 TaskHandle_t usb_uart_task;
+
+bool use_uart_on_tdi_tdo = false;
+
+static uint32_t current_uart_number = UART_NUMBER;
+
+#define UART_HW                (uart_get_hw(UART_INSTANCE(current_uart_number)))
+
+static void __not_in_flash_func(aux_serial_receive_isr)(void);
+static void __not_in_flash_func(uart_dma_handler)(void);
 
 static void __not_in_flash_func(update_serial_led)(void)
 {
@@ -126,7 +135,15 @@ static void __not_in_flash_func(uart_rx_dma_init)(const uint32_t baudrate)
     channel_config_set_transfer_data_size(&rx_config, DMA_SIZE_8);
     channel_config_set_read_increment(&rx_config, false);
     channel_config_set_write_increment(&rx_config, true);
-    channel_config_set_dreq(&rx_config, DREQ_UART1_RX);
+
+    if (current_uart_number == UART_NUMBER)
+    {
+        channel_config_set_dreq(&rx_config, DREQ_UART1_RX);
+    }
+    else
+    {
+        channel_config_set_dreq(&rx_config, DREQ_UART0_RX);
+    }
 
     dma_channel_configure(uart_dma_rx_channel,
                           &rx_config,
@@ -395,7 +412,9 @@ static void __not_in_flash_func(uart_update_config)(cdc_line_coding_t *line_codi
         data_bits = line_coding->data_bits;
     }
 
-    /* Re-initialize UART */
+    portENTER_CRITICAL();
+    xTimerStop(uart_rx_dma_timeout_timer, pdMS_TO_TICKS(0));
+
     dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
     dma_channel_abort(uart_dma_rx_channel);
     dma_channel_acknowledge_irq0(uart_dma_rx_channel);
@@ -404,9 +423,84 @@ static void __not_in_flash_func(uart_update_config)(cdc_line_coding_t *line_codi
     dma_channel_abort(uart_dma_tx_channel);
     dma_channel_acknowledge_irq0(uart_dma_tx_channel);
 
-    UART_PIN_SETUP();
-    uart_init(UART_INSTANCE(UART_NUMBER), line_coding->bit_rate);
-    uart_set_format(UART_INSTANCE(UART_NUMBER), data_bits, stop_bits, parity);
+    if ((use_uart_on_tdi_tdo != false) && (current_uart_number == UART_NUMBER))
+    {
+        irq_handler_t current_handler = irq_get_exclusive_handler(UART_IRQ);
+        irq_set_enabled(UART_IRQ, false);
+        irq_remove_handler(UART_IRQ, current_handler);
+
+        current_handler = irq_get_exclusive_handler(UART0_IRQ);
+        irq_set_enabled(UART0_IRQ, false);
+        irq_remove_handler(UART0_IRQ, current_handler);
+
+        uart_deinit(UART_INSTANCE(UART_NUMBER));
+        current_uart_number = UART_TDI_TDO_NUMBER;
+    }
+    else if ((use_uart_on_tdi_tdo == false) && (current_uart_number == UART_TDI_TDO_NUMBER))
+    {
+        irq_handler_t current_handler = irq_get_exclusive_handler(UART_IRQ);
+        irq_set_enabled(UART_IRQ, false);
+        irq_remove_handler(UART_IRQ, current_handler);
+
+        current_handler = irq_get_exclusive_handler(UART0_IRQ);
+        irq_set_enabled(UART0_IRQ, false);
+        irq_remove_handler(UART0_IRQ, current_handler);
+
+        uart_deinit(UART_INSTANCE(UART_TDI_TDO_NUMBER));
+        current_uart_number = UART_NUMBER;
+    }
+
+    if (current_uart_number == UART_NUMBER)
+    {
+        UART_PIN_SETUP();
+
+        irq_handler_t current_handler = irq_get_exclusive_handler(UART_IRQ);
+        if (current_handler == NULL)
+        {
+            irq_set_exclusive_handler(UART_IRQ, aux_serial_receive_isr);
+        }
+        irq_set_enabled(UART_IRQ, true);
+    }
+    else
+    {
+        UART_TDI_TDO_PIN_SETUP();
+
+        irq_handler_t current_handler = irq_get_exclusive_handler(UART0_IRQ);
+        if (current_handler == NULL)
+        {
+            irq_set_exclusive_handler(UART0_IRQ, aux_serial_receive_isr);
+        }
+        irq_set_enabled(UART0_IRQ, true);
+    }
+
+    dma_channel_config tx_config = dma_channel_get_default_config(uart_dma_tx_channel);
+    channel_config_set_transfer_data_size(&tx_config, DMA_SIZE_8);
+    channel_config_set_read_increment(&tx_config, true);
+    channel_config_set_write_increment(&tx_config, false);
+
+    if (current_uart_number == UART_NUMBER)
+    {
+        channel_config_set_dreq(&tx_config, DREQ_UART1_TX);
+    }
+    else
+    {
+        channel_config_set_dreq(&tx_config, DREQ_UART0_TX);
+    }
+
+    dma_channel_configure(uart_dma_tx_channel,
+                          &tx_config,
+                          &(UART_HW->dr),
+                          uart_tx_dma_buf,
+                          sizeof(uart_tx_dma_buf),
+                          false);
+
+    uart_init(UART_INSTANCE(current_uart_number), line_coding->bit_rate);
+    uart_set_format(UART_INSTANCE(current_uart_number), data_bits, stop_bits, parity);
+
+    uart_rx_ongoing = false;
+    uart_tx_ongoing = false;
+
+    portEXIT_CRITICAL();
 
     if (line_coding->bit_rate >= UART_DMA_RX_BAUDRATE_THRESHOLD)
     {
@@ -434,9 +528,6 @@ void usb_serial_init(void)
 #endif
 }
 
-static void __not_in_flash_func(aux_serial_receive_isr)(void);
-static void __not_in_flash_func(uart_dma_handler)(void);
-
 #ifdef ENABLE_RTT
 extern void rtt_serial_receive_callback(void);
 #endif
@@ -451,25 +542,9 @@ _Noreturn static void __not_in_flash_func(target_serial_thread)(void* params)
                                          NULL,
                                          uart_rx_dma_timeout_callback);
 
-	irq_set_exclusive_handler(UART_IRQ, aux_serial_receive_isr);
-	irq_set_enabled(UART_IRQ, true);
-
     uart_dma_tx_channel = dma_claim_unused_channel(true);
-    dma_channel_config tx_config = dma_channel_get_default_config(uart_dma_tx_channel);
-    channel_config_set_transfer_data_size(&tx_config, DMA_SIZE_8);
-    channel_config_set_read_increment(&tx_config, true);
-    channel_config_set_write_increment(&tx_config, false);
-    channel_config_set_dreq(&tx_config, DREQ_UART1_TX);
-
-    dma_channel_configure(uart_dma_tx_channel,
-                           &tx_config,
-                           &(UART_HW->dr),
-                           uart_tx_dma_buf,
-                           sizeof(uart_tx_dma_buf),
-                           false);
-
     uart_dma_rx_channel = dma_claim_unused_channel(true);
-
+    
     irq_set_exclusive_handler(DMA_IRQ_0, uart_dma_handler);
     irq_set_enabled(DMA_IRQ_0, true);
 
@@ -554,6 +629,15 @@ _Noreturn static void __not_in_flash_func(target_serial_thread)(void* params)
             {
                 wait_time = UART_DMA_TX_CHECK_FINISHED_PERIOD;
             }
+        }
+
+        if (((use_uart_on_tdi_tdo != false) && (current_uart_number == UART_NUMBER)) ||
+           ((use_uart_on_tdi_tdo == false) && (current_uart_number == UART_TDI_TDO_NUMBER)))
+        {
+            cdc_line_coding_t line_coding = { 0 };
+            tud_cdc_n_get_line_coding(USB_SERIAL_TARGET, &line_coding);
+
+            uart_update_config(&line_coding);
         }
 
         update_serial_led();

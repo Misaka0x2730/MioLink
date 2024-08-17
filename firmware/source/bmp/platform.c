@@ -32,7 +32,10 @@
 #include "target_internal.h"
 #include "gdb_packet.h"
 
+#include "command.h"
 #include "serialno.h"
+
+#include "usb_serial.h"
 
 extern void trace_tick(void);
 
@@ -40,32 +43,31 @@ static int adc_target_voltage_dma_chan = -1;
 static uint8_t adc_target_voltage_buf[250] = { 0 };
 static uint16_t target_voltage = 0;
 
-bool cmd_test(target_s *t, int argc, const char **argv)
+bool cmd_uart_on_tdi_tdo(target_s *t, int argc, const char **argv)
 {
     (void)t;
-    (void)argc;
-    (void)argv;
 
-    gdb_out("Just for testing\n");
+    bool print_status = false;
 
-    return true;
-}
+    if (argc == 1) {
+        print_status = true;
+    }
+    else if (argc == 2) {
+        if (parse_enable_or_disable(argv[1], &use_uart_on_tdi_tdo))
+            print_status = true;
+    } else
+        gdb_out("Unrecognized command format\n");
 
-bool cmd_test1(target_s *t, int argc, const char **argv)
-{
-    (void)t;
-    (void)argc;
-    (void)argv;
-
-    gdb_out("Just for testing 1\n");
+    if (print_status) {
+        gdb_outf("UART pins on TDI and TDO (only in SWD mode): %s\n", use_uart_on_tdi_tdo ? "enabled" : "disabled");
+    }
 
     return true;
 }
 
 const command_s platform_cmd_list[] = {
-    {"test", cmd_test, "Just for testing"},
-    {"test1", cmd_test1, "Just for testing1"},
-    {NULL, NULL, NULL},
+    {"uart_on_tdi_tdo", cmd_uart_on_tdi_tdo, "Use UART pins on TDI and TDO (only in SWD mode): [enable|disable]"},
+    {NULL, NULL, NULL}
 };
 
 int platform_hwversion(void)

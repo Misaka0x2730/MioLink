@@ -30,7 +30,6 @@
 #include "timers.h"
 #include "task.h"
 
-#define TRACESWO_UART_NUMBER            (0)
 #define TRACESWO_UART_HW                (uart_get_hw(UART_INSTANCE(TRACESWO_UART_NUMBER)))
 #define TRACESWO_UART_IRQ               UART0_IRQ
 #define TRACESWO_TASK_CORE_AFFINITY     (0x01) /* Core 0 only */

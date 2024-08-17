@@ -120,18 +120,24 @@ extern bool debug_bmp;
 #define SET_ERROR_STATE(state) gpio_set_val(PICO_GPIO_PORT, LED_ERR_PIN, state)
 
 #define UART_NUMBER            (1)
+#define TRACESWO_UART_NUMBER   (0)
+#define UART_TDI_TDO_NUMBER    (0)
 #define UART_TX_PIN            (8)
 #define UART_RX_PIN            (21)
 #define UART_IRQ               (UART1_IRQ)
 #define UART_DMA_IRQ           (DMA_IRQ_0)
-
-#define UART_HW                (uart_get_hw(UART_INSTANCE(UART_NUMBER)))
 
 
 #define UART_PIN_SETUP()                                  \
 	do {                                                  \
 		gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);   \
     	gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);   \
+	} while (0)
+
+#define UART_TDI_TDO_PIN_SETUP()                          \
+	do {                                                  \
+		gpio_set_function(TARGET_TDO_PIN, GPIO_FUNC_UART);   \
+    	gpio_set_function(TARGET_TDI_PIN, GPIO_FUNC_UART);   \
 	} while (0)
 
 #define PLATFORM_PRIORITY_LOWEST      (configMAX_PRIORITIES - 5)

@@ -41,6 +41,8 @@ typedef enum usb_serial_interface_e
 #define USB_SERIAL_DATA_UART_RX_TIMEOUT   (0x20)
 #define USB_SERIAL_DATA_UART_TX_COMPLETE  (0x40)
 
+extern bool use_uart_on_tdi_tdo;
+
 uint16_t usb_get_config(void);
 bool gdb_serial_get_dtr(void);
 void usb_serial_init(void);
