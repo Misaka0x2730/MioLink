@@ -18,8 +18,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef PLATFORMS_COMMON_USB_SERIAL_H
-#define PLATFORMS_COMMON_USB_SERIAL_H
+#ifndef BMP_USB_SERIAL_H
+#define BMP_USB_SERIAL_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -45,4 +45,4 @@ uint16_t usb_get_config(void);
 bool gdb_serial_get_dtr(void);
 void usb_serial_init(void);
 
-#endif /* PLATFORMS_COMMON_USB_SERIAL_H */
+#endif /* BMP_USB_SERIAL_H */

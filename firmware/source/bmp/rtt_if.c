@@ -99,7 +99,7 @@ bool rtt_nodata()
 /* rtt target to host: write string */
 uint32_t rtt_write(const char *buf, uint32_t len)
 {
-	if (len != 0 && usb_get_config() && gdb_serial_get_dtr() && tud_cdc_n_connected(USB_SERIAL_TARGET) )
+	if (len != 0 && usb_get_config() && gdb_serial_get_dtr() && tud_cdc_n_connected(USB_SERIAL_TARGET))
     {
 		for (uint32_t p = 0; p < len; p += 64) {
 			uint32_t plen = MIN(64, len - p);

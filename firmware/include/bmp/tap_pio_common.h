@@ -12,7 +12,7 @@
 #define TARGET_SWD_PIO_SM_SEQ           (0)
 #define TARGET_SWD_PIO_SM_ADIV5         (1)
 
-#define TARGET_JTAG_PIO                 (pio1)
+#define TARGET_JTAG_PIO                 (pio0)
 #define TARGET_JTAG_PIO_SM_NEXT_CYCLE   (0)
 #define TARGET_JTAG_PIO_SM_TMS_SEQ      (1)
 #define TARGET_JTAG_PIO_SM_TDI_TDO_SEQ  (2)

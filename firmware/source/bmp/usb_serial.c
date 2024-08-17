@@ -200,7 +200,7 @@ static void __not_in_flash_func(uart_rx_dma_process_buffers)(void)
         {
             if (send_to_usb(uart_rx_buf[i], sizeof(uart_rx_buf[i])) != false)
             {
-                tud_cdc_n_write_flush(USB_SERIAL_TARGET);
+                //tud_cdc_n_write_flush(USB_SERIAL_TARGET);
                 clear_mask |= buffer_bit;
             }
         }
@@ -234,7 +234,7 @@ static bool __not_in_flash_func(uart_rx_dma_finish_receiving)(void)
                 {
                     vTaskDelay(pdMS_TO_TICKS(1));
                 }
-                tud_cdc_n_write_flush(USB_SERIAL_TARGET);
+                //tud_cdc_n_write_flush(USB_SERIAL_TARGET);
                 clear_mask |= buffer_bit;
             }
         }
