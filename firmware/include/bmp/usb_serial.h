@@ -30,7 +30,7 @@ typedef enum usb_serial_interface_e
 {
 	USB_SERIAL_GDB = 0,
 	USB_SERIAL_TARGET,
-	USB_SERIAL_NUM = CFG_TUD_CDC
+	USB_SERIAL_NUM = CFG_TUD_CDC,
 } usb_serial_interface_t;
 
 #define USB_SERIAL_DATA_RX                (0x01)

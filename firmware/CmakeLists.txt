@@ -63,6 +63,9 @@ target_sources(MioLink PUBLIC source/bmp/adiv5_swd.c)
 target_sources(MioLink PUBLIC source/bmp/rtt_if.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/rtt.c)
 
+target_sources(MioLink PUBLIC source/bmp/traceswoasync.c)
+target_sources(MioLink PUBLIC source/bmp/traceswodecode.c)
+
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/morse.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/gdb_main.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/gdb_packet.c)
@@ -133,7 +136,7 @@ target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/target_probe.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/zynq7000.c)
 
 target_link_libraries(MioLink PUBLIC hardware_pio hardware_uart hardware_dma hardware_timer hardware_adc hardware_i2c)
-target_link_libraries(MioLink PUBLIC pico_stdlib pico_unique_id tinyusb_device tinyusb_board tinyusb_additions)
+target_link_libraries(MioLink PUBLIC pico_stdlib pico_unique_id pico_bootrom tinyusb_device tinyusb_board tinyusb_additions)
 target_link_libraries(MioLink PUBLIC FreeRTOS-Kernel FreeRTOS-Kernel-Heap1)
 
 IF(CMAKE_COMPILER_IS_GNUCC)

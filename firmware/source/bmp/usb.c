@@ -25,6 +25,7 @@
 #include "task.h"
 #include "serialno.h"
 #include "version.h"
+#include "usb_serial.h"
 
 #define USB_TASK_CORE_AFFINITY     (0x01) /* Core 0 only */
 
@@ -36,18 +37,43 @@
 
 #define BOARD_IDENT "Black Magic Probe " PLATFORM_IDENT "" FIRMWARE_VERSION
 
-#define EPNUM_CDC_0_NOTIF   0x81
-#define EPNUM_CDC_0_OUT     0x02
-#define EPNUM_CDC_0_IN      0x82
+#define MAKE_CDC_DESCRIPTOR(_itfnum, _stridx, _ep_notif, _ep_notif_size, _epout, _epin, _epsize) \
+  /* Interface Associate */\
+  8, TUSB_DESC_INTERFACE_ASSOCIATION, _itfnum, 2, TUSB_CLASS_CDC, CDC_COMM_SUBCLASS_ABSTRACT_CONTROL_MODEL, CDC_COMM_PROTOCOL_NONE, _stridx,\
+  /* CDC Control Interface */\
+  9, TUSB_DESC_INTERFACE, _itfnum, 0, 1, TUSB_CLASS_CDC, CDC_COMM_SUBCLASS_ABSTRACT_CONTROL_MODEL, CDC_COMM_PROTOCOL_NONE, _stridx,\
+  /* CDC Header */\
+  5, TUSB_DESC_CS_INTERFACE, CDC_FUNC_DESC_HEADER, U16_TO_U8S_LE(0x0120),\
+  /* CDC Call */\
+  5, TUSB_DESC_CS_INTERFACE, CDC_FUNC_DESC_CALL_MANAGEMENT, 0, (uint8_t)((_itfnum) + 1),\
+  /* CDC ACM: support line request + send break */\
+  4, TUSB_DESC_CS_INTERFACE, CDC_FUNC_DESC_ABSTRACT_CONTROL_MANAGEMENT, 6,\
+  /* CDC Union */\
+  5, TUSB_DESC_CS_INTERFACE, CDC_FUNC_DESC_UNION, _itfnum, (uint8_t)((_itfnum) + 1),\
+  /* Endpoint Notification */\
+  7, TUSB_DESC_ENDPOINT, _ep_notif, TUSB_XFER_INTERRUPT, U16_TO_U8S_LE(_ep_notif_size), 16,\
+  /* CDC Data Interface */\
+  9, TUSB_DESC_INTERFACE, (uint8_t)((_itfnum)+1), 0, 2, TUSB_CLASS_CDC_DATA, 0, 0, 0,\
+  /* Endpoint Out */\
+  7, TUSB_DESC_ENDPOINT, _epout, TUSB_XFER_BULK, U16_TO_U8S_LE(_epsize), 0,\
+  /* Endpoint In */\
+  7, TUSB_DESC_ENDPOINT, _epin, TUSB_XFER_BULK, U16_TO_U8S_LE(_epsize), 0
 
-#define EPNUM_CDC_1_NOTIF   0x83
-#define EPNUM_CDC_1_OUT     0x04
-#define EPNUM_CDC_1_IN      0x84
+#define MAKE_DFU_DESCRIPTOR(_itfnum, _stridx) \
+  8, TUSB_DESC_INTERFACE_ASSOCIATION, _itfnum, 1, TUSB_CLASS_APPLICATION_SPECIFIC, 1, 1, _stridx,\
+  9, TUSB_DESC_INTERFACE, _itfnum, 0, 0, TUSB_CLASS_APPLICATION_SPECIFIC, 1, 1, _stridx
+
+#define DUMMY_DESC_SIZE (8+9)
 
 #ifdef PLATFORM_HAS_TRACESWO
-#define EPNUM_CDC_2_NOTIF   0x85
-#define EPNUM_CDC_2_OUT     0x06
-#define EPNUM_CDC_2_IN      0x86
+#define MAKE_TRACE_DESCRIPTOR(_itfnum, _stridx, _epin, _epsize) \
+  8, TUSB_DESC_INTERFACE_ASSOCIATION, _itfnum, 1, TUSB_CLASS_VENDOR_SPECIFIC, 0xFF, 0xFF, _stridx,\
+  9, TUSB_DESC_INTERFACE, _itfnum, 0, 1, TUSB_CLASS_VENDOR_SPECIFIC, 0xFF, 0xFF, _stridx,\
+  7, TUSB_DESC_ENDPOINT, _epin, TUSB_XFER_BULK, U16_TO_U8S_LE(_epsize), 0
+
+#define TRACE_DESC_SIZE (8+9+7)
+#else
+#define TRACE_DESC_SIZE (0)
 #endif
 
 enum
@@ -56,14 +82,15 @@ enum
     ITF_NUM_CDC_0_DATA,
     ITF_NUM_CDC_1,
     ITF_NUM_CDC_1_DATA,
+    ITF_NUM_CDC,
+    ITF_NUM_DFU = ITF_NUM_CDC,
+
 #ifdef PLATFORM_HAS_TRACESWO
-    ITF_NUM_CDC_2,
-	ITF_NUM_CDC_2_DATA,
+    ITF_NUM_TRACE,
 #endif
+
     ITF_NUM_TOTAL
 };
-
-#define ITF_CONFIG_LEN   (TUD_CONFIG_DESC_LEN + ((ITF_NUM_TOTAL / 2) * TUD_CDC_DESC_LEN))
 
 tusb_desc_device_t const desc_device =
 {
@@ -80,7 +107,7 @@ tusb_desc_device_t const desc_device =
 
     .idVendor           = USB_VID,
     .idProduct          = USB_PID,
-    .bcdDevice          = 0x0100,
+    .bcdDevice          = 0x0109,
 
     .iManufacturer      = 0x01,
     .iProduct           = 0x02,
@@ -89,20 +116,26 @@ tusb_desc_device_t const desc_device =
     .bNumConfigurations = 0x01
 };
 
+#define ENDPOINT_IN_BIT  (0x80)
+
+#define ITF_CONFIG_LEN   (TUD_CONFIG_DESC_LEN + ((ITF_NUM_CDC / 2) * TUD_CDC_DESC_LEN) + DUMMY_DESC_SIZE + TRACE_DESC_SIZE)
+
 static uint8_t const desc_fs_configuration[] =
 {
     /* Config number, interface count, string index, total length, attribute, power in mA */
     TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, ITF_CONFIG_LEN, 0x00, 500),
 
     /* 1st CDC: Interface number, string index, EP notification address and size, EP data address (out, in) and size. */
-    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC_0, 4, EPNUM_CDC_0_NOTIF, 8, EPNUM_CDC_0_OUT, EPNUM_CDC_0_IN, 64),
+    MAKE_CDC_DESCRIPTOR(ITF_NUM_CDC_0, 4, GDB_ENDPOINT_NOTIF, 8, GDB_ENDPOINT, GDB_ENDPOINT | ENDPOINT_IN_BIT, 64),
 
     /* 2nd CDC: Interface number, string index, EP notification address and size, EP data address (out, in) and size. */
-    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC_1, 5, EPNUM_CDC_1_NOTIF, 8, EPNUM_CDC_1_OUT, EPNUM_CDC_1_IN, 64),
+    MAKE_CDC_DESCRIPTOR(ITF_NUM_CDC_1, 5, SERIAL_ENDPOINT_NOTIF, 8, SERIAL_ENDPOINT, SERIAL_ENDPOINT | ENDPOINT_IN_BIT, 64),
+
+    MAKE_DFU_DESCRIPTOR(ITF_NUM_DFU, 6),
 
 #ifdef PLATFORM_HAS_TRACESWO
-    /* 2rd CDC: Interface number, string index, EP notification address and size, EP data address (out, in) and size. */
-    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC_2, 6, EPNUM_CDC_2_NOTIF, 8, EPNUM_CDC_2_OUT, EPNUM_CDC_2_IN, 64),
+    /* 3rd interface - TRACESWO */
+    MAKE_TRACE_DESCRIPTOR(ITF_NUM_TRACE, 7, TRACE_ENDPOINT, 64),
 #endif
 };
 
@@ -114,12 +147,13 @@ static char const *string_desc_arr[] =
     serial_no,
     "Black Magic GDB Server",
     "Black Magic UART Port",
+    "Black Magic DFU",
 #ifdef PLATFORM_HAS_TRACESWO
     "Black Magic Trace Capture",
 #endif
 };
 
-static uint16_t _desc_str[64 + 1];
+static uint16_t _desc_str[512] = { 0 };
 
 // Invoked when received GET DEVICE DESCRIPTOR
 // Application return pointer to descriptor
@@ -144,23 +178,71 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
     }
     else
     {
-        const char *str = string_desc_arr[index];
-        size_t chr_count = strlen(str);
-        const size_t max_count = (sizeof(_desc_str) / sizeof(_desc_str[0])) - 1;
-        if (chr_count > max_count)
-        {
-            chr_count = max_count;
-        }
+        size_t chr_count = 0;
 
-        for (size_t i = 0; i < chr_count; i++)
+        if (index == 0)
         {
-            _desc_str[1 + i] = str[i];
+            _desc_str[1] = string_desc_arr[0][0] + ((uint16_t)(string_desc_arr[0][1]) << 8);
+            chr_count = 1;
+        }
+        else
+        {
+            const char *str = string_desc_arr[index];
+            chr_count = strlen(str);
+            const size_t max_count = (sizeof(_desc_str) / sizeof(_desc_str[0])) - 1;
+            if (chr_count > max_count)
+            {
+                chr_count = max_count;
+            }
+
+            for (size_t i = 0; i < chr_count; i++)
+            {
+                _desc_str[1 + i] = str[i];
+            }
         }
 
         // first byte is length (including header), second byte is string type
         _desc_str[0] = (uint16_t) ((TUSB_DESC_STRING << 8) | (2 * chr_count + 2));
     }
     return _desc_str;
+}
+
+extern TaskHandle_t usb_uart_task;
+extern TaskHandle_t gdb_task;
+
+void tud_cdc_rx_cb(uint8_t interface)
+{
+    if (interface == USB_SERIAL_GDB)
+    {
+        xTaskNotify(gdb_task, USB_SERIAL_DATA_RX, eSetBits);
+    }
+    else if (interface == USB_SERIAL_TARGET)
+    {
+        xTaskNotify(usb_uart_task, USB_SERIAL_DATA_RX, eSetBits);
+    }
+}
+
+void tud_cdc_line_state_cb(uint8_t interface, bool dtr, bool rts)
+{
+    (void) rts;
+    (void) dtr;
+
+    if (interface == USB_SERIAL_GDB)
+    {
+        xTaskNotify(gdb_task, USB_SERIAL_LINE_STATE_UPDATE, eSetBits);
+    }
+    else if (interface == USB_SERIAL_TARGET)
+    {
+        xTaskNotify(usb_uart_task, USB_SERIAL_LINE_STATE_UPDATE, eSetBits);
+    }
+}
+
+void tud_cdc_line_coding_cb(uint8_t interface, cdc_line_coding_t const* p_line_coding)
+{
+    if (interface == USB_SERIAL_TARGET)
+    {
+        xTaskNotify(usb_uart_task, USB_SERIAL_LINE_CODING_UPDATE, eSetBits);
+    }
 }
 
 _Noreturn static void usb_task_thread(void *param);

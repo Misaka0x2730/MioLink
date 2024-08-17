@@ -41,6 +41,19 @@ extern bool debug_bmp;
 
 #define PLATFORM_MIOLINK
 
+#define PLATFORM_HAS_TRACESWO
+
+#define GDB_ENDPOINT_NOTIF      0x84
+#define GDB_ENDPOINT            0x01
+
+#define SERIAL_ENDPOINT_NOTIF   0x85
+#define SERIAL_ENDPOINT         0x02
+
+#ifdef PLATFORM_HAS_TRACESWO
+#define TRACESWO_PROTOCOL   2
+#define TRACE_ENDPOINT      0x83
+#endif
+
 #define PICO_GPIO_PORT                (0)
 
 #define PLATFORM_HAS_CUSTOM_COMMANDS

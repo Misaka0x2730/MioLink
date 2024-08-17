@@ -23,6 +23,7 @@
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
 #include "pico/stdlib.h"
+#include "pico/bootrom.h"
 
 #include "general.h"
 #include "platform.h"
@@ -30,6 +31,8 @@
 
 #include "target_internal.h"
 #include "gdb_packet.h"
+
+#include "serialno.h"
 
 extern void trace_tick(void);
 
@@ -185,6 +188,8 @@ void platform_init(void)
     }
 
     platform_timing_init();
+
+    read_serial_number();
 }
 
 void platform_nrst_set_val(bool assert)
@@ -268,4 +273,10 @@ uint8_t platform_spi_xfer(const spi_bus_e bus, const uint8_t value)
 
 void debug_serial_send_stdout(const uint8_t *const data, const size_t len)
 {
+}
+
+void tud_dfu_runtime_reboot_to_dfu_cb(void)
+{
+    /* Error pin is used as boot activity pin, enable all boot modes */
+    reset_usb_boot((1 << LED_ERR_PIN),0);
 }

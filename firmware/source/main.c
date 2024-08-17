@@ -13,6 +13,11 @@
 #ifdef ENABLE_RTT
 #include "rtt.h"
 #endif
+
+#ifdef PLATFORM_HAS_TRACESWO
+#include "traceswo.h"
+#endif
+
 #include "pico/multicore.h"
 
 #include "usb.h"
@@ -63,43 +68,6 @@ static void bmp_poll_loop(void)
     //vTaskDelay(5);
 }
 
-extern TaskHandle_t usb_uart_task;
-
-void tud_cdc_rx_cb(uint8_t interface)
-{
-    if (interface == USB_SERIAL_GDB)
-    {
-        xTaskNotify(gdb_task, USB_SERIAL_DATA_RX, eSetBits);
-    }
-    else if (interface == USB_SERIAL_TARGET)
-    {
-        xTaskNotify(usb_uart_task, USB_SERIAL_DATA_RX, eSetBits);
-    }
-}
-
-void tud_cdc_line_state_cb(uint8_t interface, bool dtr, bool rts)
-{
-    (void) rts;
-    (void) dtr;
-
-    if (interface == USB_SERIAL_GDB)
-    {
-        xTaskNotify(gdb_task, USB_SERIAL_LINE_STATE_UPDATE, eSetBits);
-    }
-    else if (interface == USB_SERIAL_TARGET)
-    {
-        xTaskNotify(usb_uart_task, USB_SERIAL_LINE_STATE_UPDATE, eSetBits);
-    }
-}
-
-void tud_cdc_line_coding_cb(uint8_t interface, cdc_line_coding_t const* p_line_coding)
-{
-    if (interface == USB_SERIAL_TARGET)
-    {
-        xTaskNotify(usb_uart_task, USB_SERIAL_LINE_CODING_UPDATE, eSetBits);
-    }
-}
-
 _Noreturn static void main_thread(void* params)
 {
     while (1)
@@ -127,7 +95,7 @@ void main(void)
     platform_timing_init();
     blackmagic_usb_init();
     usb_serial_init();
-    usb_serial_init();
+    traceswo_task_init();
 
     multicore_reset_core1();
 
