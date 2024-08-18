@@ -65,8 +65,53 @@ bool cmd_uart_on_tdi_tdo(target_s *t, int argc, const char **argv)
     return true;
 }
 
+bool cmd_rtos_heapinfo(target_s *t, int argc, const char **argv)
+{
+    const size_t free_heap = xPortGetFreeHeapSize();
+    gdb_outf("Free heap: %d\n", free_heap);
+
+    return true;
+}
+
+#define RTOS_TASKS_INFO_MAX_TASKS_NUMBER  (10)
+
+bool cmd_rtos_tasksinfo(target_s *t, int argc, const char **argv)
+{
+    UBaseType_t tasks_number = uxTaskGetNumberOfTasks();
+    if (tasks_number > 0)
+    {
+        static TaskStatus_t *p_task_status = NULL;
+        if (p_task_status == NULL)
+        {
+            p_task_status = pvPortMalloc(RTOS_TASKS_INFO_MAX_TASKS_NUMBER * sizeof(TaskStatus_t));
+        }
+
+        if (uxTaskGetSystemState(p_task_status, RTOS_TASKS_INFO_MAX_TASKS_NUMBER, NULL) == tasks_number)
+        {
+            gdb_outf("Total number of tasks: %d\n",  tasks_number);
+            gdb_out("Name:                            Min free stack:\n");
+            for (uint32_t i = 0; i < tasks_number; i++)
+            {
+                gdb_outf("%-32s %-5d\n", p_task_status[i].pcTaskName, p_task_status[i].usStackHighWaterMark);
+            }
+        }
+        else
+        {
+            gdb_out("Failed to read tasks info\n");
+        }
+    }
+    else
+    {
+        gdb_out("Incorrect tasks number\n");
+    }
+
+    return true;
+}
+
 const command_s platform_cmd_list[] = {
     {"uart_on_tdi_tdo", cmd_uart_on_tdi_tdo, "Use UART pins on TDI and TDO (only in SWD mode): [enable|disable]"},
+    {"rtos_heapinfo", cmd_rtos_heapinfo, "Print free FreeRTOS heap size"},
+    {"rtos_tasksinfo", cmd_rtos_tasksinfo, "Print info about running tasks"},
     {NULL, NULL, NULL}
 };
 
@@ -271,10 +316,6 @@ uint8_t platform_spi_xfer(const spi_bus_e bus, const uint8_t value)
 {
 	(void)bus;
 	return value;
-}
-
-void debug_serial_send_stdout(const uint8_t *const data, const size_t len)
-{
 }
 
 void tud_dfu_runtime_reboot_to_dfu_cb(void)

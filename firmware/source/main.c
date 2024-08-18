@@ -65,10 +65,9 @@ static void bmp_poll_loop(void)
 	if (pbuf[0] != '\x04' || cur_target)
 		SET_IDLE_STATE(false);
 	gdb_main(pbuf, GDB_PACKET_BUFFER_SIZE, size);
-    //vTaskDelay(5);
 }
 
-_Noreturn static void main_thread(void* params)
+_Noreturn static void gdb_thread(void* params)
 {
     while (1)
     {
@@ -99,9 +98,9 @@ void main(void)
 
     multicore_reset_core1();
 
-    BaseType_t status = xTaskCreate(main_thread,
-                                    "main",
-									1024,
+    BaseType_t status = xTaskCreate(gdb_thread,
+                                    "target_gdb",
+									2048,
                                     NULL,
                                     PLATFORM_PRIORITY_NORMAL,
                                     &gdb_task);
@@ -111,10 +110,7 @@ void main(void)
 #endif
     vTaskStartScheduler();
 
-	while(1)
-    {
-
-    }
+	panic("Should not reach here!");
 }
 
 void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName )

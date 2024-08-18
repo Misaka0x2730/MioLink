@@ -56,7 +56,7 @@
 
 #define UART_DMA_TX_CHECK_FINISHED_PERIOD (2)
 
-#define UART_NOTIFY_WAIT_PERIOD           (2000)
+#define UART_NOTIFY_WAIT_PERIOD           (3000)
 
 static uint8_t uart_rx_buf[UART_DMA_RX_NUMBER_OF_BUFFERS][UART_DMA_RX_BUFFER_SIZE] = { 0 };
 static uint32_t uart_rx_int_buf_pos = 0;
@@ -517,7 +517,7 @@ _Noreturn static void __not_in_flash_func(target_serial_thread)(void* params);
 void usb_serial_init(void)
 {
     BaseType_t status = xTaskCreate(target_serial_thread,
-                                    "Target UART",
+                                    "target_uart",
                                     128*4,
                                     NULL,
                                     PLATFORM_PRIORITY_HIGH,
@@ -544,7 +544,7 @@ _Noreturn static void __not_in_flash_func(target_serial_thread)(void* params)
 
     uart_dma_tx_channel = dma_claim_unused_channel(true);
     uart_dma_rx_channel = dma_claim_unused_channel(true);
-    
+
     irq_set_exclusive_handler(DMA_IRQ_0, uart_dma_handler);
     irq_set_enabled(DMA_IRQ_0, true);
 
@@ -742,4 +742,9 @@ static void __not_in_flash_func(uart_dma_handler)(void)
         xTaskNotifyFromISR(usb_uart_task, USB_SERIAL_DATA_UART_RX_FLUSH, eSetBits, &xHigherPriorityTaskWoken);
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
+}
+
+void debug_serial_send_stdout(const uint8_t *const data, const size_t len)
+{
+    send_to_usb((uint8_t*)data, len);
 }

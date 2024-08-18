@@ -332,7 +332,7 @@ _Noreturn static void __not_in_flash_func(traceswo_thread)(void* params);
 void traceswo_task_init(void)
 {
     BaseType_t status = xTaskCreate(traceswo_thread,
-                                    "Trace",
+                                    "target_trace",
                                     128*4,
                                     NULL,
                                     PLATFORM_PRIORITY_HIGH,
