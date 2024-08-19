@@ -39,6 +39,8 @@ extern bool debug_bmp;
 #endif
 
 #define PLATFORM_MIOLINK
+#define PLATFORM_MIOLINK_REV_A   (1)
+#define PLATFORM_MIOLINK_REV_B   (2)
 
 #define PLATFORM_HAS_TRACESWO
 #define PLATFORM_HAS_CUSTOM_COMMANDS
