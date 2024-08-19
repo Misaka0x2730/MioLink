@@ -16,6 +16,9 @@ add_compile_definitions(PICO_FLASH_SPI_CLKDIV=2)
 add_compile_definitions(PICO_RP2040_B0_SUPPORTED=0)
 
 cmake_policy(SET CMP0169 OLD)
+
+set(PICO_STDIO_UART OFF)
+
 include(pico_sdk_import.cmake)
 include(pico_extras_import_optional.cmake)
 
@@ -157,6 +160,8 @@ add_compile_definitions(SYSTICKHZ=1000)
 
 add_compile_definitions(ENABLE_RTT=1)
 
+add_compile_definitions(PICO_STDIO_SHORT_CIRCUIT_CLIB_FUNCS=0)
+pico_set_printf_implementation(MioLink "compiler")
 
 target_link_options(MioLink PRIVATE -Xlinker --print-memory-usage)
 
