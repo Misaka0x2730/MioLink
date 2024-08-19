@@ -63,7 +63,9 @@ execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ../thirdParty/blackmagic/.gi
         OUTPUT_VARIABLE GIT_BMP_REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
 execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ../thirdParty/FreeRTOS-Kernel/.git describe --tags --always
         OUTPUT_VARIABLE GIT_FREERTOS_REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
-configure_file("git_thirdParty_version.h.in" "git_thirdParty_version.h")
+execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ../../.git describe --tags --always
+        OUTPUT_VARIABLE GIT_MIOLINK_REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+configure_file("git_version.h.in" "git_version.h")
 
 # BlackMagic sources
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/morse.c)
