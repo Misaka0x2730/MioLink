@@ -143,11 +143,6 @@ target_link_libraries(MioLink PUBLIC hardware_pio hardware_uart hardware_dma har
 target_link_libraries(MioLink PUBLIC pico_stdlib pico_unique_id pico_bootrom tinyusb_device tinyusb_board tinyusb_additions)
 target_link_libraries(MioLink PUBLIC FreeRTOS-Kernel FreeRTOS-Kernel-Heap1)
 
-IF(CMAKE_COMPILER_IS_GNUCC)
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
-ENDIF(CMAKE_COMPILER_IS_GNUCC)
-
 get_target_property(DirDefs tinyusb_common_base INTERFACE_COMPILE_DEFINITIONS)
 list(FILTER DirDefs EXCLUDE REGEX [[^CFG_TUSB_OS=OPT_OS_PICO$]])
 set_property(TARGET tinyusb_common_base PROPERTY INTERFACE_COMPILE_DEFINITIONS ${DirDefs})
