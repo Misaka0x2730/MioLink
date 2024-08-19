@@ -68,7 +68,7 @@ bool cmd_uart_on_tdi_tdo(target_s *t, int argc, const char **argv)
 bool cmd_rtos_heapinfo(target_s *t, int argc, const char **argv)
 {
     const size_t free_heap = xPortGetFreeHeapSize();
-    gdb_outf("Free heap: %d\n", free_heap);
+    gdb_outf("Free heap (bytes): %d\n", free_heap);
 
     return true;
 }
@@ -89,10 +89,10 @@ bool cmd_rtos_tasksinfo(target_s *t, int argc, const char **argv)
         if (uxTaskGetSystemState(p_task_status, RTOS_TASKS_INFO_MAX_TASKS_NUMBER, NULL) == tasks_number)
         {
             gdb_outf("Total number of tasks: %d\n",  tasks_number);
-            gdb_out("Name:                            Min free stack:\n");
+            gdb_out("Name:                            Min free stack (bytes):\n");
             for (uint32_t i = 0; i < tasks_number; i++)
             {
-                gdb_outf("%-32s %-5d\n", p_task_status[i].pcTaskName, p_task_status[i].usStackHighWaterMark);
+                gdb_outf("%-32s %-5d\n", p_task_status[i].pcTaskName, p_task_status[i].usStackHighWaterMark * sizeof(StackType_t));
             }
         }
         else
