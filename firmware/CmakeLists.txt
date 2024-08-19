@@ -4,17 +4,7 @@ set(PICO_SDK_FETCH_FROM_GIT ON)
 set(PICO_BOARD none)
 set(PICO_DEOPTIMIZED_DEBUG 1)
 
-add_compile_definitions(ENABLE_DEBUG=1)
-add_compile_definitions(PC_HOSTED=0)
-add_compile_definitions(PICO_FLASH_SIZE_BYTES=2097152)
-add_compile_definitions(PICO_BOOT_STAGE2_CHOOSE_W25Q080=1)
-add_compile_definitions(PICO_FLASH_SPI_CLKDIV=2)
-add_compile_definitions(PICO_RP2040_B0_SUPPORTED=0)
-
-
 cmake_policy(SET CMP0169 OLD)
-
-set(PICO_STDIO_UART OFF)
 
 include(pico_sdk_import.cmake)
 include(pico_extras_import_optional.cmake)
@@ -23,6 +13,7 @@ set(FREERTOS_KERNEL_PATH "../thirdParty/FreeRTOS-Kernel")
 include(FreeRTOS_Kernel_import.cmake)
 
 project(MioLink C CXX ASM)
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
@@ -31,31 +22,45 @@ pico_sdk_init()
 
 add_executable(MioLink)
 
-add_compile_definitions(LOG=0)
+# Raspberry Pi Pico SDK parameters
+set_property(TARGET MioLink PROPERTY PICO_STDIO_UART OFF)
 
-add_compile_definitions(NO_LIBOPENCM3)
+target_compile_definitions(MioLink PUBLIC PICO_FLASH_SIZE_BYTES=2097152)
+target_compile_definitions(MioLink PUBLIC PICO_BOOT_STAGE2_CHOOSE_W25Q080=1)
+target_compile_definitions(MioLink PUBLIC PICO_FLASH_SPI_CLKDIV=2)
+target_compile_definitions(MioLink PUBLIC PICO_RP2040_B0_SUPPORTED=0)
+target_compile_definitions(MioLink PUBLIC PICO_STDIO_SHORT_CIRCUIT_CLIB_FUNCS=0)
 
-target_include_directories(MioLink PUBLIC include)
+pico_set_printf_implementation(MioLink "compiler")
+
+# BlackMagic parameters
+target_compile_definitions(MioLink PUBLIC ENABLE_DEBUG=1)
+target_compile_definitions(MioLink PUBLIC PC_HOSTED=0)
+target_compile_definitions(MioLink PUBLIC NO_LIBOPENCM3)
+target_compile_definitions(MioLink PUBLIC DFU_SERIAL_LENGTH=PICO_UNIQUE_BOARD_ID_SIZE_BYTES+1)
+target_compile_definitions(MioLink PUBLIC SYSTICKHZ=1000)
+target_compile_definitions(MioLink PUBLIC ENABLE_RTT=1)
+
+# MioLink parameters
+set_property(TARGET MioLink PROPERTY USE_SYSVIEW_TRACE ON)
+
+# BlackMagic headers
 target_include_directories(MioLink PUBLIC thirdParty/blackmagic/src/include)
 target_include_directories(MioLink PUBLIC thirdParty/blackmagic/src/target)
+
+# MioLink headers
+target_include_directories(MioLink PUBLIC include)
 target_include_directories(MioLink PUBLIC include/bmp)
+target_include_directories(MioLink PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
-target_sources(MioLink PUBLIC source/main.c)
-target_sources(MioLink PUBLIC source/bmp/platform.c)
-target_sources(MioLink PUBLIC source/bmp/timing_rp2040.c)
-target_sources(MioLink PUBLIC source/bmp/serialno.c)
-target_sources(MioLink PUBLIC source/bmp/usb_serial.c)
-target_sources(MioLink PUBLIC source/bmp/gdb_if.c)
-target_sources(MioLink PUBLIC source/bmp/swdptap.c)
-target_sources(MioLink PUBLIC source/bmp/usb.c)
-target_sources(MioLink PUBLIC source/bmp/jtagtap.c)
-target_sources(MioLink PUBLIC source/bmp/crc32.c)
-target_sources(MioLink PUBLIC source/bmp/adiv5_swd.c)
-target_sources(MioLink PUBLIC source/bmp/rtt_if.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/rtt.c)
-target_sources(MioLink PUBLIC source/bmp/traceswoasync.c)
-target_sources(MioLink PUBLIC source/bmp/traceswodecode.c)
+# Generate header with BlackMagic and FreeRTOS-Kernel versions
+execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ../thirdParty/blackmagic/.git describe --tags --always
+        OUTPUT_VARIABLE GIT_BMP_REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ../thirdParty/FreeRTOS-Kernel/.git describe --tags --always
+        OUTPUT_VARIABLE GIT_FREERTOS_REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+configure_file("git_thirdParty_version.h.in" "git_thirdParty_version.h")
 
+# BlackMagic sources
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/morse.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/gdb_main.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/gdb_packet.c)
@@ -66,6 +71,7 @@ target_sources(MioLink PUBLIC thirdParty/blackmagic/src/remote.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/exception.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/timing.c)
 
+# BlackMagic targets
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/adiv5.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/adiv5_jtag.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/at32f43x.c)
@@ -125,9 +131,26 @@ target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/target_flash.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/target_probe.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/zynq7000.c)
 
-set(USE_SYSVIEW_TRACE OFF)
+# MioLink sources
+target_sources(MioLink PUBLIC source/main.c)
+target_sources(MioLink PUBLIC source/bmp/platform.c)
+target_sources(MioLink PUBLIC source/bmp/timing_rp2040.c)
+target_sources(MioLink PUBLIC source/bmp/serialno.c)
+target_sources(MioLink PUBLIC source/bmp/usb_serial.c)
+target_sources(MioLink PUBLIC source/bmp/gdb_if.c)
+target_sources(MioLink PUBLIC source/bmp/swdptap.c)
+target_sources(MioLink PUBLIC source/bmp/usb.c)
+target_sources(MioLink PUBLIC source/bmp/jtagtap.c)
+target_sources(MioLink PUBLIC source/bmp/crc32.c)
+target_sources(MioLink PUBLIC source/bmp/adiv5_swd.c)
+target_sources(MioLink PUBLIC source/bmp/rtt_if.c)
+target_sources(MioLink PUBLIC thirdParty/blackmagic/src/rtt.c)
+target_sources(MioLink PUBLIC source/bmp/traceswoasync.c)
+target_sources(MioLink PUBLIC source/bmp/traceswodecode.c)
 
-IF(USE_SYSVIEW_TRACE)
+get_target_property(SYSVIEW_ENABLED MioLink USE_SYSVIEW_TRACE)
+
+IF(SYSVIEW_ENABLED)
     add_compile_definitions(ENABLE_SYSVIEW_TRACE=1)
 
     target_include_directories(MioLink PUBLIC source/SysView)
@@ -137,39 +160,26 @@ IF(USE_SYSVIEW_TRACE)
     target_sources(MioLink PUBLIC source/SysView/SEGGER_SYSVIEW.c)
     target_sources(MioLink PUBLIC source/SysView/SEGGER_SYSVIEW_Config_FreeRTOS.c)
     target_sources(MioLink PUBLIC source/SysView/SEGGER_SYSVIEW_FreeRTOS.c)
-ENDIF(USE_SYSVIEW_TRACE)
+ENDIF(SYSVIEW_ENABLED)
 
+# Raspberry Pi Pico SDK libraries
 target_link_libraries(MioLink PUBLIC hardware_pio hardware_uart hardware_dma hardware_timer hardware_adc hardware_i2c)
 target_link_libraries(MioLink PUBLIC pico_stdlib pico_unique_id pico_bootrom tinyusb_device tinyusb_board tinyusb_additions)
 target_link_libraries(MioLink PUBLIC FreeRTOS-Kernel FreeRTOS-Kernel-Heap1)
 
+# Patch tinyusb defines to use FreeRTOS integratoion instead of Pico SDK
 get_target_property(DirDefs tinyusb_common_base INTERFACE_COMPILE_DEFINITIONS)
 list(FILTER DirDefs EXCLUDE REGEX [[^CFG_TUSB_OS=OPT_OS_PICO$]])
 set_property(TARGET tinyusb_common_base PROPERTY INTERFACE_COMPILE_DEFINITIONS ${DirDefs})
 target_compile_definitions(tinyusb_common_base INTERFACE CFG_TUSB_OS=OPT_OS_FREERTOS)
 
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
-add_compile_definitions(DFU_SERIAL_LENGTH=PICO_UNIQUE_BOARD_ID_SIZE_BYTES+1)
-add_compile_definitions(PC_HOSTED=0)
-add_compile_definitions(SYSTICKHZ=1000)
-
-add_compile_definitions(ENABLE_RTT=1)
-
-add_compile_definitions(PICO_STDIO_SHORT_CIRCUIT_CLIB_FUNCS=0)
-pico_set_printf_implementation(MioLink "compiler")
-
-target_link_options(MioLink PRIVATE -Xlinker --print-memory-usage)
-
+# Compile PIO programs
 pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/target_swd.pio)
 pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/target_jtag.pio)
 
+# Set linker script and set parameter to print memory usage
 pico_set_linker_script(MioLink ${CMAKE_CURRENT_LIST_DIR}/memmap_default.ld)
+target_link_options(MioLink PRIVATE -Xlinker --print-memory-usage)
 
-execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ../thirdParty/blackmagic/.git describe --tags --always
-        OUTPUT_VARIABLE GIT_BMP_REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ../thirdParty/FreeRTOS-Kernel/.git describe --tags --always
-        OUTPUT_VARIABLE GIT_FREERTOS_REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
-configure_file("git_thirdParty_version.h.in" "git_thirdParty_version.h")
-
+# Add MioLink output
 pico_add_extra_outputs(MioLink)
