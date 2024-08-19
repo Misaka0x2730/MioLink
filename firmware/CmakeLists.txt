@@ -4,16 +4,13 @@ set(PICO_SDK_FETCH_FROM_GIT ON)
 set(PICO_BOARD none)
 set(PICO_DEOPTIMIZED_DEBUG 1)
 
-#set(CMAKE_BUILD_TYPE Debug)
-#set(PICO_DEOPTIMIZED_DEBUG 1)
-#set(LOGGER rtt)
-#add_compile_definitions(PICO_STDIO_STACK_BUFFER_SIZE=2048)
-add_compile_definitions(ENABLE_DEBUG=0)
+add_compile_definitions(ENABLE_DEBUG=1)
 add_compile_definitions(PC_HOSTED=0)
 add_compile_definitions(PICO_FLASH_SIZE_BYTES=2097152)
 add_compile_definitions(PICO_BOOT_STAGE2_CHOOSE_W25Q080=1)
 add_compile_definitions(PICO_FLASH_SPI_CLKDIV=2)
 add_compile_definitions(PICO_RP2040_B0_SUPPORTED=0)
+
 
 cmake_policy(SET CMP0169 OLD)
 
@@ -51,21 +48,11 @@ target_sources(MioLink PUBLIC source/bmp/usb_serial.c)
 target_sources(MioLink PUBLIC source/bmp/gdb_if.c)
 target_sources(MioLink PUBLIC source/bmp/swdptap.c)
 target_sources(MioLink PUBLIC source/bmp/usb.c)
-#target_sources(MioLink PUBLIC thirdParty/blackmagic/src/platforms/common/swdptap.c)
-#target_sources(MioLink PUBLIC source/bmp/traceswoasync.c)
-
 target_sources(MioLink PUBLIC source/bmp/jtagtap.c)
-#target_sources(MioLink PUBLIC thirdParty/blackmagic/src/platforms/common/jtagtap.c)
-
 target_sources(MioLink PUBLIC source/bmp/crc32.c)
-#target_sources(MioLink PUBLIC thirdParty/blackmagic/src/crc32.c)
-
 target_sources(MioLink PUBLIC source/bmp/adiv5_swd.c)
-#target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/adiv5_swd.c)
-
 target_sources(MioLink PUBLIC source/bmp/rtt_if.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/rtt.c)
-
 target_sources(MioLink PUBLIC source/bmp/traceswoasync.c)
 target_sources(MioLink PUBLIC source/bmp/traceswodecode.c)
 
@@ -137,6 +124,20 @@ target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/target.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/target_flash.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/target_probe.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/zynq7000.c)
+
+set(USE_SYSVIEW_TRACE OFF)
+
+IF(USE_SYSVIEW_TRACE)
+    add_compile_definitions(ENABLE_SYSVIEW_TRACE=1)
+
+    target_include_directories(MioLink PUBLIC source/SysView)
+
+    target_sources(MioLink PUBLIC source/SysView/SEGGER_RTT.c)
+    target_sources(MioLink PUBLIC source/SysView/SEGGER_RTT_printf.c)
+    target_sources(MioLink PUBLIC source/SysView/SEGGER_SYSVIEW.c)
+    target_sources(MioLink PUBLIC source/SysView/SEGGER_SYSVIEW_Config_FreeRTOS.c)
+    target_sources(MioLink PUBLIC source/SysView/SEGGER_SYSVIEW_FreeRTOS.c)
+ENDIF(USE_SYSVIEW_TRACE)
 
 target_link_libraries(MioLink PUBLIC hardware_pio hardware_uart hardware_dma hardware_timer hardware_adc hardware_i2c)
 target_link_libraries(MioLink PUBLIC pico_stdlib pico_unique_id pico_bootrom tinyusb_device tinyusb_board tinyusb_additions)

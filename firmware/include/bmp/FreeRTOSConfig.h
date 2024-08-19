@@ -144,10 +144,8 @@ to exclude the API function. */
 #define INCLUDE_xQueueGetMutexHolder            1
 #define INCLUDE_pxTaskGetStackStart             1
 
-#if ENABLE_DEBUG
+#if ENABLE_SYSVIEW_TRACE
 #include "SEGGER_SYSVIEW_FreeRTOS.h"
 #endif
-/* A header file that defines trace macro can be included here. */
-
 
 #endif /* FREERTOS_CONFIG_H */

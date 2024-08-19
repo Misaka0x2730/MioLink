@@ -318,6 +318,13 @@ uint8_t platform_spi_xfer(const spi_bus_e bus, const uint8_t value)
 	return value;
 }
 
+#if ENABLE_SYSVIEW_TRACE
+uint32_t SEGGER_SYSVIEW_X_GetTimestamp(void)
+{
+    return time_us_32();
+}
+#endif
+
 void tud_dfu_runtime_reboot_to_dfu_cb(void)
 {
     /* Error pin is used as boot activity pin, enable all boot modes */

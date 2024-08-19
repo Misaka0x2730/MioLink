@@ -30,21 +30,6 @@
 
 #include "tap_pio_common.h"
 
-#if !defined(SWDIO_IN_PORT)
-#define SWDIO_IN_PORT SWDIO_PORT
-#endif
-
-#if !defined(SWDIO_IN_PIN)
-#define SWDIO_IN_PIN SWDIO_PIN
-#endif
-
-typedef enum swdio_status_e {
-	SWDIO_STATUS_FLOAT = 0,
-	SWDIO_STATUS_DRIVE
-} swdio_status_t;
-
-swd_proc_s swd_proc;
-
 static uint32_t swdptap_seq_in(size_t clock_cycles) __attribute__((optimize(3)));
 static bool swdptap_seq_in_parity(uint32_t *ret, size_t clock_cycles) __attribute__((optimize(3)));
 static void swdptap_seq_out(uint32_t tms_states, size_t clock_cycles) __attribute__((optimize(3)));
@@ -58,6 +43,13 @@ static void swdptap_seq_out_parity(uint32_t tms_states, size_t clock_cycles) __a
 #define SWD_ADIV5_REQ_TURNAROUND_IN_TO_OUT_POS (15)
 #define SWD_ADIV5_REQ_POS                      (17)
 #define SWD_TURNAROUND_IN_TO_OUT_POS           (26)
+
+typedef enum swdio_status_e {
+	SWDIO_STATUS_FLOAT = 0,
+	SWDIO_STATUS_DRIVE
+} swdio_status_t;
+
+swd_proc_s swd_proc;
 
 static swdio_status_t tms_dir = SWDIO_STATUS_FLOAT;
 

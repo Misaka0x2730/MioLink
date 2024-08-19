@@ -22,10 +22,6 @@
 
 #include "usb.h"
 
-#if ENABLE_DEBUG
-#include "SEGGER_RTT.h"
-#endif
-
 static char BMD_ALIGN_DEF(8) pbuf[GDB_PACKET_BUFFER_SIZE + 1U];
 
 #define GDB_TASK_CORE_AFFINITY     (0x01) /* Core 0 only */
@@ -86,8 +82,7 @@ _Noreturn static void gdb_thread(void* params)
 
 void main(void)
 {
-#if ENABLE_DEBUG
-    SEGGER_RTT_Init();
+#if ENABLE_SYSVIEW_TRACE
     traceSTART();
 #endif
     platform_init();
@@ -100,7 +95,7 @@ void main(void)
 
     BaseType_t status = xTaskCreate(gdb_thread,
                                     "target_gdb",
-									2048,
+									1024,
                                     NULL,
                                     PLATFORM_PRIORITY_NORMAL,
                                     &gdb_task);

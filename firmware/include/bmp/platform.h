@@ -24,10 +24,6 @@
 #include "pico/unique_id.h"
 #include "timing_rp2040.h"
 #include "hardware/pio.h"
-#if ENABLE_DEBUG == 1
-#include "SEGGER_RTT.h"
-#endif
-#define PLATFORM_IDENT "(MioLink) "
 
 #define TARGET_SWD_IDLE_CYCLES (8)
 #if (TARGET_SWD_IDLE_CYCLES <= 0)
@@ -37,11 +33,16 @@
 #if ENABLE_DEBUG == 1
 #define PLATFORM_HAS_DEBUG
 extern bool debug_bmp;
+#define PLATFORM_IDENT "(MioLink, ENABLE_DEBUG=1) "
+#else
+#define PLATFORM_IDENT "(MioLink) "
 #endif
 
 #define PLATFORM_MIOLINK
 
 #define PLATFORM_HAS_TRACESWO
+#define PLATFORM_HAS_CUSTOM_COMMANDS
+#define PLATFORM_HAS_POWER_SWITCH
 
 #define GDB_ENDPOINT_NOTIF      0x84
 #define GDB_ENDPOINT            0x01
@@ -50,14 +51,11 @@ extern bool debug_bmp;
 #define SERIAL_ENDPOINT         0x02
 
 #ifdef PLATFORM_HAS_TRACESWO
-#define TRACESWO_PROTOCOL   2
-#define TRACE_ENDPOINT      0x83
+#define TRACESWO_PROTOCOL       2
+#define TRACE_ENDPOINT          0x83
 #endif
 
 #define PICO_GPIO_PORT                (0)
-
-#define PLATFORM_HAS_CUSTOM_COMMANDS
-#define PLATFORM_HAS_POWER_SWITCH
 
 #define HWVERSION_PIN_0               (14)
 #define HWVERSION_PIN_1               (15)
@@ -77,38 +75,6 @@ extern bool debug_bmp;
 #define TARGET_TDI_PIN                (28)
 #define TARGET_TMS_PIN                (26)
 #define TARGET_TMS_DIR_PIN            (27)
-
-#define TDI_PORT                      (PICO_GPIO_PORT)
-#define TMS_PORT                      (PICO_GPIO_PORT)
-#define TCK_PORT                      (PICO_GPIO_PORT)
-#define TDO_PORT                      (PICO_GPIO_PORT)
-#define TDI_PIN                       (TARGET_TDI_PIN)
-#define TMS_PIN                       (TARGET_TMS_PIN)
-#define TCK_PIN                       (TARGET_TCK_PIN)
-#define TDO_PIN                       (TARGET_TDO_PIN)
-
-#define SWDIO_PORT                    (PICO_GPIO_PORT)
-#define SWCLK_PORT                    (PICO_GPIO_PORT)
-#define SWDIO_PIN                     (TARGET_TMS_PIN)
-#define SWCLK_PIN                     (TARGET_TCK_PIN)
-
-#define TMS_SET_MODE()                          \
-	do {                                        \
-		gpio_put(TARGET_TMS_DIR_PIN, 1);        \
-		gpio_set_dir(TARGET_TMS_PIN, GPIO_OUT); \
-	} while (0)
-
-#define SWDIO_MODE_FLOAT()                        \
-	do {                                          \
-        gpio_set_dir(TARGET_TMS_PIN, GPIO_IN);    \
-        gpio_put(TARGET_TMS_DIR_PIN, 0);          \
-	} while (0)
-
-#define SWDIO_MODE_DRIVE()                         \
-	do {                                           \
-        gpio_put(TARGET_TMS_DIR_PIN, 1);           \
-        gpio_set_dir(TARGET_TMS_PIN, GPIO_OUT);    \
-	} while (0)
 
 #define gpio_clear(port, pin)           gpio_put(pin, 0)
 #define gpio_set(port, pin)             gpio_put(pin, 1)
