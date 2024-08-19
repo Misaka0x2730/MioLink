@@ -778,3 +778,22 @@ void debug_serial_send_stdout(const uint8_t *const data, const size_t len)
 {
     send_to_usb((uint8_t*)data, len);
 }
+
+#if ENABLE_DEBUG == 1
+size_t debug_serial_debug_write(const char *buf, const size_t len)
+{
+    return send_to_usb((uint8_t*)buf, len) ? len : 0;
+}
+
+__attribute__((used)) int _write(const int file, const void *const ptr, const size_t len)
+{
+    (void)file;
+#ifdef PLATFORM_HAS_DEBUG
+    if (debug_bmp)
+		return debug_serial_debug_write(ptr, len);
+#else
+    (void)ptr;
+#endif
+    return len;
+}
+#endif
