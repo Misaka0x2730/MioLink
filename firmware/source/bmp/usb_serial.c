@@ -35,6 +35,7 @@
 #include "atomic.h"
 #include "timers.h"
 #include "task.h"
+#include "general.h"
 
 #define USB_UART_TASK_CORE_AFFINITY     (0x01) /* Core 0 only */
 
@@ -107,7 +108,36 @@ static bool __not_in_flash_func(send_to_usb)(uint8_t *data, const size_t len)
     }
     else if (tud_cdc_n_write_available(USB_SERIAL_TARGET) < len)
     {
-        return false;
+        platform_timeout_s timeout;
+        platform_timeout_set(&timeout, 200);
+
+        size_t written = 0;
+        while ((written < len) && (!platform_timeout_is_expired(&timeout)))
+        {
+            const size_t available = tud_cdc_n_write_available(USB_SERIAL_TARGET);
+
+            if (available > 0)
+            {
+                const size_t data_to_write = MIN(len - written, available);
+                if (tud_cdc_n_write(USB_SERIAL_TARGET, data + written, data_to_write) == data_to_write)
+                {
+                    written += data_to_write;
+                }
+            }
+            else
+            {
+                vTaskDelay(pdMS_TO_TICKS(5));
+            }
+        }
+
+        if (written < len)
+        {
+            return false;
+        }
+        else
+        {
+            return true;
+        }
     }
     else
     {
