@@ -37,6 +37,9 @@
 
 #include "usb_serial.h"
 
+#include "FreeRTOS.h"
+#include "task.h"
+
 extern void trace_tick(void);
 
 static int adc_target_voltage_dma_chan = -1;

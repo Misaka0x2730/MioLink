@@ -29,6 +29,8 @@
 #include "usb_serial.h"
 #include "tusb.h"
 #include "gdb_if.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 static uint32_t gdb_to_usb_count;
 static char gdb_to_usb_buf[512];

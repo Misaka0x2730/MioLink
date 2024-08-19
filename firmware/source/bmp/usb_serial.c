@@ -32,6 +32,7 @@
 #endif
 #include "tusb.h"
 
+#include "FreeRTOS.h"
 #include "atomic.h"
 #include "timers.h"
 #include "task.h"
@@ -106,42 +107,62 @@ static bool __not_in_flash_func(send_to_usb)(uint8_t *data, const size_t len)
     {
         return true;
     }
-    else if (tud_cdc_n_write_available(USB_SERIAL_TARGET) < len)
+    else
     {
-        platform_timeout_s timeout;
-        platform_timeout_set(&timeout, 200);
-
-        size_t written = 0;
-        while ((written < len) && (!platform_timeout_is_expired(&timeout)))
+        bool result = false;
+        bool flush = false;
+        for (size_t i = 0; i < len; i++)
         {
-            const size_t available = tud_cdc_n_write_available(USB_SERIAL_TARGET);
-
-            if (available > 0)
+            if (data[i] == '\n')
             {
-                const size_t data_to_write = MIN(len - written, available);
-                if (tud_cdc_n_write(USB_SERIAL_TARGET, data + written, data_to_write) == data_to_write)
+                flush = true;
+                break;
+            }
+        }
+
+        if (tud_cdc_n_write_available(USB_SERIAL_TARGET) < len)
+        {
+            platform_timeout_s timeout;
+            platform_timeout_set(&timeout, 200);
+
+            size_t written = 0;
+            while ((written < len) && (!platform_timeout_is_expired(&timeout)))
+            {
+                const size_t available = tud_cdc_n_write_available(USB_SERIAL_TARGET);
+
+                if (available > 0)
                 {
-                    written += data_to_write;
+                    const size_t data_to_write = MIN(len - written, available);
+                    if (tud_cdc_n_write(USB_SERIAL_TARGET, data + written, data_to_write) == data_to_write)
+                    {
+                        written += data_to_write;
+                    }
                 }
+                else
+                {
+                    vTaskDelay(pdMS_TO_TICKS(1));
+                }
+            }
+
+            if (written < len)
+            {
+                result = false;
             }
             else
             {
-                vTaskDelay(pdMS_TO_TICKS(5));
+                result = true;
             }
-        }
-
-        if (written < len)
-        {
-            return false;
         }
         else
         {
-            return true;
+            result = (tud_cdc_n_write(USB_SERIAL_TARGET, data, len) == len);
         }
-    }
-    else
-    {
-        return (tud_cdc_n_write(USB_SERIAL_TARGET, data, len) == len);
+
+        if (flush)
+        {
+            tud_cdc_n_write_flush(USB_SERIAL_TARGET);
+        }
+        return result;
     }
 }
 

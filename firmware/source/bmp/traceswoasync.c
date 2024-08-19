@@ -26,6 +26,7 @@
 #include "traceswo.h"
 #include "tusb.h"
 
+#include "FreeRTOS.h"
 #include "atomic.h"
 #include "timers.h"
 #include "task.h"

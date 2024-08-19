@@ -22,6 +22,7 @@
 #include "general.h"
 #include "platform.h"
 #include "tusb.h"
+#include "FreeRTOS.h"
 #include "task.h"
 #include "serialno.h"
 #include "version.h"
