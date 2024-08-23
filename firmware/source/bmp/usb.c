@@ -233,7 +233,7 @@ static const uint8_t desc_ms_os_20[] =
     'D', 0x00, 'e', 0x00, 'v', 0x00, 'i', 0x00, 'c', 0x00, 'e', 0x00, 'I', 0x00, 'n', 0x00, 't', 0x00, 'e', 0x00,
     'r', 0x00, 'f', 0x00, 'a', 0x00, 'c', 0x00, 'e', 0x00, 'G', 0x00, 'U', 0x00, 'I', 0x00, 'D', 0x00, 0x00, 0x00,
     U16_TO_U8S_LE(0x004E), // wPropertyDataLength
-    // Vendor-defined Property Data: {bc7398c1-73cd-4cb7-98b8-913a8fca7bf6}
+    // Vendor-defined Property Data:{76be5ca1-e304-4b32-be5f-d9369d3d201a}
     '{', 0,     '7', 0,     '6', 0,     'b', 0,     'e', 0,     '5', 0,
     'c', 0,     'a', 0,     '1', 0,     '-', 0,     'e', 0,     '3', 0,
     '0', 0,     '4', 0,     '-', 0,     '4', 0,     'b', 0,     '3', 0,
@@ -255,7 +255,7 @@ static const uint8_t desc_ms_os_20[] =
     'D', 0x00, 'e', 0x00, 'v', 0x00, 'i', 0x00, 'c', 0x00, 'e', 0x00, 'I', 0x00, 'n', 0x00, 't', 0x00, 'e', 0x00,
     'r', 0x00, 'f', 0x00, 'a', 0x00, 'c', 0x00, 'e', 0x00, 'G', 0x00, 'U', 0x00, 'I', 0x00, 'D', 0x00, 0x00, 0x00,
     U16_TO_U8S_LE(0x004E), // wPropertyDataLength
-        // Vendor-defined Property Data: {bc7398c1-73cd-4cb7-98b8-913a8fca7bf6}
+        // Vendor-defined Property Data: {76be5ca1-e305-4b32-be5f-d9369d3d201a}
     '{', 0,     '7', 0,     '6', 0,     'b', 0,     'e', 0,     '5', 0,
     'c', 0,     'a', 0,     '1', 0,     '-', 0,     'e', 0,     '3', 0,
     '0', 0,     '5', 0,     '-', 0,     '4', 0,     'b', 0,     '3', 0,
