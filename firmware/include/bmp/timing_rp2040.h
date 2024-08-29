@@ -24,10 +24,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "platform_support.h"
+
 #define PLATFORM_DEFAULT_FREQUENCY    (4000000UL)
 
 extern bool running_status;
 
 void platform_timing_init(void);
+uint32_t platform_timeout_time_left(const platform_timeout_s *const t);
 
 #endif /* PLATFORMS_TIMING_RP2040_H */

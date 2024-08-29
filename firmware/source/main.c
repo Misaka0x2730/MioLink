@@ -18,6 +18,10 @@
 #include "traceswo.h"
 #endif
 
+#if ENABLE_SYSVIEW_TRACE
+#include "SEGGER_RTT.h"
+#endif
+
 #include "pico/multicore.h"
 
 #include "usb.h"
@@ -25,6 +29,7 @@
 static char BMD_ALIGN_DEF(8) pbuf[GDB_PACKET_BUFFER_SIZE + 1U];
 
 #define GDB_TASK_CORE_AFFINITY     (0x01) /* Core 0 only */
+#define GDB_TASK_STACK_SIZE        (1024)
 
 TaskHandle_t gdb_task;
 
@@ -83,6 +88,7 @@ _Noreturn static void gdb_thread(void* params)
 void main(void)
 {
 #if ENABLE_SYSVIEW_TRACE
+    SEGGER_RTT_Init();
     traceSTART();
 #endif
     platform_init();
@@ -95,13 +101,13 @@ void main(void)
 
     BaseType_t status = xTaskCreate(gdb_thread,
                                     "target_gdb",
-									1024,
+									GDB_TASK_STACK_SIZE,
                                     NULL,
                                     PLATFORM_PRIORITY_NORMAL,
                                     &gdb_task);
 
 #if configUSE_CORE_AFFINITY
-    vTaskCoreAffinitySet(main_task, GDB_TASK_CORE_AFFINITY);
+    vTaskCoreAffinitySet(gdb_task, GDB_TASK_CORE_AFFINITY);
 #endif
     vTaskStartScheduler();
 

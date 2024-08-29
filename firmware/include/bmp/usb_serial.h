@@ -43,8 +43,12 @@ typedef enum usb_serial_interface_e
 
 extern bool use_uart_on_tdi_tdo;
 
+void usb_serial_update_led(void);
+bool usb_serial_send_to_usb(uint8_t *data, size_t len, bool flush);
+
 uint16_t usb_get_config(void);
 bool gdb_serial_get_dtr(void);
+void usb_serial_uart_release(uint32_t uart_number);
 void usb_serial_init(void);
 
 #endif /* BMP_USB_SERIAL_H */

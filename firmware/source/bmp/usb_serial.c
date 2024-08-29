@@ -28,7 +28,6 @@
 #endif
 #ifdef ENABLE_RTT
 #include "rtt.h"
-#include "rtt_if.h"
 #endif
 #include "tusb.h"
 
@@ -36,31 +35,37 @@
 #include "atomic.h"
 #include "timers.h"
 #include "task.h"
-#include "general.h"
 
-#define USB_UART_TASK_CORE_AFFINITY     (0x01) /* Core 0 only */
-
-#define UART_RX_INT_FIFO_LEVEL          (16)
-
-#define UART_DMA_RX_TOTAL_BUFFERS_SIZE  (16 * 1024)
-#define UART_DMA_RX_NUMBER_OF_BUFFERS   (32)
-#define UART_DMA_RX_BUFFER_SIZE   (UART_DMA_RX_TOTAL_BUFFERS_SIZE / UART_DMA_RX_NUMBER_OF_BUFFERS)
-
-#if (UART_DMA_RX_NUMBER_OF_BUFFERS < 4)
-#error "UART_DMA_RX_NUMBER_OF_BUFFERS should be at least 4"
+#if ENABLE_SYSVIEW_TRACE
+#include "SEGGER_RTT.h"
 #endif
 
-#define UART_DMA_TX_BUFFER_SIZE   (256)
+#define USB_SERIAL_UART_RX_INT_FIFO_LEVEL          (16)
 
-#define UART_DMA_RX_BAUDRATE_THRESHOLD   (38400)
-#define UART_DMA_RX_MIN_TIMEOUT          (5)
-#define UART_DMA_RX_MAX_TIMEOUT          (200)
+#define USB_SERIAL_UART_DMA_RX_TOTAL_BUFFERS_SIZE  (16 * 1024)
+#define USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS   (32)
+#define USB_SERIAL_UART_DMA_RX_BUFFER_SIZE         (USB_SERIAL_UART_DMA_RX_TOTAL_BUFFERS_SIZE / \
+                                                    USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS)
 
-#define UART_DMA_TX_CHECK_FINISHED_PERIOD (2)
+#if (USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS < 4)
+#error "USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS should be at least 4"
+#endif
 
-#define UART_NOTIFY_WAIT_PERIOD           (3000)
+#define USB_SERIAL_UART_DMA_RX_BAUDRATE_THRESHOLD     (38400)
+#define USB_SERIAL_UART_DMA_RX_MIN_TIMEOUT            (5)
+#define USB_SERIAL_UART_DMA_RX_MAX_TIMEOUT            (200)
 
-static uint8_t uart_rx_buf[UART_DMA_RX_NUMBER_OF_BUFFERS][UART_DMA_RX_BUFFER_SIZE] = { 0 };
+#define USB_SERIAL_UART_DMA_TX_BUFFER_SIZE            (256)
+#define USB_SERIAL_UART_DMA_TX_CHECK_FINISHED_PERIOD  (2)
+
+#define USB_SERIAL_TASK_NOTIFY_WAIT_PERIOD            (3000)
+#define USB_SERIAL_USB_TX_WAIT_FOR_AVAIL              (1)
+#define USB_SERIAL_USB_TX_WAIT_MAX                    (200)
+
+#define USB_SERIAL_TASK_CORE_AFFINITY                 (0x02) /* Core 0 only */
+#define USB_SERIAL_TASK_STACK_SIZE                    (512)
+
+static uint8_t uart_rx_buf[USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS][USB_SERIAL_UART_DMA_RX_BUFFER_SIZE] = { 0 };
 static uint32_t uart_rx_int_buf_pos = 0;
 static uint32_t uart_rx_dma_buffer_full_mask = 0;
 static uint32_t uart_rx_dma_current_buffer = 0;
@@ -70,22 +75,23 @@ static int uart_dma_rx_channel = -1;
 static bool uart_rx_ongoing = false;
 
 static int uart_dma_tx_channel = -1;
-uint8_t uart_tx_dma_buf[UART_DMA_TX_BUFFER_SIZE] = { 0 };
+uint8_t uart_tx_dma_buf[USB_SERIAL_UART_DMA_TX_BUFFER_SIZE] = { 0 };
 bool uart_tx_dma_finished = false;
 static bool uart_tx_ongoing = false;
 
 TaskHandle_t usb_uart_task;
 
+/* Sets externally */
 bool use_uart_on_tdi_tdo = false;
 
-static uint32_t current_uart_number = UART_NUMBER;
+static uint32_t current_uart_number = USB_SERIAL_UART_MAIN_NUMBER;
 
 #define UART_HW                (uart_get_hw(UART_INSTANCE(current_uart_number)))
 
-static void __not_in_flash_func(aux_serial_receive_isr)(void);
+static void __not_in_flash_func(uart_rx_isr)(void);
 static void __not_in_flash_func(uart_dma_handler)(void);
 
-static void __not_in_flash_func(update_serial_led)(void)
+void __not_in_flash_func(usb_serial_update_led)(void)
 {
     if (tud_cdc_n_connected(USB_SERIAL_TARGET) == false)
     {
@@ -101,7 +107,7 @@ static void __not_in_flash_func(update_serial_led)(void)
     }
 }
 
-static bool __not_in_flash_func(send_to_usb)(uint8_t *data, const size_t len)
+bool __not_in_flash_func(usb_serial_send_to_usb)(uint8_t *data, const size_t len, const bool flush)
 {
     if (tud_cdc_n_connected(USB_SERIAL_TARGET) == false)
     {
@@ -110,20 +116,23 @@ static bool __not_in_flash_func(send_to_usb)(uint8_t *data, const size_t len)
     else
     {
         bool result = false;
-        bool flush = false;
-        for (size_t i = 0; i < len; i++)
+        bool need_flush = flush;
+        if (need_flush == false)
         {
-            if (data[i] == '\n')
+            for (size_t i = 0; i < len; i++)
             {
-                flush = true;
-                break;
+                if (data[i] == '\n')
+                {
+                    need_flush = true;
+                    break;
+                }
             }
         }
 
         if (tud_cdc_n_write_available(USB_SERIAL_TARGET) < len)
         {
             platform_timeout_s timeout;
-            platform_timeout_set(&timeout, 200);
+            platform_timeout_set(&timeout, USB_SERIAL_USB_TX_WAIT_MAX);
 
             size_t written = 0;
             while ((written < len) && (!platform_timeout_is_expired(&timeout)))
@@ -140,36 +149,23 @@ static bool __not_in_flash_func(send_to_usb)(uint8_t *data, const size_t len)
                 }
                 else
                 {
-                    vTaskDelay(pdMS_TO_TICKS(1));
+                    vTaskDelay(pdMS_TO_TICKS(USB_SERIAL_USB_TX_WAIT_FOR_AVAIL));
                 }
             }
 
-            if (written < len)
-            {
-                result = false;
-            }
-            else
-            {
-                result = true;
-            }
+            result = (written == len);
         }
         else
         {
             result = (tud_cdc_n_write(USB_SERIAL_TARGET, data, len) == len);
         }
 
-        if (flush)
+        if (need_flush)
         {
             tud_cdc_n_write_flush(USB_SERIAL_TARGET);
         }
         return result;
     }
-}
-
-static void __not_in_flash_func(uart_rx_dma_timeout_callback)(TimerHandle_t xTimer)
-{
-    (void)(xTimer);
-    xTaskNotify(usb_uart_task, USB_SERIAL_DATA_UART_RX_TIMEOUT, eSetBits);
 }
 
 static void __not_in_flash_func(uart_rx_dma_init)(const uint32_t baudrate)
@@ -186,35 +182,27 @@ static void __not_in_flash_func(uart_rx_dma_init)(const uint32_t baudrate)
     channel_config_set_transfer_data_size(&rx_config, DMA_SIZE_8);
     channel_config_set_read_increment(&rx_config, false);
     channel_config_set_write_increment(&rx_config, true);
-
-    if (current_uart_number == UART_NUMBER)
-    {
-        channel_config_set_dreq(&rx_config, DREQ_UART1_RX);
-    }
-    else
-    {
-        channel_config_set_dreq(&rx_config, DREQ_UART0_RX);
-    }
+    channel_config_set_dreq(&rx_config, uart_get_dreq(UART_INSTANCE(current_uart_number), false));
 
     dma_channel_configure(uart_dma_rx_channel,
                           &rx_config,
                           uart_rx_buf,
                           &(UART_HW->dr),
-                          UART_DMA_RX_BUFFER_SIZE,
+                          USB_SERIAL_UART_DMA_RX_BUFFER_SIZE,
                           false);
 
     uart_rx_use_dma = true;
 
-    /* Calculate timer period - time to fill 3 rx buffers */
-    uint32_t timer_period = (UART_DMA_RX_BUFFER_SIZE * 3 * 1000); /* 1000 - because we need milliseconds */
+    /* Calculate timer period - time to fill 2 rx buffers */
+    uint32_t timer_period = (USB_SERIAL_UART_DMA_RX_BUFFER_SIZE * 2 * 1000); /* 1000 - because we need milliseconds */
     timer_period /= (baudrate / 10);  /* byte rate, 1 data byte = 10 bits (8 data, 1 start and 1 stop) */
-    if (timer_period < UART_DMA_RX_MIN_TIMEOUT)
+    if (timer_period < USB_SERIAL_UART_DMA_RX_MIN_TIMEOUT)
     {
-        timer_period = UART_DMA_RX_MIN_TIMEOUT;
+        timer_period = USB_SERIAL_UART_DMA_RX_MIN_TIMEOUT;
     }
-    else if (timer_period > UART_DMA_RX_MAX_TIMEOUT)
+    else if (timer_period > USB_SERIAL_UART_DMA_RX_MAX_TIMEOUT)
     {
-        timer_period = UART_DMA_RX_MAX_TIMEOUT;
+        timer_period = USB_SERIAL_UART_DMA_RX_MAX_TIMEOUT;
     }
 
     xTimerChangePeriod(uart_rx_dma_timeout_timer, pdMS_TO_TICKS(timer_period), portMAX_DELAY);
@@ -259,22 +247,27 @@ static void __not_in_flash_func(uart_rx_dma_process_buffers)(void)
     const uint32_t buffer_state = uart_rx_dma_buffer_full_mask;
     uint32_t clear_mask = 0;
 
-    xTimerReset(uart_rx_dma_timeout_timer, pdMS_TO_TICKS(0));
+    xTimerReset(uart_rx_dma_timeout_timer, 0);
 
-    for (uint32_t i = 0; i < UART_DMA_RX_NUMBER_OF_BUFFERS; i++)
+    for (uint32_t i = 0; i < USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS; i++)
     {
         const uint32_t buffer_bit = (1u << i);
         if (buffer_state & buffer_bit)
         {
-            if (send_to_usb(uart_rx_buf[i], sizeof(uart_rx_buf[i])) != false)
+            if (usb_serial_send_to_usb(uart_rx_buf[i], sizeof(uart_rx_buf[i]), false) != false)
             {
-                //tud_cdc_n_write_flush(USB_SERIAL_TARGET);
                 clear_mask |= buffer_bit;
             }
         }
     }
 
     Atomic_AND_u32(&uart_rx_dma_buffer_full_mask, ~clear_mask);
+}
+
+static void __not_in_flash_func(uart_rx_dma_timeout_callback)(TimerHandle_t xTimer)
+{
+    (void)(xTimer);
+    xTaskNotify(usb_uart_task, USB_SERIAL_DATA_UART_RX_TIMEOUT, eSetBits);
 }
 
 static bool __not_in_flash_func(uart_rx_dma_finish_receiving)(void)
@@ -293,16 +286,12 @@ static bool __not_in_flash_func(uart_rx_dma_finish_receiving)(void)
         const uint32_t buffer_state = uart_rx_dma_buffer_full_mask;
         uint32_t clear_mask = 0;
 
-        for (uint32_t i = 0; i < UART_DMA_RX_NUMBER_OF_BUFFERS; i++)
+        for (uint32_t i = 0; i < USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS; i++)
         {
             const uint32_t buffer_bit = (1u << i);
             if (buffer_state & buffer_bit)
             {
-                while (send_to_usb(uart_rx_buf[i], sizeof(uart_rx_buf[i])) == false)
-                {
-                    vTaskDelay(pdMS_TO_TICKS(1));
-                }
-                //tud_cdc_n_write_flush(USB_SERIAL_TARGET);
+                usb_serial_send_to_usb(uart_rx_buf[i], sizeof(uart_rx_buf[i]), false);
                 clear_mask |= buffer_bit;
             }
         }
@@ -310,11 +299,7 @@ static bool __not_in_flash_func(uart_rx_dma_finish_receiving)(void)
         const uint32_t remaining = dma_hw->ch[uart_dma_rx_channel].transfer_count;
         const uint32_t data_in_buffer = sizeof(uart_rx_buf[0]) - remaining;
 
-        while (send_to_usb(uart_rx_buf[uart_rx_dma_current_buffer], data_in_buffer) == false)
-        {
-            vTaskDelay(pdMS_TO_TICKS(1));
-        }
-        tud_cdc_n_write_flush(USB_SERIAL_TARGET);
+        usb_serial_send_to_usb(uart_rx_buf[uart_rx_dma_current_buffer], data_in_buffer, true);
 
         dma_channel_abort(uart_dma_rx_channel);
         dma_channel_acknowledge_irq0(uart_dma_rx_channel);
@@ -323,7 +308,7 @@ static bool __not_in_flash_func(uart_rx_dma_finish_receiving)(void)
         uart_rx_dma_buffer_full_mask = 0;
         uart_rx_ongoing = false;
 
-        xTimerStop(uart_rx_dma_timeout_timer, pdMS_TO_TICKS(0));
+        xTimerStop(uart_rx_dma_timeout_timer, 0);
 
         UART_HW->imsc = UART_UARTIMSC_RXIM_BITS | UART_UARTIMSC_RTIM_BITS;
     }
@@ -344,7 +329,7 @@ static void __not_in_flash_func(uart_rx_int_process)(void)
 {
     if (uart_rx_int_buf_pos > 0)
     {
-        if (send_to_usb((uint8_t *) (uart_rx_buf), uart_rx_int_buf_pos) != false)
+        if (usb_serial_send_to_usb((uint8_t *) (uart_rx_buf), uart_rx_int_buf_pos, false) != false)
         {
             uart_rx_int_buf_pos = 0;
         }
@@ -359,11 +344,7 @@ static void __not_in_flash_func(uart_rx_int_finish)(void)
 {
     if (uart_rx_int_buf_pos > 0)
     {
-        while (send_to_usb((uint8_t*)(uart_rx_buf), uart_rx_int_buf_pos) == false)
-        {
-            vTaskDelay(pdMS_TO_TICKS(1));
-        }
-
+        usb_serial_send_to_usb((uint8_t *) (uart_rx_buf), uart_rx_int_buf_pos, false);
         uart_rx_int_buf_pos = 0;
     }
 
@@ -374,13 +355,9 @@ static void __not_in_flash_func(uart_rx_int_finish)(void)
 
     if (uart_rx_int_buf_pos > 0)
     {
-        while (send_to_usb((uint8_t*)(uart_rx_buf), uart_rx_int_buf_pos) == false)
-        {
-            vTaskDelay(pdMS_TO_TICKS(1));
-        }
+        usb_serial_send_to_usb((uint8_t *) (uart_rx_buf), uart_rx_int_buf_pos, true);
         uart_rx_int_buf_pos = 0;
     }
-    tud_cdc_n_write_flush(USB_SERIAL_TARGET);
 
     uart_rx_ongoing = false;
     UART_HW->imsc |= UART_UARTIMSC_RTIM_BITS;
@@ -464,7 +441,7 @@ static void __not_in_flash_func(uart_update_config)(cdc_line_coding_t *line_codi
     }
 
     portENTER_CRITICAL();
-    xTimerStop(uart_rx_dma_timeout_timer, pdMS_TO_TICKS(0));
+    xTimerStop(uart_rx_dma_timeout_timer, 0);
 
     dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
     dma_channel_abort(uart_dma_rx_channel);
@@ -474,52 +451,62 @@ static void __not_in_flash_func(uart_update_config)(cdc_line_coding_t *line_codi
     dma_channel_abort(uart_dma_tx_channel);
     dma_channel_acknowledge_irq0(uart_dma_tx_channel);
 
-    if ((use_uart_on_tdi_tdo != false) && (current_uart_number == UART_NUMBER))
+    if ((use_uart_on_tdi_tdo != false) && (current_uart_number == USB_SERIAL_UART_MAIN_NUMBER))
     {
-        irq_handler_t current_handler = irq_get_exclusive_handler(UART_IRQ);
-        irq_set_enabled(UART_IRQ, false);
-        irq_remove_handler(UART_IRQ, current_handler);
+        if (traceswo_uart_is_used(USB_SERIAL_UART_TDI_TDO_NUMBER))
+        {
+            return;
+        }
 
-        current_handler = irq_get_exclusive_handler(UART0_IRQ);
-        irq_set_enabled(UART0_IRQ, false);
-        irq_remove_handler(UART0_IRQ, current_handler);
+        irq_handler_t current_handler = irq_get_exclusive_handler(USB_SERIAL_UART_MAIN_IRQ);
+        irq_set_enabled(USB_SERIAL_UART_MAIN_IRQ, false);
+        irq_remove_handler(USB_SERIAL_UART_MAIN_IRQ, current_handler);
 
-        uart_deinit(UART_INSTANCE(UART_NUMBER));
-        current_uart_number = UART_TDI_TDO_NUMBER;
+        current_handler = irq_get_exclusive_handler(USB_SERIAL_UART_TDI_TDO_IRQ);
+        irq_set_enabled(USB_SERIAL_UART_TDI_TDO_IRQ, false);
+        irq_remove_handler(USB_SERIAL_UART_TDI_TDO_IRQ, current_handler);
+
+        uart_deinit(UART_INSTANCE(USB_SERIAL_UART_MAIN_NUMBER));
+        current_uart_number = USB_SERIAL_UART_TDI_TDO_NUMBER;
     }
-    else if ((use_uart_on_tdi_tdo == false) && (current_uart_number == UART_TDI_TDO_NUMBER))
+    else if ((use_uart_on_tdi_tdo == false) && (current_uart_number == USB_SERIAL_UART_TDI_TDO_NUMBER))
     {
-        irq_handler_t current_handler = irq_get_exclusive_handler(UART_IRQ);
-        irq_set_enabled(UART_IRQ, false);
-        irq_remove_handler(UART_IRQ, current_handler);
+        if (traceswo_uart_is_used(USB_SERIAL_UART_MAIN_NUMBER))
+        {
+            return;
+        }
 
-        current_handler = irq_get_exclusive_handler(UART0_IRQ);
-        irq_set_enabled(UART0_IRQ, false);
-        irq_remove_handler(UART0_IRQ, current_handler);
+        irq_handler_t current_handler = irq_get_exclusive_handler(USB_SERIAL_UART_MAIN_IRQ);
+        irq_set_enabled(USB_SERIAL_UART_MAIN_IRQ, false);
+        irq_remove_handler(USB_SERIAL_UART_MAIN_IRQ, current_handler);
 
-        uart_deinit(UART_INSTANCE(UART_TDI_TDO_NUMBER));
-        current_uart_number = UART_NUMBER;
+        current_handler = irq_get_exclusive_handler(USB_SERIAL_UART_TDI_TDO_IRQ);
+        irq_set_enabled(USB_SERIAL_UART_TDI_TDO_IRQ, false);
+        irq_remove_handler(USB_SERIAL_UART_TDI_TDO_IRQ, current_handler);
+
+        uart_deinit(UART_INSTANCE(USB_SERIAL_UART_TDI_TDO_NUMBER));
+        current_uart_number = USB_SERIAL_UART_MAIN_NUMBER;
     }
 
-    if (current_uart_number == UART_NUMBER)
+    if (current_uart_number == USB_SERIAL_UART_MAIN_NUMBER)
     {
-        UART_PIN_SETUP();
+        USB_SERIAL_UART_MAIN_PIN_SETUP();
 
-        irq_handler_t current_handler = irq_get_exclusive_handler(UART_IRQ);
+        irq_handler_t current_handler = irq_get_exclusive_handler(USB_SERIAL_UART_MAIN_IRQ);
         if (current_handler == NULL)
         {
-            irq_set_exclusive_handler(UART_IRQ, aux_serial_receive_isr);
+            irq_set_exclusive_handler(USB_SERIAL_UART_MAIN_IRQ, uart_rx_isr);
         }
-        irq_set_enabled(UART_IRQ, true);
+        irq_set_enabled(USB_SERIAL_UART_MAIN_IRQ, true);
     }
     else
     {
-        UART_TDI_TDO_PIN_SETUP();
+        USB_SERIAL_UART_TDI_TDO_PIN_SETUP();
 
         irq_handler_t current_handler = irq_get_exclusive_handler(UART0_IRQ);
         if (current_handler == NULL)
         {
-            irq_set_exclusive_handler(UART0_IRQ, aux_serial_receive_isr);
+            irq_set_exclusive_handler(UART0_IRQ, uart_rx_isr);
         }
         irq_set_enabled(UART0_IRQ, true);
     }
@@ -529,14 +516,7 @@ static void __not_in_flash_func(uart_update_config)(cdc_line_coding_t *line_codi
     channel_config_set_read_increment(&tx_config, true);
     channel_config_set_write_increment(&tx_config, false);
 
-    if (current_uart_number == UART_NUMBER)
-    {
-        channel_config_set_dreq(&tx_config, DREQ_UART1_TX);
-    }
-    else
-    {
-        channel_config_set_dreq(&tx_config, DREQ_UART0_TX);
-    }
+    channel_config_set_dreq(&tx_config, uart_get_dreq(UART_INSTANCE(current_uart_number), true));
 
     dma_channel_configure(uart_dma_tx_channel,
                           &tx_config,
@@ -548,18 +528,39 @@ static void __not_in_flash_func(uart_update_config)(cdc_line_coding_t *line_codi
     uart_init(UART_INSTANCE(current_uart_number), line_coding->bit_rate);
     uart_set_format(UART_INSTANCE(current_uart_number), data_bits, stop_bits, parity);
 
+    uart_rx_int_buf_pos = 0;
     uart_rx_ongoing = false;
     uart_tx_ongoing = false;
 
-    portEXIT_CRITICAL();
-
-    if (line_coding->bit_rate >= UART_DMA_RX_BAUDRATE_THRESHOLD)
+    if (line_coding->bit_rate >= USB_SERIAL_UART_DMA_RX_BAUDRATE_THRESHOLD)
     {
         uart_rx_dma_init(line_coding->bit_rate);
     }
     else
     {
         uart_rx_int_init();
+    }
+
+    portEXIT_CRITICAL();
+}
+
+void usb_serial_uart_release(const uint32_t uart_number)
+{
+    if (uart_number == current_uart_number)
+    {
+        if (current_uart_number == USB_SERIAL_UART_TDI_TDO_NUMBER)
+        {
+            use_uart_on_tdi_tdo = false;
+        }
+        else
+        {
+            use_uart_on_tdi_tdo = true;
+        }
+
+        cdc_line_coding_t line_coding = { 0 };
+        tud_cdc_n_get_line_coding(USB_SERIAL_TARGET, &line_coding);
+
+        uart_update_config(&line_coding);
     }
 }
 
@@ -569,13 +570,13 @@ void usb_serial_init(void)
 {
     BaseType_t status = xTaskCreate(target_serial_thread,
                                     "target_uart",
-                                    128*4,
+                                    USB_SERIAL_TASK_STACK_SIZE,
                                     NULL,
                                     PLATFORM_PRIORITY_HIGH,
                                     &usb_uart_task);
 
 #if configUSE_CORE_AFFINITY
-    vTaskCoreAffinitySet(uart_task, USB_UART_TASK_CORE_AFFINITY);
+    vTaskCoreAffinitySet(usb_uart_task, USB_SERIAL_TASK_CORE_AFFINITY);
 #endif
 }
 
@@ -588,7 +589,7 @@ _Noreturn static void __not_in_flash_func(target_serial_thread)(void* params)
 	uint32_t notificationValue = 0;
 
     uart_rx_dma_timeout_timer = xTimerCreate("UART_RX",
-                                         pdMS_TO_TICKS(UART_DMA_RX_MAX_TIMEOUT),
+                                         pdMS_TO_TICKS(USB_SERIAL_UART_DMA_RX_MAX_TIMEOUT),
                                          pdFALSE,
                                          NULL,
                                          uart_rx_dma_timeout_callback);
@@ -596,10 +597,12 @@ _Noreturn static void __not_in_flash_func(target_serial_thread)(void* params)
     uart_dma_tx_channel = dma_claim_unused_channel(true);
     uart_dma_rx_channel = dma_claim_unused_channel(true);
 
-    irq_set_exclusive_handler(DMA_IRQ_0, uart_dma_handler);
-    irq_set_enabled(DMA_IRQ_0, true);
+    irq_set_exclusive_handler(USB_SERIAL_TRACESWO_DMA_IRQ, uart_dma_handler);
+    irq_set_enabled(USB_SERIAL_TRACESWO_DMA_IRQ, true);
 
-	uint32_t wait_time = UART_NOTIFY_WAIT_PERIOD;
+    irq_set_priority(USB_SERIAL_TRACESWO_DMA_IRQ, 0);
+
+	uint32_t wait_time = USB_SERIAL_TASK_NOTIFY_WAIT_PERIOD;
 
 	while (1)
     {
@@ -671,19 +674,19 @@ _Noreturn static void __not_in_flash_func(target_serial_thread)(void* params)
         {
             if (uart_tx_dma_check_uart_finished())
             {
-                wait_time = UART_NOTIFY_WAIT_PERIOD;
+                wait_time = USB_SERIAL_TASK_NOTIFY_WAIT_PERIOD;
 
                 uart_tx_ongoing = false;
                 uart_tx_dma_finished = false;
             }
             else
             {
-                wait_time = UART_DMA_TX_CHECK_FINISHED_PERIOD;
+                wait_time = USB_SERIAL_UART_DMA_TX_CHECK_FINISHED_PERIOD;
             }
         }
 
-        if (((use_uart_on_tdi_tdo != false) && (current_uart_number == UART_NUMBER)) ||
-           ((use_uart_on_tdi_tdo == false) && (current_uart_number == UART_TDI_TDO_NUMBER)))
+        if (((use_uart_on_tdi_tdo != false) && (current_uart_number == USB_SERIAL_UART_MAIN_NUMBER)) ||
+            ((use_uart_on_tdi_tdo == false) && (current_uart_number == USB_SERIAL_UART_TDI_TDO_NUMBER)))
         {
             cdc_line_coding_t line_coding = { 0 };
             tud_cdc_n_get_line_coding(USB_SERIAL_TARGET, &line_coding);
@@ -691,11 +694,11 @@ _Noreturn static void __not_in_flash_func(target_serial_thread)(void* params)
             uart_update_config(&line_coding);
         }
 
-        update_serial_led();
+        usb_serial_update_led();
     }
 }
 
-static void __not_in_flash_func(aux_serial_receive_isr)(void)
+static void __not_in_flash_func(uart_rx_isr)(void)
 {
     traceISR_ENTER();
 
@@ -708,7 +711,7 @@ static void __not_in_flash_func(aux_serial_receive_isr)(void)
     {
         if (uart_int_status & UART_UARTMIS_RXMIS_BITS)
         {
-            for (uint32_t i = 0; i < (UART_RX_INT_FIFO_LEVEL - 1); i++)
+            for (uint32_t i = 0; i < (USB_SERIAL_UART_RX_INT_FIFO_LEVEL - 1); i++)
             {
                 if (UART_HW->fr & UART_UARTFR_RXFE_BITS)
                 {
@@ -738,7 +741,7 @@ static void __not_in_flash_func(aux_serial_receive_isr)(void)
     {
         xHigherPriorityTaskWoken = uart_rx_dma_start_receiving();
 
-        update_serial_led();
+        usb_serial_update_led();
 
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 
@@ -779,7 +782,7 @@ static void __not_in_flash_func(uart_dma_handler)(void)
 
         uart_rx_dma_buffer_full_mask |= (1u << uart_rx_dma_current_buffer);
 
-        if (++uart_rx_dma_current_buffer >= UART_DMA_RX_NUMBER_OF_BUFFERS)
+        if (++uart_rx_dma_current_buffer >= USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS)
         {
             uart_rx_dma_current_buffer = 0;
         }
@@ -789,15 +792,17 @@ static void __not_in_flash_func(uart_dma_handler)(void)
         dma_channel_set_trans_count(uart_dma_rx_channel, sizeof(uart_rx_buf[uart_rx_dma_current_buffer]), true);
 
         dma_channel_set_irq0_enabled(uart_dma_rx_channel, true);
-
+-
         xTaskNotifyFromISR(usb_uart_task, USB_SERIAL_DATA_UART_RX_FLUSH, eSetBits, &xHigherPriorityTaskWoken);
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
+
+    traceswo_uart_dma_handler();
 }
 
 void debug_serial_send_stdout(const uint8_t *const data, const size_t len)
 {
-    send_to_usb((uint8_t*)data, len);
+    usb_serial_send_to_usb((uint8_t *) data, len, true);
 }
 
 #if ENABLE_DEBUG == 1
@@ -812,6 +817,8 @@ __attribute__((used)) int _write(const int file, const void *const ptr, const si
 #ifdef PLATFORM_HAS_DEBUG
     if (debug_bmp)
 		return debug_serial_debug_write(ptr, len);
+    else
+        SEGGER_RTT_Write(0, ptr, len);
 #else
     (void)ptr;
 #endif

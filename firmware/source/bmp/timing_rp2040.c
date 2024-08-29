@@ -175,3 +175,21 @@ uint32_t platform_max_frequency_get(void)
 
     return target_interface_frequency;
 }
+
+uint32_t platform_timeout_time_left(const platform_timeout_s *const t)
+{
+	/* Cache the current time for the whole calculation */
+	const uint32_t counter = platform_time_ms();
+
+    if ((counter & UINT32_C(0x80000000)) && !(t->time & UINT32_C(0x80000000)))
+    {
+        return UINT32_MAX - counter + t->time + 1;
+    }
+    else if (counter > t->time)
+    {
+        return 0;
+    }
+    {
+        return t->time - counter;
+    }
+}

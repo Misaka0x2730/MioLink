@@ -28,6 +28,7 @@
 #define SWO_DEFAULT_BAUD 2250000U
 void traceswo_init(uint32_t baudrate, uint32_t swo_chan_bitmask);
 void traceswo_deinit(void);
+uint32_t traceswo_get_baudrate(void);
 #else
 void traceswo_init(uint32_t swo_chan_bitmask);
 #endif
@@ -36,8 +37,12 @@ void traceswo_init(uint32_t swo_chan_bitmask);
 void traceswo_setmask(uint32_t mask);
 
 /* Print decoded SWO packet on USB serial */
-uint16_t traceswo_decode(const void *buf, uint16_t len);
+uint16_t traceswo_decode(const void *buf, uint16_t len, bool flush);
 
 void traceswo_task_init(void);
+
+void traceswo_uart_dma_handler(void);
+
+bool traceswo_uart_is_used(uint32_t uart_number);
 
 #endif /* PLATFORMS_COMMON_TRACESWO_H */

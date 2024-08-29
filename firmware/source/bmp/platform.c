@@ -36,6 +36,7 @@
 #include "serialno.h"
 
 #include "usb_serial.h"
+#include "traceswo.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -55,8 +56,14 @@ bool cmd_uart_on_tdi_tdo(target_s *t, int argc, const char **argv)
     if (argc == 1) {
         print_status = true;
     }
-    else if (argc == 2) {
-        if (parse_enable_or_disable(argv[1], &use_uart_on_tdi_tdo))
+    else if (argc == 2)
+    {
+        if (traceswo_uart_is_used(TRACESWO_UART_NUMBER))
+        {
+            print_status = true;
+            gdb_out("You should disable TRACESWO before activating UART on TDI and TDO!\n");
+        }
+        else if (parse_enable_or_disable(argv[1], &use_uart_on_tdi_tdo))
             print_status = true;
     } else
         gdb_out("Unrecognized command format\n");

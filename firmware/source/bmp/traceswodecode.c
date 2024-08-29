@@ -31,9 +31,10 @@ static int swo_pkt_len = 0;     /* decoder state */
 static bool swo_print = false;
 
 /* print decoded swo packet on usb serial */
-uint16_t traceswo_decode(const void *buf, uint16_t len)
+uint16_t traceswo_decode(const void *buf, uint16_t len, const bool flush)
 {
     const uint8_t *const data = (const uint8_t *) buf;
+
     for (uint16_t i = 0; i < len; i++)
     {
         const uint8_t ch = data[i];
@@ -56,11 +57,11 @@ uint16_t traceswo_decode(const void *buf, uint16_t len)
                 swo_buf[swo_buf_len++] = ch;
                 if (swo_buf_len == sizeof(swo_buf))
                 {
-                    if (usb_get_config() && gdb_serial_get_dtr() &&
-                        (tud_cdc_n_write_available(USB_SERIAL_TARGET) > swo_buf_len))
-                    { /* silently drop if usb not ready */
-                        tud_cdc_n_write(USB_SERIAL_TARGET, swo_buf, swo_buf_len);
+                    if (usb_get_config() && gdb_serial_get_dtr())
+                    {
+                        usb_serial_send_to_usb(swo_buf, swo_buf_len, flush);
                     }
+
                     swo_buf_len = 0;
                 }
             }
@@ -74,9 +75,9 @@ uint16_t traceswo_decode(const void *buf, uint16_t len)
     }
     if (swo_buf_len > 0)
     {
-        if (usb_get_config() && gdb_serial_get_dtr() && (tud_cdc_n_write_available(USB_SERIAL_TARGET) > swo_buf_len))
+        if (usb_get_config() && gdb_serial_get_dtr())
         {
-            tud_cdc_n_write(USB_SERIAL_TARGET, swo_buf, swo_buf_len);
+            usb_serial_send_to_usb(swo_buf, swo_buf_len, flush);
         }
         swo_buf_len = 0;
     }

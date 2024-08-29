@@ -2,7 +2,10 @@ cmake_minimum_required(VERSION 3.30)
 
 set(PICO_SDK_FETCH_FROM_GIT ON)
 set(PICO_BOARD none)
+#set(PICO_DEOPTIMIZED_DEBUG 0)
+#set(CMAKE_BUILD_TYPE Release)
 set(PICO_DEOPTIMIZED_DEBUG 1)
+set(CMAKE_BUILD_TYPE Debug)
 
 cmake_policy(SET CMP0169 OLD)
 
@@ -23,6 +26,8 @@ set(TINYUSB_OPT_OS OPT_OS_FREERTOS)
 # Don't use Pico SDK stdio
 set(PICO_STDIO_UART OFF)
 
+set(LOG 0)
+
 # initialize the Raspberry Pi Pico SDK
 pico_sdk_init()
 
@@ -36,18 +41,21 @@ target_compile_definitions(MioLink PUBLIC PICO_FLASH_SPI_CLKDIV=2)
 target_compile_definitions(MioLink PUBLIC PICO_RP2040_B0_SUPPORTED=0)
 target_compile_definitions(MioLink PUBLIC PICO_STDIO_SHORT_CIRCUIT_CLIB_FUNCS=0)
 
+#target_compile_definitions(MioLink PUBLIC ADVERTISE_NOACKMODE=1)
+
 pico_set_printf_implementation(MioLink "compiler")
 
 # BlackMagic parameters
-target_compile_definitions(MioLink PUBLIC ENABLE_DEBUG=1)
+target_compile_definitions(MioLink PUBLIC ENABLE_DEBUG=0)
 target_compile_definitions(MioLink PUBLIC PC_HOSTED=0)
 target_compile_definitions(MioLink PUBLIC NO_LIBOPENCM3)
 target_compile_definitions(MioLink PUBLIC DFU_SERIAL_LENGTH=PICO_UNIQUE_BOARD_ID_SIZE_BYTES+1)
 target_compile_definitions(MioLink PUBLIC SYSTICKHZ=1000)
 target_compile_definitions(MioLink PUBLIC ENABLE_RTT=1)
+target_compile_definitions(MioLink PUBLIC GDB_PACKET_BUFFER_SIZE=16384)
 
 # MioLink parameters
-set_property(TARGET MioLink PROPERTY USE_SYSVIEW_TRACE ON)
+set_property(TARGET MioLink PROPERTY USE_SYSVIEW_TRACE OFF)
 
 # BlackMagic headers
 target_include_directories(MioLink PUBLIC thirdParty/blackmagic/src/include)
@@ -167,6 +175,8 @@ IF(SYSVIEW_ENABLED)
     target_sources(MioLink PUBLIC source/SysView/SEGGER_SYSVIEW.c)
     target_sources(MioLink PUBLIC source/SysView/SEGGER_SYSVIEW_Config_FreeRTOS.c)
     target_sources(MioLink PUBLIC source/SysView/SEGGER_SYSVIEW_FreeRTOS.c)
+ELSEIF (SYSVIEW_ENABLED)
+    add_compile_definitions(ENABLE_SYSVIEW_TRACE=0)
 ENDIF(SYSVIEW_ENABLED)
 
 # Raspberry Pi Pico SDK libraries

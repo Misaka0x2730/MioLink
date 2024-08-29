@@ -26,32 +26,43 @@
 #include "traceswo.h"
 #include "tusb.h"
 
+#include "hardware/uart.h"
+#include "hardware/clocks.h"
+
 #include "FreeRTOS.h"
 #include "atomic.h"
 #include "timers.h"
 #include "task.h"
 
-#define TRACESWO_UART_HW                (uart_get_hw(UART_INSTANCE(TRACESWO_UART_NUMBER)))
-#define TRACESWO_UART_IRQ               UART0_IRQ
-#define TRACESWO_TASK_CORE_AFFINITY     (0x01) /* Core 0 only */
+#define TRACESWO_UART_HW                     (uart_get_hw(UART_INSTANCE(TRACESWO_UART_NUMBER)))
 
-#define TRACESWO_RX_INT_FIFO_LEVEL      (16)
+#define TRACESWO_UART_RX_INT_FIFO_LEVEL      (16)
 
-#define UART_DMA_RX_TOTAL_BUFFERS_SIZE  (16 * 1024)
-#define UART_DMA_RX_NUMBER_OF_BUFFERS   (32)
-#define UART_DMA_RX_BUFFER_SIZE         (UART_DMA_RX_TOTAL_BUFFERS_SIZE / UART_DMA_RX_NUMBER_OF_BUFFERS)
+#define TRACESWO_UART_DMA_RX_TOTAL_BUFFERS_SIZE  (16 * 1024)
+#define TRACESWO_UART_DMA_RX_NUMBER_OF_BUFFERS   (32)
+#define TRACESWO_UART_DMA_RX_BUFFER_SIZE         (TRACESWO_UART_DMA_RX_TOTAL_BUFFERS_SIZE / TRACESWO_UART_DMA_RX_NUMBER_OF_BUFFERS)
 
-#if (UART_DMA_RX_NUMBER_OF_BUFFERS < 4)
-#error "UART_DMA_RX_NUMBER_OF_BUFFERS should be at least 4"
+#if (TRACESWO_UART_DMA_RX_NUMBER_OF_BUFFERS < 4)
+#error "TRACESWO_UART_DMA_RX_NUMBER_OF_BUFFERS should be at least 4"
 #endif
 
-#define UART_DMA_RX_BAUDRATE_THRESHOLD   (38400)
-#define UART_DMA_RX_MIN_TIMEOUT          (5)
-#define UART_DMA_RX_MAX_TIMEOUT          (200)
+#define TRACESWO_UART_DMA_RX_BAUDRATE_THRESHOLD   (38400)
+#define TRACESWO_UART_DMA_RX_MIN_TIMEOUT          (5)
+#define TRACESWO_UART_DMA_RX_MAX_TIMEOUT          (200)
 
-#define UART_NOTIFY_WAIT_PERIOD           (portMAX_DELAY)
+#define TRACESWO_USB_TX_WAIT_FOR_AVAIL     (1)
+#define TRACESWO_USB_TX_WAIT_MAX           (200)
 
-static uint8_t uart_rx_buf[UART_DMA_RX_NUMBER_OF_BUFFERS][UART_DMA_RX_BUFFER_SIZE] = { 0 };
+#define TRACESWO_TASK_NOTIFY_WAIT_PERIOD   (portMAX_DELAY)
+
+#define TRACESWO_VENDOR_INTERFACE          (0)
+
+#define TRACESWO_DECODE_THRESHOLD          (64)
+
+#define TRACESWO_TASK_CORE_AFFINITY          (0x02) /* Core 0 only */
+#define TRACESWO_TASK_STACK_SIZE             (512)
+
+static uint8_t uart_rx_buf[TRACESWO_UART_DMA_RX_NUMBER_OF_BUFFERS][TRACESWO_UART_DMA_RX_BUFFER_SIZE] = {0 };
 static uint32_t uart_rx_int_buf_pos = 0;
 static uint32_t uart_rx_dma_buffer_full_mask = 0;
 static uint32_t uart_rx_dma_current_buffer = 0;
@@ -60,35 +71,75 @@ static xTimerHandle uart_rx_dma_timeout_timer;
 static int uart_dma_rx_channel = -1;
 static bool uart_rx_ongoing = false;
 
+static bool traceswo_initialized = false;
+
 /* SWO decoding */
-static bool decoding = false;
+static bool traceswo_decoding = false;
 
 TaskHandle_t traceswo_task;
 
-#define TRACESWO_VENDOR_INTERFACE   (0)
+static void __not_in_flash_func(uart_rx_isr)(void);
+static void __not_in_flash_func(uart_dma_handler)(void);
 
-static bool __not_in_flash_func(send_to_usb)(uint8_t *data, const size_t len)
+void __not_in_flash_func(traceswo_update_led)(void)
 {
-    if (tud_vendor_n_write_available(TRACESWO_VENDOR_INTERFACE) < len)
+    if (uart_rx_ongoing)
     {
-        return false;
+        gpio_set(PICO_GPIO_PORT, LED_SER_PIN);
     }
     else
     {
-        return (tud_vendor_n_write(TRACESWO_VENDOR_INTERFACE, data, len) == len);
+        gpio_clear(PICO_GPIO_PORT, LED_SER_PIN);
     }
 }
 
-static void __not_in_flash_func(uart_rx_dma_timeout_callback)(TimerHandle_t xTimer)
+static bool __not_in_flash_func(usb_trace_send_to_usb)(uint8_t *data, const size_t len, const bool flush)
 {
-    (void)(xTimer);
-    xTaskNotify(traceswo_task, USB_SERIAL_DATA_UART_RX_TIMEOUT, eSetBits);
+    bool result = false;
+
+    if (tud_vendor_n_write_available(TRACESWO_VENDOR_INTERFACE) < len)
+    {
+        platform_timeout_s timeout;
+        platform_timeout_set(&timeout, TRACESWO_USB_TX_WAIT_MAX);
+
+        size_t written = 0;
+        while ((written < len) && (!platform_timeout_is_expired(&timeout)))
+        {
+            const size_t available = tud_vendor_n_write_available(TRACESWO_VENDOR_INTERFACE);
+
+            if (available > 0)
+            {
+                const size_t data_to_write = MIN(len - written, available);
+                if (tud_vendor_n_write(TRACESWO_VENDOR_INTERFACE, data + written, data_to_write) == data_to_write)
+                {
+                    written += data_to_write;
+                }
+            }
+            else
+            {
+                vTaskDelay(pdMS_TO_TICKS(TRACESWO_USB_TX_WAIT_FOR_AVAIL));
+            }
+        }
+
+        result = (written == len);
+    }
+    else
+    {
+        result = (tud_vendor_n_write(TRACESWO_VENDOR_INTERFACE, data, len) == len);
+    }
+
+    if (flush)
+    {
+        tud_vendor_n_write_flush(TRACESWO_VENDOR_INTERFACE);
+    }
+
+    return result;
 }
 
 static void __not_in_flash_func(uart_rx_dma_init)(const uint32_t baudrate)
 {
-    TRACESWO_UART_HW->dmacr = UART_UARTDMACR_TXDMAE_BITS;
-    TRACESWO_UART_HW->imsc = 0;
+    TRACESWO_UART_HW->dmacr = 0;
+    TRACESWO_UART_HW->imsc = UART_UARTIMSC_OEIM_BITS;
     TRACESWO_UART_HW->ifls = 0;
 
     dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
@@ -99,32 +150,33 @@ static void __not_in_flash_func(uart_rx_dma_init)(const uint32_t baudrate)
     channel_config_set_transfer_data_size(&rx_config, DMA_SIZE_8);
     channel_config_set_read_increment(&rx_config, false);
     channel_config_set_write_increment(&rx_config, true);
-    channel_config_set_dreq(&rx_config, DREQ_UART1_RX);
+    channel_config_set_dreq(&rx_config, uart_get_dreq(UART_INSTANCE(TRACESWO_UART_NUMBER), false));
+    channel_config_set_high_priority(&rx_config, true);
 
     dma_channel_configure(uart_dma_rx_channel,
                           &rx_config,
                           uart_rx_buf,
                           &(TRACESWO_UART_HW->dr),
-                          UART_DMA_RX_BUFFER_SIZE,
+                          TRACESWO_UART_DMA_RX_BUFFER_SIZE,
                           false);
 
     uart_rx_use_dma = true;
 
-    /* Calculate timer period - time to fill 3 rx buffers */
-    uint32_t timer_period = (UART_DMA_RX_BUFFER_SIZE * 3 * 1000); /* 1000 - because we need milliseconds */
+    /* Calculate timer period - time to fill 2 rx buffers */
+    uint32_t timer_period = (TRACESWO_UART_DMA_RX_BUFFER_SIZE * 2 * 1000); /* 1000 - because we need milliseconds */
     timer_period /= (baudrate / 10);  /* byte rate, 1 data byte = 10 bits (8 data, 1 start and 1 stop) */
-    if (timer_period < UART_DMA_RX_MIN_TIMEOUT)
+    if (timer_period < TRACESWO_UART_DMA_RX_MIN_TIMEOUT)
     {
-        timer_period = UART_DMA_RX_MIN_TIMEOUT;
+        timer_period = TRACESWO_UART_DMA_RX_MIN_TIMEOUT;
     }
-    else if (timer_period > UART_DMA_RX_MAX_TIMEOUT)
+    else if (timer_period > TRACESWO_UART_DMA_RX_MAX_TIMEOUT)
     {
-        timer_period = UART_DMA_RX_MAX_TIMEOUT;
+        timer_period = TRACESWO_UART_DMA_RX_MAX_TIMEOUT;
     }
 
     xTimerChangePeriod(uart_rx_dma_timeout_timer, pdMS_TO_TICKS(timer_period), portMAX_DELAY);
 
-    TRACESWO_UART_HW->imsc = UART_UARTIMSC_RXIM_BITS | UART_UARTIMSC_RTIM_BITS;
+    TRACESWO_UART_HW->imsc = UART_UARTIMSC_RXIM_BITS | UART_UARTIMSC_RTIM_BITS | UART_UARTIMSC_OEIM_BITS;
 }
 
 static BaseType_t __not_in_flash_func(uart_rx_dma_start_receiving)(void)
@@ -149,8 +201,8 @@ static BaseType_t __not_in_flash_func(uart_rx_dma_start_receiving)(void)
         uart_rx_dma_buffer_full_mask = 0;
         uart_rx_ongoing = true;
 
-        TRACESWO_UART_HW->imsc = 0;
-        TRACESWO_UART_HW->dmacr = UART_UARTDMACR_TXDMAE_BITS | UART_UARTDMACR_RXDMAE_BITS;
+        TRACESWO_UART_HW->imsc = UART_UARTIMSC_OEIM_BITS;
+        TRACESWO_UART_HW->dmacr = UART_UARTDMACR_RXDMAE_BITS;
 
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
@@ -164,22 +216,32 @@ static void __not_in_flash_func(uart_rx_dma_process_buffers)(void)
     const uint32_t buffer_state = uart_rx_dma_buffer_full_mask;
     uint32_t clear_mask = 0;
 
-    xTimerReset(uart_rx_dma_timeout_timer, pdMS_TO_TICKS(0));
+    xTimerReset(uart_rx_dma_timeout_timer, 0);
 
-    for (uint32_t i = 0; i < UART_DMA_RX_NUMBER_OF_BUFFERS; i++)
+    for (uint32_t i = 0; i < TRACESWO_UART_DMA_RX_NUMBER_OF_BUFFERS; i++)
     {
         const uint32_t buffer_bit = (1u << i);
         if (buffer_state & buffer_bit)
         {
-            if (send_to_usb(uart_rx_buf[i], sizeof(uart_rx_buf[i])) != false)
+            if (traceswo_decoding)
             {
-                //tud_vendor_n_write_flush(TRACESWO_VENDOR_INTERFACE);
+                traceswo_decode(uart_rx_buf[i], sizeof(uart_rx_buf[i]), true);
+                clear_mask |= buffer_bit;
+            }
+            else if (usb_trace_send_to_usb(uart_rx_buf[i], sizeof(uart_rx_buf[i]), true) != false)
+            {
                 clear_mask |= buffer_bit;
             }
         }
     }
 
     Atomic_AND_u32(&uart_rx_dma_buffer_full_mask, ~clear_mask);
+}
+
+static void __not_in_flash_func(uart_rx_dma_timeout_callback)(TimerHandle_t xTimer)
+{
+    (void)(xTimer);
+    xTaskNotify(traceswo_task, USB_SERIAL_DATA_UART_RX_TIMEOUT, eSetBits);
 }
 
 static bool __not_in_flash_func(uart_rx_dma_finish_receiving)(void)
@@ -190,36 +252,40 @@ static bool __not_in_flash_func(uart_rx_dma_finish_receiving)(void)
     }
     else
     {
-        TRACESWO_UART_HW->dmacr = UART_UARTDMACR_TXDMAE_BITS;
+        TRACESWO_UART_HW->dmacr = 0;
 
         dma_channel_acknowledge_irq0(uart_dma_rx_channel);
         dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
 
         const uint32_t buffer_state = uart_rx_dma_buffer_full_mask;
-        uint32_t clear_mask = 0;
 
-        for (uint32_t i = 0; i < UART_DMA_RX_NUMBER_OF_BUFFERS; i++)
+        for (uint32_t i = 0; i < TRACESWO_UART_DMA_RX_NUMBER_OF_BUFFERS; i++)
         {
             const uint32_t buffer_bit = (1u << i);
             if (buffer_state & buffer_bit)
             {
-                while (send_to_usb(uart_rx_buf[i], sizeof(uart_rx_buf[i])) == false)
+                if (traceswo_decoding)
                 {
-                    vTaskDelay(pdMS_TO_TICKS(1));
+                    traceswo_decode(uart_rx_buf[i], sizeof(uart_rx_buf[i]), false);
                 }
-                //tud_vendor_n_write_flush(TRACESWO_VENDOR_INTERFACE);
-                clear_mask |= buffer_bit;
+                else
+                {
+                    usb_trace_send_to_usb(uart_rx_buf[i], sizeof(uart_rx_buf[i]), false);
+                }
             }
         }
 
         const uint32_t remaining = dma_hw->ch[uart_dma_rx_channel].transfer_count;
         const uint32_t data_in_buffer = sizeof(uart_rx_buf[0]) - remaining;
 
-        while (send_to_usb(uart_rx_buf[uart_rx_dma_current_buffer], data_in_buffer) == false)
+        if (traceswo_decoding)
         {
-            vTaskDelay(pdMS_TO_TICKS(1));
+           // traceswo_decode(uart_rx_buf[uart_rx_dma_current_buffer], data_in_buffer, true);
         }
-        tud_vendor_n_write_flush(TRACESWO_VENDOR_INTERFACE);
+        else
+        {
+            usb_trace_send_to_usb(uart_rx_buf[uart_rx_dma_current_buffer], data_in_buffer, true);
+        }
 
         dma_channel_abort(uart_dma_rx_channel);
         dma_channel_acknowledge_irq0(uart_dma_rx_channel);
@@ -247,28 +313,34 @@ static void __not_in_flash_func(uart_rx_int_init)(void)
 
 static void __not_in_flash_func(uart_rx_int_process)(void)
 {
-    if (uart_rx_int_buf_pos >= 64)
+    if (uart_rx_int_buf_pos > 0)
     {
-        if (decoding)
+        if ((traceswo_decoding) && (uart_rx_int_buf_pos >= TRACESWO_DECODE_THRESHOLD))
         {
             /* write decoded swo packets to the uart port */
-            traceswo_decode(uart_rx_buf, uart_rx_int_buf_pos);
+            traceswo_decode(uart_rx_buf, uart_rx_int_buf_pos, false);
 
             uart_rx_int_buf_pos = 0;
         }
-        else if (send_to_usb((uint8_t *) (uart_rx_buf), uart_rx_int_buf_pos) != false)
+        else if (usb_trace_send_to_usb((uint8_t *) (uart_rx_buf), uart_rx_int_buf_pos, false) != false)
         {
             uart_rx_int_buf_pos = 0;
         }
-    }
 
-    uart_rx_ongoing = true;
+        uart_rx_ongoing = true;
+    }
 
     TRACESWO_UART_HW->imsc |= UART_UARTIMSC_RXIM_BITS;
 }
 
 static void __not_in_flash_func(uart_rx_int_finish)(void)
 {
+    if (uart_rx_int_buf_pos > 0)
+    {
+        usb_trace_send_to_usb((uint8_t *) (uart_rx_buf), uart_rx_int_buf_pos, false);
+        uart_rx_int_buf_pos = 0;
+    }
+
     while ((TRACESWO_UART_HW->fr & UART_UARTFR_RXFE_BITS) == 0)
     {
         ((uint8_t *) uart_rx_buf)[uart_rx_int_buf_pos++] = (uint8_t) TRACESWO_UART_HW->dr;
@@ -281,16 +353,14 @@ static void __not_in_flash_func(uart_rx_int_finish)(void)
 
     if (uart_rx_int_buf_pos > 0)
     {
-        if (decoding)
+        if (traceswo_decoding)
         {
             /* write decoded swo packets to the uart port */
-            traceswo_decode(uart_rx_buf, uart_rx_int_buf_pos);
-            tud_cdc_n_write_flush(USB_SERIAL_TARGET);
+            traceswo_decode(uart_rx_buf, uart_rx_int_buf_pos, true);
         }
         else
         {
-            send_to_usb((uint8_t *) (uart_rx_buf), uart_rx_int_buf_pos);
-            tud_vendor_n_write_flush(TRACESWO_VENDOR_INTERFACE);
+            usb_trace_send_to_usb((uint8_t *) (uart_rx_buf), uart_rx_int_buf_pos, true);
         }
 
         uart_rx_int_buf_pos = 0;
@@ -302,30 +372,85 @@ static void __not_in_flash_func(uart_rx_int_finish)(void)
 
 void traceswo_init(uint32_t baudrate, uint32_t swo_chan_bitmask)
 {
-    /* Re-initialize UART */
-    dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
-    dma_channel_abort(uart_dma_rx_channel);
-    dma_channel_acknowledge_irq0(uart_dma_rx_channel);
+    usb_serial_uart_release(TRACESWO_UART_NUMBER);
 
-    gpio_set_function(TARGET_TDO_PIN, GPIO_FUNC_UART);
+    portENTER_CRITICAL();
+
+    traceswo_deinit();
+
+    /* Re-initialize UART */
+    TRACESWO_UART_PIN_SETUP();
+
+    irq_handler_t current_handler = irq_get_exclusive_handler(TRACESWO_UART_IRQ);
+    if (current_handler == NULL)
+    {
+        irq_set_exclusive_handler(TRACESWO_UART_IRQ, uart_rx_isr);
+    }
+    else
+    {
+        panic("TRACESWO UART IRQ handler was already set!");
+    }
+    irq_set_enabled(TRACESWO_UART_IRQ, true);
+    irq_set_priority(TRACESWO_UART_IRQ, 0x80 - 1);
+
     uart_init(UART_INSTANCE(TRACESWO_UART_NUMBER), baudrate);
 
-    //if (baudrate >= UART_DMA_RX_BAUDRATE_THRESHOLD)
+    if (baudrate >= TRACESWO_UART_DMA_RX_BAUDRATE_THRESHOLD)
     {
-        //uart_rx_dma_init(baudrate);
+        uart_rx_dma_init(baudrate);
     }
-    //else
+    else
     {
         uart_rx_int_init();
     }
 
     traceswo_setmask(swo_chan_bitmask);
-    decoding = swo_chan_bitmask != 0;
+    traceswo_decoding = swo_chan_bitmask != 0;
+
+    traceswo_initialized = true;
+
+    portEXIT_CRITICAL();
 }
 
 void traceswo_deinit(void)
 {
+    if (traceswo_initialized)
+    {
+        portENTER_CRITICAL();
 
+        dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
+        dma_channel_abort(uart_dma_rx_channel);
+        dma_channel_acknowledge_irq0(uart_dma_rx_channel);
+
+        irq_handler_t current_handler = irq_get_exclusive_handler(TRACESWO_UART_IRQ);
+        irq_set_enabled(TRACESWO_UART_IRQ, false);
+
+        if (current_handler != NULL)
+        {
+            irq_remove_handler(TRACESWO_UART_IRQ, current_handler);
+        }
+
+        uart_deinit(UART_INSTANCE(TRACESWO_UART_NUMBER));
+
+        uart_rx_int_buf_pos = 0;
+        uart_rx_ongoing = false;
+
+        traceswo_initialized = false;
+
+        portEXIT_CRITICAL();
+    }
+}
+
+bool traceswo_uart_is_used(const uint32_t uart_number)
+{
+    return (traceswo_initialized && (uart_number == TRACESWO_UART_NUMBER));
+}
+
+uint32_t traceswo_get_baudrate(void)
+{
+    const uint32_t ibrd = TRACESWO_UART_HW->ibrd;
+    const uint32_t fbrd = TRACESWO_UART_HW->fbrd;
+    return (4 * clock_get_hz(UART_CLOCK_NUM(UART_INSTANCE(TRACESWO_UART_NUMBER)))) / (64 * ibrd + fbrd);
 }
 
 _Noreturn static void __not_in_flash_func(traceswo_thread)(void* params);
@@ -334,38 +459,30 @@ void traceswo_task_init(void)
 {
     BaseType_t status = xTaskCreate(traceswo_thread,
                                     "target_trace",
-                                    128*4,
+                                    TRACESWO_TASK_STACK_SIZE,
                                     NULL,
                                     PLATFORM_PRIORITY_HIGH,
                                     &traceswo_task);
 
 #if configUSE_CORE_AFFINITY
-    vTaskCoreAffinitySet(traceswo_thread, TRACESWO_TASK_CORE_AFFINITY);
+    vTaskCoreAffinitySet(traceswo_task, TRACESWO_TASK_CORE_AFFINITY);
 #endif
 }
-
-static void __not_in_flash_func(aux_serial_receive_isr)(void);
-static void __not_in_flash_func(uart_dma_handler)(void);
 
 _Noreturn static void __not_in_flash_func(traceswo_thread)(void* params)
 {
 	uint32_t notificationValue = 0;
 
     uart_rx_dma_timeout_timer = xTimerCreate("UART_RX",
-                                         pdMS_TO_TICKS(UART_DMA_RX_MAX_TIMEOUT),
+                                         pdMS_TO_TICKS(TRACESWO_UART_DMA_RX_MAX_TIMEOUT),
                                          pdFALSE,
                                          NULL,
                                          uart_rx_dma_timeout_callback);
 
-	irq_set_exclusive_handler(TRACESWO_UART_IRQ, aux_serial_receive_isr);
-	irq_set_enabled(TRACESWO_UART_IRQ, true);
 
     uart_dma_rx_channel = dma_claim_unused_channel(true);
 
-    //irq_set_exclusive_handler(DMA_IRQ_0, uart_dma_handler);
-    //irq_set_enabled(DMA_IRQ_0, true);
-
-	uint32_t wait_time = UART_NOTIFY_WAIT_PERIOD;
+	uint32_t wait_time = TRACESWO_TASK_NOTIFY_WAIT_PERIOD;
 
 	while (1)
     {
@@ -403,10 +520,12 @@ _Noreturn static void __not_in_flash_func(traceswo_thread)(void* params)
                 uart_rx_dma_finish_receiving();
             }
         }
+
+        traceswo_update_led();
     }
 }
 
-static void __not_in_flash_func(aux_serial_receive_isr)(void)
+static void __not_in_flash_func(uart_rx_isr)(void)
 {
     traceISR_ENTER();
 
@@ -415,19 +534,26 @@ static void __not_in_flash_func(aux_serial_receive_isr)(void)
 
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
+    uint32_t test = *(io_rw_32 *)(PPB_BASE + ARM_CPU_PREFIXED(NVIC_ISPR_OFFSET));
+
+    if (uart_int_status & UART_UARTMIS_OEMIS_BITS)
+    {
+        panic("UART overrun!");
+    }
+
     if (uart_rx_use_dma == false)
     {
         if (uart_int_status & UART_UARTMIS_RXMIS_BITS)
         {
-            for (uint32_t i = 0; i < (TRACESWO_RX_INT_FIFO_LEVEL - 1); i++)
+            for (uint32_t i = 0; i < (TRACESWO_UART_RX_INT_FIFO_LEVEL - 1); i++)
             {
                 if (TRACESWO_UART_HW->fr & UART_UARTFR_RXFE_BITS)
                 {
                     break;
                 }
 
-                ((uint8_t*)uart_rx_buf)[uart_rx_int_buf_pos] = (uint8_t) TRACESWO_UART_HW->dr;
-                if (++uart_rx_int_buf_pos >= sizeof(uart_rx_buf))
+                ((uint8_t*)uart_rx_buf)[uart_rx_int_buf_pos++] = (uint8_t) TRACESWO_UART_HW->dr;
+                if (uart_rx_int_buf_pos >= sizeof(uart_rx_buf))
                 {
                     uart_rx_int_buf_pos = 0;
                 }
@@ -449,6 +575,8 @@ static void __not_in_flash_func(aux_serial_receive_isr)(void)
     {
         xHigherPriorityTaskWoken = uart_rx_dma_start_receiving();
 
+        traceswo_update_led();
+
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 
         return;
@@ -458,7 +586,7 @@ static void __not_in_flash_func(aux_serial_receive_isr)(void)
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
-static void __not_in_flash_func(uart_dma_handler)(void)
+void __not_in_flash_func(traceswo_uart_dma_handler)(void)
 {
     traceISR_ENTER();
 
@@ -475,7 +603,7 @@ static void __not_in_flash_func(uart_dma_handler)(void)
 
         uart_rx_dma_buffer_full_mask |= (1u << uart_rx_dma_current_buffer);
 
-        if (++uart_rx_dma_current_buffer >= UART_DMA_RX_NUMBER_OF_BUFFERS)
+        if (++uart_rx_dma_current_buffer >= TRACESWO_UART_DMA_RX_NUMBER_OF_BUFFERS)
         {
             uart_rx_dma_current_buffer = 0;
         }

@@ -28,10 +28,8 @@
 #include "version.h"
 #include "usb_serial.h"
 
-#define USB_TASK_CORE_AFFINITY     (0x01) /* Core 0 only */
-
-//#define USB_VID   (0x1209)
-//#define USB_PID   (0x2730)
+#define USB_TASK_CORE_AFFINITY   (0x01) /* Core 0 only */
+#define USB_TASK_STACK_SIZE      (512)
 
 #define USB_VID   (0x1d50)
 #define USB_PID   (0x6018)
@@ -127,16 +125,16 @@ static uint8_t const desc_fs_configuration[] =
     TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, ITF_CONFIG_LEN, 0x00, 500),
 
     /* 1st CDC: Interface number, string index, EP notification address and size, EP data address (out, in) and size. */
-    MAKE_CDC_DESCRIPTOR(ITF_NUM_CDC_0, 4, GDB_ENDPOINT_NOTIF, 8, GDB_ENDPOINT, GDB_ENDPOINT | ENDPOINT_IN_BIT, 64),
+    MAKE_CDC_DESCRIPTOR(ITF_NUM_CDC_0, 4, GDB_ENDPOINT_NOTIF | ENDPOINT_IN_BIT, 8, GDB_ENDPOINT, GDB_ENDPOINT | ENDPOINT_IN_BIT, 64),
 
     /* 2nd CDC: Interface number, string index, EP notification address and size, EP data address (out, in) and size. */
-    MAKE_CDC_DESCRIPTOR(ITF_NUM_CDC_1, 5, SERIAL_ENDPOINT_NOTIF, 8, SERIAL_ENDPOINT, SERIAL_ENDPOINT | ENDPOINT_IN_BIT, 64),
+    MAKE_CDC_DESCRIPTOR(ITF_NUM_CDC_1, 5, SERIAL_ENDPOINT_NOTIF | ENDPOINT_IN_BIT, 8, SERIAL_ENDPOINT, SERIAL_ENDPOINT | ENDPOINT_IN_BIT, 64),
 
     MAKE_DFU_DESCRIPTOR(ITF_NUM_DFU, 6),
 
 #ifdef PLATFORM_HAS_TRACESWO
     /* 3rd interface - TRACESWO */
-    MAKE_TRACE_DESCRIPTOR(ITF_NUM_TRACE, 7, TRACE_ENDPOINT, 64),
+    MAKE_TRACE_DESCRIPTOR(ITF_NUM_TRACE, 7, TRACE_ENDPOINT | ENDPOINT_IN_BIT, 64),
 #endif
 };
 
@@ -242,7 +240,7 @@ static const uint8_t desc_ms_os_20[] =
     'd', 0,     '3', 0,     'd', 0,     '2', 0,     '0', 0,     '1', 0,
     'a', 0,     '}', 0,       0, 0,
 
-        // Function Subset header: length, type, first interface, reserved, subset length
+    // Function Subset header: length, type, first interface, reserved, subset length
     U16_TO_U8S_LE(0x0008), U16_TO_U8S_LE(MS_OS_20_SUBSET_HEADER_FUNCTION), 5, 0, U16_TO_U8S_LE(0x009C),
 
         // MS OS 2.0 Compatible ID descriptor: length, type, compatible ID, sub compatible ID
@@ -337,9 +335,9 @@ void blackmagic_usb_init(void)
     TaskHandle_t usb_task;
     BaseType_t status = xTaskCreate(usb_task_thread,
                                     "usb_task",
-                                    configMINIMAL_STACK_SIZE*4,
+                                    USB_TASK_STACK_SIZE,
                                     NULL,
-                                    PLATFORM_PRIORITY_HIGH,
+                                    PLATFORM_PRIORITY_HIGHEST,
                                     &usb_task);
 
 #if configUSE_CORE_AFFINITY
