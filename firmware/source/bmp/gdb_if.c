@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2011  Black Sphere Technologies Ltd.
  * Written by Gareth McMullin <gareth@blacksphere.co.nz>
+ * Modified 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,19 +34,19 @@
 #include "task.h"
 
 static uint32_t gdb_to_usb_count;
-static char gdb_to_usb_buf[512];
+static char gdb_to_usb_buf[1024];
 
-bool __not_in_flash_func(gdb_serial_get_dtr)(void)
+bool gdb_serial_get_dtr(void)
 {
     return tud_cdc_n_get_line_state(USB_SERIAL_GDB) & 0x01;
 }
 
-uint16_t __not_in_flash_func(usb_get_config)(void)
+uint16_t usb_get_config(void)
 {
     return tud_mounted() ? 1 : 0;
 }
 
-void __not_in_flash_func(gdb_if_putchar)(const char c, const int flush)
+void gdb_if_putchar(const char c, const int flush)
 {
 	gdb_to_usb_buf[gdb_to_usb_count++] = c;
 	if (flush || gdb_to_usb_count == sizeof(gdb_to_usb_buf))
@@ -79,15 +80,18 @@ void __not_in_flash_func(gdb_if_putchar)(const char c, const int flush)
             }
         }
 
-        tud_cdc_n_write_flush(USB_SERIAL_GDB);
+        if (flush)
+        {
+            tud_cdc_n_write_flush(USB_SERIAL_GDB);
+        }
 	}
 }
 
-uint8_t usb_to_gdb_buf[512] = { 0 };
+uint8_t usb_to_gdb_buf[1024] = { 0 };
 uint32_t usb_to_gdb_count = 0;
 uint32_t usb_to_gdb_buf_pos = 0;
 
-char __not_in_flash_func(gdb_if_getchar)(void)
+char gdb_if_getchar(void)
 {
     uint32_t notificationValue = 0;
 
@@ -130,7 +134,7 @@ char __not_in_flash_func(gdb_if_getchar)(void)
     } while (1);
 }
 
-char __not_in_flash_func(gdb_if_getchar_to)(const uint32_t timeout)
+char gdb_if_getchar_to(const uint32_t timeout)
 {
     uint32_t notificationValue = 0;
 
@@ -170,7 +174,7 @@ char __not_in_flash_func(gdb_if_getchar_to)(const uint32_t timeout)
     {
         const uint32_t timeout_left = platform_timeout_time_left(&receive_timeout);
 
-        if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(timeout_left)) != pdFALSE)
+        if ((timeout_left == 0) || (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(timeout_left)) != pdFALSE))
         {
             if (notificationValue & USB_SERIAL_DATA_RX)
             {
@@ -179,6 +183,11 @@ char __not_in_flash_func(gdb_if_getchar_to)(const uint32_t timeout)
                 {
                     return (char)usb_to_gdb_buf[usb_to_gdb_buf_pos++];
                 }
+            }
+
+            if (timeout_left == 0)
+            {
+                break;
             }
         }
     }

@@ -1,15 +1,32 @@
+/*
+ * This file is part of the MioLink project.
+ *
+ * Copyright (C) 2024 Dmitry Rezvanov <gareth@blacksphere.co.nz>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include "general.h"
+
+#include "pico/multicore.h"
+
 #include "FreeRTOS.h"
 #include "task.h"
-#include "usb_serial.h"
+
 #include "platform.h"
-#include "gdb_if.h"
-#include "gdb_main.h"
-#include "target.h"
-#include "exception.h"
-#include "gdb_packet.h"
-#include "morse.h"
-#include "command.h"
+#include "usb_serial.h"
+
 #ifdef ENABLE_RTT
 #include "rtt.h"
 #endif
@@ -18,15 +35,19 @@
 #include "traceswo.h"
 #endif
 
-#if ENABLE_SYSVIEW_TRACE
+#if ENABLE_DEBUG
 #include "SEGGER_RTT.h"
 #endif
 
-#include "pico/multicore.h"
-
+#include "gdb_if.h"
+#include "gdb_main.h"
+#include "target.h"
+#include "exception.h"
+#include "gdb_packet.h"
+#include "morse.h"
 #include "usb.h"
 
-static char BMD_ALIGN_DEF(8) pbuf[GDB_PACKET_BUFFER_SIZE + 1U];
+static char BMD_ALIGN_DEF(8) gdb_buffer[GDB_PACKET_BUFFER_SIZE + 1U];
 
 #define GDB_TASK_CORE_AFFINITY     (0x01) /* Core 0 only */
 #define GDB_TASK_STACK_SIZE        (1024)
@@ -35,7 +56,7 @@ TaskHandle_t gdb_task;
 
 char *gdb_packet_buffer()
 {
-    return pbuf;
+    return gdb_buffer;
 }
 
 static void bmp_poll_loop(void)
@@ -52,8 +73,6 @@ static void bmp_poll_loop(void)
 		char c = gdb_if_getchar_to(0);
 		if (c == '\x03' || c == '\x04')
 			target_halt_request(cur_target);
-        /* TODO: fix this error */
-        //platform_pace_poll();
 #ifdef ENABLE_RTT
 		if (rtt_enabled)
 			poll_rtt(cur_target);
@@ -61,11 +80,11 @@ static void bmp_poll_loop(void)
 	}
 
 	SET_IDLE_STATE(true);
-	size_t size = gdb_getpacket(pbuf, GDB_PACKET_BUFFER_SIZE);
+	size_t size = gdb_getpacket(gdb_buffer, GDB_PACKET_BUFFER_SIZE);
 	// If port closed and target detached, stay idle
-	if (pbuf[0] != '\x04' || cur_target)
+	if (gdb_buffer[0] != '\x04' || cur_target)
 		SET_IDLE_STATE(false);
-	gdb_main(pbuf, GDB_PACKET_BUFFER_SIZE, size);
+	gdb_main(gdb_buffer, GDB_PACKET_BUFFER_SIZE, size);
 }
 
 _Noreturn static void gdb_thread(void* params)
@@ -87,8 +106,11 @@ _Noreturn static void gdb_thread(void* params)
 
 void main(void)
 {
-#if ENABLE_SYSVIEW_TRACE
+#if ENABLE_DEBUG
     SEGGER_RTT_Init();
+#endif
+
+#if ENABLE_SYSVIEW_TRACE
     traceSTART();
 #endif
     platform_init();
@@ -99,29 +121,17 @@ void main(void)
 
     multicore_reset_core1();
 
-    BaseType_t status = xTaskCreate(gdb_thread,
-                                    "target_gdb",
-									GDB_TASK_STACK_SIZE,
-                                    NULL,
-                                    PLATFORM_PRIORITY_NORMAL,
-                                    &gdb_task);
+    assert(xTaskCreate(gdb_thread,
+                       "target_gdb",
+					   GDB_TASK_STACK_SIZE,
+                       NULL,
+                       PLATFORM_PRIORITY_LOW,
+                       &gdb_task) == pdPASS);
 
 #if configUSE_CORE_AFFINITY
     vTaskCoreAffinitySet(gdb_task, GDB_TASK_CORE_AFFINITY);
 #endif
     vTaskStartScheduler();
 
-	panic("Should not reach here!");
-}
-
-void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName )
-{
-    ( void ) pcTaskName;
-    ( void ) pxTask;
-
-    /* Run time stack overflow checking is performed if
-    configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2.  This hook
-    function is called if a stack overflow is detected. */
-
-    panic("Stack overflow!");
+	assert(false);
 }

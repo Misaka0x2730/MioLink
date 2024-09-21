@@ -3,8 +3,8 @@
  *
  * Copyright (C) 2015 Gareth McMullin <gareth@blacksphere.co.nz>
  * Copyright (C) 2023 1BitSquared <info@1bitsquared.com>
- * Modified 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  * Modified by Rachel Mant <git@dragonmux.network>
+ * Modified 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,14 +44,14 @@ static uint8_t monitor_error_count = 0;
 
 uint32_t target_interface_frequency = PLATFORM_DEFAULT_FREQUENCY;
 
-void __not_in_flash_func(vApplicationTickHook)( void )
+void vApplicationTickHook( void )
 {
     time_ms += SYSTICKMS;
     if (morse_tick >= MORSECNT)
     {
         if (running_status)
         {
-            gpio_xor_mask(1 << LED_ACT_PIN);
+            gpio_xor_mask(1ul << LED_ACT_PIN);
         }
         //TODO: Update this
         //usb_config_morse_msg_update();
@@ -82,7 +82,7 @@ void __not_in_flash_func(vApplicationTickHook)( void )
             }
 
             /* Something's wrong, and it is not a glitch, so turn tpwr off and set the morse blink pattern */
-            if (monitor_error_count > 2)
+            if (monitor_error_count > 5)
             {
                 monitor_error_count = 0;
 
@@ -114,7 +114,7 @@ uint32_t platform_time_ms(void)
 void platform_max_frequency_set(uint32_t freq)
 {
     const uint32_t sys_freq = clock_get_hz(clk_sys);
-    const uint32_t interface_freq = sys_freq / 2;
+    const uint32_t interface_freq = sys_freq / 10;
 
     const uint32_t min_freq = (interface_freq >> 16); /* Max divider = 65536 */
     const uint32_t max_freq = interface_freq;
@@ -160,7 +160,7 @@ void platform_max_frequency_set(uint32_t freq)
 uint32_t platform_max_frequency_get(void)
 {
     const uint32_t sys_freq = clock_get_hz(clk_sys);
-    const uint32_t interface_freq = sys_freq / 2;
+    const uint32_t interface_freq = sys_freq / 10;
 
     uint32_t clkdiv_int = (TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM_SEQ].clkdiv & PIO_SM0_CLKDIV_INT_BITS) >> PIO_SM0_CLKDIV_INT_LSB;
     uint32_t clkdiv_frac = (TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM_SEQ].clkdiv & PIO_SM0_CLKDIV_FRAC_BITS) >> PIO_SM0_CLKDIV_FRAC_LSB;
@@ -185,11 +185,12 @@ uint32_t platform_timeout_time_left(const platform_timeout_s *const t)
     {
         return UINT32_MAX - counter + t->time + 1;
     }
-    else if (counter > t->time)
-    {
-        return 0;
-    }
+    else if (t->time > counter)
     {
         return t->time - counter;
+    }
+    else
+    {
+        return 0;
     }
 }

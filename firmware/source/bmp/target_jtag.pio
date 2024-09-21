@@ -11,8 +11,8 @@ jtag_tdi_seq:    ; machine 3 start
     out y, 32
 
     jtag_tdi_seq_loop:
-        out pins, 1 side 0
-        jmp x-- jtag_tdi_seq_loop side 1
+        out pins, 1 side 0 [4]
+        jmp x-- jtag_tdi_seq_loop side 1 [4]
 
     jmp !y jtag_tdi_tdo_seq_final_tms_0
     jmp jtag_tdi_tdo_seq_final_tms_1
@@ -22,8 +22,8 @@ jtag_tdi_tdo_seq: ; machine 2 start
     out y, 32
 
     jtag_tdi_tdo_seq_loop:
-        out pins, 1 side 0
-        in pins, 1 side 1
+        out pins, 1 side 0 [4]
+        in pins, 1 side 1 [4]
         jmp x-- jtag_tdi_tdo_seq_loop
 
 jtag_tdi_tdo_seq_final:
@@ -37,16 +37,16 @@ jtag_tdi_tdo_seq_final_tms_0:
     set pins, 0
 
 jtag_tdi_tdo_seq_final_clock:
-    out pins, 1 side 0
-    in pins, 1 side 1
+    out pins, 1 side 0 [4]
+    in pins, 1 side 1 [4]
     push side 0  ; wrap for machine 2, machine 3
 
 jtag_tms_seq:     ; machine 1 start
     set pins, 1
 
     jtag_tms_seq_loop:
-        out pins, 1 side 0
-        jmp x-- jtag_tms_seq_loop side 1    ; machine 1 wrap
+        out pins, 1 side 0 [4]
+        jmp x-- jtag_tms_seq_loop side 1 [4]   ; machine 1 wrap
 
 jtag_next_cycle_initial_set_1: ; machine 0 start
     set pins, 1
@@ -58,7 +58,7 @@ jtag_next_cycle_initial_set_0:
 jtag_next_cycle:
     out pins, 1 side 0
     jtag_cycle_loop:
-        in pins, 1 side 1
-        jmp x-- jtag_cycle_loop side 0
+        in pins, 1 side 1 [4]
+        jmp x-- jtag_cycle_loop side 0 [4]
 
     push ; machine 0 wrap

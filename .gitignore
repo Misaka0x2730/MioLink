@@ -1,6 +1,14 @@
+# IDE settings
+.idea/
+.vscode/
+
 # KiCad files
 *.kicad_prl
+*.kicad_sch.lck
+*.kicad_pcb.lck
 fp-info-cache
+sym-lib-table
+fp-lib-table
 
 # Prerequisites
 *.d
@@ -54,3 +62,8 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# CMake folders
+firmware/cmake-build-*/
+hardware/**/*-backups/
+hardware/**/jlcpcb/gerber/

@@ -29,6 +29,7 @@
 #include "usb_serial.h"
 
 #define USB_TASK_CORE_AFFINITY   (0x01) /* Core 0 only */
+//#define USB_TASK_STACK_SIZE      (256)
 #define USB_TASK_STACK_SIZE      (512)
 
 #define USB_VID   (0x1d50)
@@ -42,15 +43,15 @@
   /* CDC Control Interface */\
   9, TUSB_DESC_INTERFACE, _itfnum, 0, 1, TUSB_CLASS_CDC, CDC_COMM_SUBCLASS_ABSTRACT_CONTROL_MODEL, CDC_COMM_PROTOCOL_NONE, _stridx,\
   /* CDC Header */\
-  5, TUSB_DESC_CS_INTERFACE, CDC_FUNC_DESC_HEADER, U16_TO_U8S_LE(0x0120),\
+  5, TUSB_DESC_CS_INTERFACE, CDC_FUNC_DESC_HEADER, U16_TO_U8S_LE(0x0110),\
   /* CDC Call */\
   5, TUSB_DESC_CS_INTERFACE, CDC_FUNC_DESC_CALL_MANAGEMENT, 0, (uint8_t)((_itfnum) + 1),\
   /* CDC ACM: support line request + send break */\
-  4, TUSB_DESC_CS_INTERFACE, CDC_FUNC_DESC_ABSTRACT_CONTROL_MANAGEMENT, 6,\
+  4, TUSB_DESC_CS_INTERFACE, CDC_FUNC_DESC_ABSTRACT_CONTROL_MANAGEMENT, 2,\
   /* CDC Union */\
   5, TUSB_DESC_CS_INTERFACE, CDC_FUNC_DESC_UNION, _itfnum, (uint8_t)((_itfnum) + 1),\
   /* Endpoint Notification */\
-  7, TUSB_DESC_ENDPOINT, _ep_notif, TUSB_XFER_INTERRUPT, U16_TO_U8S_LE(_ep_notif_size), 16,\
+  7, TUSB_DESC_ENDPOINT, _ep_notif, TUSB_XFER_INTERRUPT, U16_TO_U8S_LE(_ep_notif_size), 255,\
   /* CDC Data Interface */\
   9, TUSB_DESC_INTERFACE, (uint8_t)((_itfnum)+1), 0, 2, TUSB_CLASS_CDC_DATA, 0, 0, 0,\
   /* Endpoint Out */\
@@ -125,10 +126,10 @@ static uint8_t const desc_fs_configuration[] =
     TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, ITF_CONFIG_LEN, 0x00, 500),
 
     /* 1st CDC: Interface number, string index, EP notification address and size, EP data address (out, in) and size. */
-    MAKE_CDC_DESCRIPTOR(ITF_NUM_CDC_0, 4, GDB_ENDPOINT_NOTIF | ENDPOINT_IN_BIT, 8, GDB_ENDPOINT, GDB_ENDPOINT | ENDPOINT_IN_BIT, 64),
+    MAKE_CDC_DESCRIPTOR(ITF_NUM_CDC_0, 4, GDB_ENDPOINT_NOTIF | ENDPOINT_IN_BIT, 16, GDB_ENDPOINT, GDB_ENDPOINT | ENDPOINT_IN_BIT, 64),
 
     /* 2nd CDC: Interface number, string index, EP notification address and size, EP data address (out, in) and size. */
-    MAKE_CDC_DESCRIPTOR(ITF_NUM_CDC_1, 5, SERIAL_ENDPOINT_NOTIF | ENDPOINT_IN_BIT, 8, SERIAL_ENDPOINT, SERIAL_ENDPOINT | ENDPOINT_IN_BIT, 64),
+    MAKE_CDC_DESCRIPTOR(ITF_NUM_CDC_1, 5, SERIAL_ENDPOINT_NOTIF | ENDPOINT_IN_BIT, 16, SERIAL_ENDPOINT, SERIAL_ENDPOINT | ENDPOINT_IN_BIT, 64),
 
     MAKE_DFU_DESCRIPTOR(ITF_NUM_DFU, 6),
 
@@ -333,12 +334,12 @@ _Noreturn static void usb_task_thread(void *param);
 void blackmagic_usb_init(void)
 {
     TaskHandle_t usb_task;
-    BaseType_t status = xTaskCreate(usb_task_thread,
-                                    "usb_task",
-                                    USB_TASK_STACK_SIZE,
-                                    NULL,
-                                    PLATFORM_PRIORITY_HIGHEST,
-                                    &usb_task);
+    assert(xTaskCreate(usb_task_thread,
+                       "usb_task",
+                       USB_TASK_STACK_SIZE,
+                       NULL,
+                       PLATFORM_PRIORITY_HIGH,
+                       &usb_task) == pdPASS);
 
 #if configUSE_CORE_AFFINITY
     vTaskCoreAffinitySet(usb_task, USB_TASK_CORE_AFFINITY);

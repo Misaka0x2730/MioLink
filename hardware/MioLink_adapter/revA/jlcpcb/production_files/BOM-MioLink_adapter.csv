@@ -1,0 +1,10 @@
+Comment,Designator,Footprint,LCSC
+TC2030-IDC-NL,J4,PinHeader_2x03_P2.54mm_Vertical,
+"10-pin Cortex Debug 0.05""",J2,PinHeader_2x05_P1.27mm_Vertical_SMD,
+ST-Link v3 STDC14,J7,PinHeader_2x07_P1.27mm_Vertical_SMD,
+ST-Link clone,J3,IDC-Header_2x05_P2.54mm_Vertical,
+"10-pin Cortex Debug 0.1""",J1,IDC-Header_2x05_P2.54mm_Vertical,
+Standard JTAG,J5,IDC-Header_2x10_P2.54mm_Vertical,
+Serial Interconnection,J8,PinHeader_2x08_P2.54mm_Vertical,
+20-pin Cortex Debug + ETM,J6,PinHeader_2x10_P1.27mm_Vertical_SMD,
+Target Serial,J9,PinHeader_1x04_P2.54mm_Horizontal,

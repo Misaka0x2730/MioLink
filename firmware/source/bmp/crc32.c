@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2011  Black Sphere Technologies Ltd.
  * Written by Gareth McMullin <gareth@blacksphere.co.nz>
+ * Modified 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,9 +26,9 @@
 
 static int crc_dma_channel = -1;
 
-static bool __not_in_flash_func(rp2040_crc32)(target_s *const target, uint32_t *const result, const uint32_t base, const size_t len)
+static bool rp2040_crc32(target_s *const target, uint32_t *const result, const uint32_t base, const size_t len)
 {
-    uint8_t bytes[1024U]; /* ADIv5 MEM-AP AutoInc range */
+    uint8_t bytes[2048U]; /* ADIv5 MEM-AP AutoInc range */
 
     uint32_t last_time = platform_time_ms();
     const size_t adjusted_len = len & ~3U;
@@ -96,7 +97,7 @@ static bool __not_in_flash_func(rp2040_crc32)(target_s *const target, uint32_t *
 }
 
 /* Shim to dispatch host-specific implementation (and keep the `__func__` meaningful) */
-bool __not_in_flash_func(bmd_crc32)(target_s *const target, uint32_t *const result, const uint32_t base, const size_t len)
+bool bmd_crc32(target_s *const target, uint32_t *const result, const uint32_t base, const size_t len)
 {
 #ifndef DEBUG_INFO_IS_NOOP
 	const uint32_t start_time = platform_time_ms();
@@ -104,8 +105,6 @@ bool __not_in_flash_func(bmd_crc32)(target_s *const target, uint32_t *const resu
 	const bool status = rp2040_crc32(target, result, base, len);
 
 #ifndef DEBUG_INFO_IS_NOOP
-	/* "generic_crc32: 08000110+75272 -> 1353ms, 54 KiB/s" */
-	/* "stm32_crc32: 08000110+75272 -> 237ms, 310 KiB/s" */
 	const uint32_t end_time = platform_time_ms();
 	const uint32_t time_elapsed = end_time - start_time;
 	DEBUG_INFO("%s: 0x%08" PRIx32 "+%" PRIu32 " -> %" PRIu32 "ms", __func__, base, (uint32_t)len, time_elapsed);

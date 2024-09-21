@@ -1,0 +1,16 @@
+(version 1)
+
+(rule "usb pair1 clearance top"
+    (constraint clearance (min 1mm))
+	(layer F.Cu)
+    (condition "A.inDiffPair('/USB_L_D') && B.Type == 'Zone'"))
+
+(rule "usb pair2 clearance top"
+    (constraint clearance (min 0.8mm))
+	(layer F.Cu)
+    (condition "A.inDiffPair('/USB_D') && B.Type == 'Zone'"))
+
+(rule "usb shield pad to pads and traces"
+    (constraint clearance (min 0.2mm))
+	(layer F.Cu)
+    (condition "A.memberOfFootprint('Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12') && A.isPlated()&& ((B.Type == 'Pad') || (B.Type == 'Track'))"))

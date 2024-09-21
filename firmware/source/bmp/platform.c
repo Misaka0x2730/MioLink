@@ -19,33 +19,41 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "general.h"
+
 #include "hardware/adc.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
 #include "pico/stdlib.h"
 #include "pico/bootrom.h"
 
-#include "general.h"
-#include "platform.h"
-#include "timing_rp2040.h"
-
-#include "target_internal.h"
-#include "gdb_packet.h"
-
-#include "command.h"
-#include "serialno.h"
-
-#include "usb_serial.h"
-#include "traceswo.h"
-
 #include "FreeRTOS.h"
 #include "task.h"
 
-extern void trace_tick(void);
+#include "platform.h"
+#include "timing_rp2040.h"
+#include "target_internal.h"
+#include "gdb_packet.h"
+#include "command.h"
+#include "serialno.h"
+#include "usb_serial.h"
+#include "traceswo.h"
 
 static int adc_target_voltage_dma_chan = -1;
 static uint8_t adc_target_voltage_buf[250] = { 0 };
 static uint16_t target_voltage = 0;
+
+void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName )
+{
+    (void)pcTaskName;
+    (void)pxTask;
+
+    /* Run time stack overflow checking is performed if
+    configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2.  This hook
+    function is called if a stack overflow is detected. */
+
+    assert(false);
+}
 
 bool cmd_uart_on_tdi_tdo(target_s *t, int argc, const char **argv)
 {
@@ -58,7 +66,7 @@ bool cmd_uart_on_tdi_tdo(target_s *t, int argc, const char **argv)
     }
     else if (argc == 2)
     {
-        if (traceswo_uart_is_used(TRACESWO_UART_NUMBER))
+        if (traceswo_uart_is_used(TRACESWO_UART))
         {
             print_status = true;
             gdb_out("You should disable TRACESWO before activating UART on TDI and TDO!\n");
@@ -85,24 +93,20 @@ bool cmd_rtos_heapinfo(target_s *t, int argc, const char **argv)
 
 #define RTOS_TASKS_INFO_MAX_TASKS_NUMBER  (10)
 
+static TaskStatus_t task_status[RTOS_TASKS_INFO_MAX_TASKS_NUMBER];
+
 bool cmd_rtos_tasksinfo(target_s *t, int argc, const char **argv)
 {
     UBaseType_t tasks_number = uxTaskGetNumberOfTasks();
     if (tasks_number > 0)
     {
-        static TaskStatus_t *p_task_status = NULL;
-        if (p_task_status == NULL)
+        if (uxTaskGetSystemState(task_status, RTOS_TASKS_INFO_MAX_TASKS_NUMBER, NULL) == tasks_number)
         {
-            p_task_status = pvPortMalloc(RTOS_TASKS_INFO_MAX_TASKS_NUMBER * sizeof(TaskStatus_t));
-        }
-
-        if (uxTaskGetSystemState(p_task_status, RTOS_TASKS_INFO_MAX_TASKS_NUMBER, NULL) == tasks_number)
-        {
-            gdb_outf("Total number of tasks: %d\n",  tasks_number);
-            gdb_out("Name:                            Min free stack (bytes):\n");
+            gdb_outf("Total number of tasks: %lu\n",  tasks_number);
+            gdb_out("Name:            Min free stack (bytes):\n");
             for (uint32_t i = 0; i < tasks_number; i++)
             {
-                gdb_outf("%-32s %-5d\n", p_task_status[i].pcTaskName, p_task_status[i].usStackHighWaterMark * sizeof(StackType_t));
+                gdb_outf("%-16s %-5lu\n", task_status[i].pcTaskName, task_status[i].usStackHighWaterMark * sizeof(StackType_t));
             }
         }
         else
@@ -143,7 +147,7 @@ int platform_hwversion(void)
     return hwversion;
 }
 
-static void __not_in_flash_func(adc_target_voltage_dma_handler)(void)
+static void adc_target_voltage_dma_handler(void)
 {
     uint32_t temp = 0;
 
@@ -170,6 +174,7 @@ static void __not_in_flash_func(adc_target_voltage_dma_handler)(void)
 
 void platform_init(void)
 {
+    set_sys_clock_hz(configCPU_CLOCK_HZ, true);
     gpio_init(TARGET_TCK_PIN);
     gpio_set_dir(TARGET_TCK_PIN, GPIO_OUT);
 

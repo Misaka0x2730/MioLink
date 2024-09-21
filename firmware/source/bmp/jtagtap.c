@@ -5,6 +5,7 @@
  * Written by Gareth McMullin <gareth@blacksphere.co.nz>
  * Copyright (C) 2022-2023 1BitSquared <info@1bitsquared.com>
  * Modified by Rachel Mant <git@dragonmux.network>
+ * Modified 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,15 +23,11 @@
 
 /* This file implements the low-level JTAG TAP interface.  */
 
-#include <stdio.h>
-
 #include "general.h"
 #include "platform.h"
 #include "tap_pio_common.h"
 #include "jtagtap.h"
 #include "target_jtag.pio.h"
-
-jtag_proc_s jtag_proc;
 
 static void jtagtap_reset(void) __attribute__((optimize(3)));
 static void jtagtap_tms_seq(uint32_t tms_states, size_t ticks) __attribute__((optimize(3)));
@@ -39,21 +36,22 @@ static void jtagtap_tdi_seq(bool final_tms, const uint8_t *data_in, size_t clock
 static bool jtagtap_next(bool tms, bool tdi) __attribute__((optimize(3)));
 static void jtagtap_cycle(bool tms, bool tdi, size_t clock_cycles) __attribute__((optimize(3)));
 
-#define JTAG_PROGRAM_START_POS             (0)
-#define JTAG_TDI_SEQ_POS                   (3)
-#define JTAG_TDI_TDO_SEQ_POS               (9)
-#define JTAG_TDI_TDO_SEQ_POS               (9)
-#define JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS   (15)
-#define JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS   (17)
-#define JTAG_TMS_SEQ_POS                   (21)
-#define JTAG_NEXT_CYCLE_INITIAL_SET_1_POS  (24)
-#define JTAG_NEXT_CYCLE_INITIAL_SET_0_POS  (26)
+#define JTAG_PROGRAM_START_POS              (target_jtag_wrap_target)
+#define JTAG_TDI_SEQ_POS                    (3)
+#define JTAG_TDI_TDO_SEQ_POS                (9)
+#define JTAG_TDI_TDO_SEQ_POS                (9)
+#define JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS    (15)
+#define JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS    (17)
+#define JTAG_TMS_SEQ_POS                    (21)
+#define JTAG_NEXT_CYCLE_INITIAL_SET_1_POS   (24)
+#define JTAG_NEXT_CYCLE_INITIAL_SET_0_POS   (26)
 
-#define JTAG_SM_NEXT_CYCLE_WRAP            (30)
-#define JTAG_SM_TMS_SEQ_WRAP               (JTAG_NEXT_CYCLE_INITIAL_SET_1_POS - 1)
-#define JTAG_SM_TDI_TDO_SEQ_WRAP           (JTAG_TMS_SEQ_POS - 1)
-#define JTAG_SM_TDI_SEQ_WRAP               (JTAG_TMS_SEQ_POS - 1)
+#define JTAG_SM_NEXT_CYCLE_WRAP             (target_jtag_wrap)
+#define JTAG_SM_TMS_SEQ_WRAP                (JTAG_NEXT_CYCLE_INITIAL_SET_1_POS - 1)
+#define JTAG_SM_TDI_TDO_SEQ_WRAP            (JTAG_TMS_SEQ_POS - 1)
+#define JTAG_SM_TDI_SEQ_WRAP                (JTAG_TMS_SEQ_POS - 1)
 
+jtag_proc_s jtag_proc;
 extern uint32_t target_interface_frequency;
 
 void jtagtap_init(void)
@@ -103,7 +101,7 @@ void jtagtap_init(void)
 
     tap_pio_common_disable_input_sync(TARGET_JTAG_PIO, TARGET_TDO_PIN);
 
-    pio_add_program_at_offset(TARGET_JTAG_PIO, &target_jtag_program, 0);
+    pio_add_program_at_offset(TARGET_JTAG_PIO, &target_jtag_program, JTAG_PROGRAM_START_POS);
 
     pio_sm_config prog_config = pio_get_default_sm_config();
 
@@ -180,45 +178,45 @@ static void jtagtap_reset(void)
 	jtagtap_soft_reset();
 }
 
-static bool __not_in_flash_func(jtagtap_next)(const bool tms, const bool tdi)
+static bool jtagtap_next(const bool tms, const bool tdi)
 {
-    tap_pio_common_enable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, true);
 
-    tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, 0); /* Number of cycles - 1 */
+    pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, 0); /* Number of cycles - 1 */
 
     if (tms)
     {
-        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_1_POS);
+        pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_1_POS);
     }
     else
     {
-        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_0_POS);
+        pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_0_POS);
     }
 
-    tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (tdi ? (1 << 0) : 0));
+    pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (tdi ? (1 << 0) : 0));
     tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
 
-    const bool result = (tap_pio_common_read_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE) != 0);
+    const bool result = (pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE) != 0);
 
-    tap_pio_common_disable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, false);
 
     return result;
 }
 
-static void __not_in_flash_func(jtagtap_tms_seq)(const uint32_t tms_states, const size_t ticks)
+static void jtagtap_tms_seq(const uint32_t tms_states, const size_t ticks)
 {
-    tap_pio_common_enable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, true);
 
-    tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, (ticks - 1));
-    tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, JTAG_TMS_SEQ_POS);
-    tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, tms_states);
+    pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, (ticks - 1));
+    pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, JTAG_TMS_SEQ_POS);
+    pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, tms_states);
 
     tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ);
 
-    tap_pio_common_disable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, false);
 }
 
-static void __not_in_flash_func(jtagtap_tdi_tdo_seq)(
+static void jtagtap_tdi_tdo_seq(
 	uint8_t *const data_out, const bool final_tms, const uint8_t *const data_in, size_t clock_cycles)
 {
     if (clock_cycles == 0)
@@ -226,28 +224,28 @@ static void __not_in_flash_func(jtagtap_tdi_tdo_seq)(
         return;
     }
 
-    tap_pio_common_enable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, true);
 
     if (clock_cycles == 1)
     {
-        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, 0);
+        pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, 0);
         if (final_tms)
         {
-            tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS);
+            pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS);
         }
         else
         {
-            tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS);
+            pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS);
         }
-        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, data_in[0]);
+        pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, data_in[0]);
 
-        data_out[0] = (tap_pio_common_read_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) != 0) ? (1 << 0) : 0;
+        data_out[0] = (pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) != 0) ? (1 << 0) : 0;
     }
     else
     {
-        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, (clock_cycles - 2));
-        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, JTAG_TDI_TDO_SEQ_POS);
-        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, (final_tms ? 1 : 0));
+        pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, (clock_cycles - 2));
+        pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, JTAG_TDI_TDO_SEQ_POS);
+        pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, (final_tms ? 1 : 0));
 
         size_t data_bytes = clock_cycles / 8;
         if (clock_cycles % 8)
@@ -258,17 +256,17 @@ static void __not_in_flash_func(jtagtap_tdi_tdo_seq)(
         size_t data_out_cnt = 0;
         for (size_t i = 0; i < data_bytes; i++)
         {
-            tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, data_in[i]);
+            pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, data_in[i]);
 
-            if (tap_pio_common_rx_is_not_empty(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ))
+            if (pio_sm_is_rx_fifo_empty(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) == false)
             {
-                data_out[data_out_cnt++] = (uint8_t) ((tap_pio_common_read_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) >> 24) & 0xFF);
+                data_out[data_out_cnt++] = (uint8_t) ((pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) >> 24) & 0xFF);
             }
         }
 
         while (data_out_cnt < data_bytes)
         {
-            data_out[data_out_cnt++] = (uint8_t) ((tap_pio_common_read_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) >> 24) & 0xFF);
+            data_out[data_out_cnt++] = (uint8_t) ((pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) >> 24) & 0xFF);
         }
 
         if ((clock_cycles % 8) != 0)
@@ -279,38 +277,38 @@ static void __not_in_flash_func(jtagtap_tdi_tdo_seq)(
 
     tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
 
-    tap_pio_common_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
+    pio_sm_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
 
-    tap_pio_common_disable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, false);
 }
 
-static void __not_in_flash_func(jtagtap_tdi_seq)(const bool final_tms, const uint8_t *const data_in, const size_t clock_cycles)
+static void jtagtap_tdi_seq(const bool final_tms, const uint8_t *const data_in, const size_t clock_cycles)
 {
     if (clock_cycles == 0)
     {
         return;
     }
 
-    tap_pio_common_enable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, true);
 
     if (clock_cycles == 1)
     {
-        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, 0);
+        pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, 0);
         if (final_tms)
         {
-            tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS);
+            pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS);
         }
         else
         {
-            tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS);
+            pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS);
         }
-        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, data_in[0]);
+        pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, data_in[0]);
     }
     else
     {
-        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, (clock_cycles - 2));
-        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, JTAG_TDI_SEQ_POS);
-        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, (final_tms ? 1 : 0));
+        pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, (clock_cycles - 2));
+        pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, JTAG_TDI_SEQ_POS);
+        pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, (final_tms ? 1 : 0));
 
         size_t data_bytes = (clock_cycles) / 8;
         if (clock_cycles % 8)
@@ -320,50 +318,48 @@ static void __not_in_flash_func(jtagtap_tdi_seq)(const bool final_tms, const uin
 
         for (size_t i = 0; i < data_bytes; i++)
         {
-            tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, data_in[i]);
+            pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, data_in[i]);
         }
     }
 
     tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ);
 
-    tap_pio_common_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ);
-
-    tap_pio_common_disable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ);
+    pio_sm_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, false);
 }
 
-static void __not_in_flash_func(jtagtap_cycle)(const bool tms, const bool tdi, const size_t clock_cycles)
+static void jtagtap_cycle(const bool tms, const bool tdi, const size_t clock_cycles)
 {
-    tap_pio_common_enable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, true);
 
     if (clock_cycles == 0)
     {
         return;
     }
 
-    tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (clock_cycles - 1)); /* Number of cycles */
+    pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (clock_cycles - 1)); /* Number of cycles */
 
     if (tms)
     {
-        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_1_POS);
+        pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_1_POS);
     }
     else
     {
-        tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_0_POS);
+        pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_0_POS);
     }
 
-    tap_pio_common_push_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (tdi ? (1 << 0) : 0));
+    pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (tdi ? (1 << 0) : 0));
 
     volatile uint32_t rx_data = 0;
 
     while(tap_pio_common_is_not_tx_stalled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE))
     {
-        if (tap_pio_common_rx_is_not_empty(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE))
+        if (pio_sm_is_rx_fifo_empty(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE) == false)
         {
-            rx_data = tap_pio_common_read_data(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
+            rx_data = pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
         }
     }
 
-    tap_pio_common_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
-
-    tap_pio_common_disable_sm(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
+    pio_sm_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
+    pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, false);
 }

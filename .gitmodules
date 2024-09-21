@@ -6,3 +6,7 @@
 	path = firmware/thirdParty/FreeRTOS-Kernel
 	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
 	branch = main
+[submodule "tinyusb_Misaka0x2730"]
+	path = firmware/thirdParty/tinyusb
+	url = https://github.com/Misaka0x2730/tinyusb.git
+	branch = master

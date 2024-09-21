@@ -2,6 +2,7 @@
  * The MIT License (MIT)
  *
  * Copyright (c) 2019 Ha Thach (tinyusb.org)
+ * Modified 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -64,22 +65,7 @@
   #error "Incorrect RHPort configuration"
 #endif
 
-/*#ifndef CFG_TUSB_OS
-#define CFG_TUSB_OS                 OPT_OS_NONE
-#endif*/
 
-//#define CFG_TUSB_OS  OPT_OS_FREERTOS
-
-// CFG_TUSB_DEBUG is defined by compiler in DEBUG build
-// #define CFG_TUSB_DEBUG           0
-
-/* USB DMA on some MCUs can only access a specific SRAM region with restriction on alignment.
- * Tinyusb use follows macros to declare transferring memory so that they can be put
- * into those specific section.
- * e.g
- * - CFG_TUSB_MEM SECTION : __attribute__ (( section(".usb_ram") ))
- * - CFG_TUSB_MEM_ALIGN   : __attribute__ ((aligned(4)))
- */
 #ifndef CFG_TUSB_MEM_SECTION
 #define CFG_TUSB_MEM_SECTION
 #endif
@@ -105,15 +91,29 @@
 #define CFG_TUD_DFU_RUNTIME       1
 
 // CDC FIFO size of TX and RX
-#define CFG_TUD_CDC_RX_BUFSIZE   (4096)
-#define CFG_TUD_CDC_TX_BUFSIZE   (4096)
+#if !defined(CFG_TUD_CDC_RX_BUFSIZE)
+#define CFG_TUD_CDC_RX_BUFSIZE    2048
+#endif
 
-// CDC Endpoint transfer buffer size, more is faster
-//#define CFG_TUD_CDC_EP_BUFSIZE   (TUD_OPT_HIGH_SPEED ? 512 : 64)
-#define CFG_TUD_CDC_EP_BUFSIZE   (64)
+#if !defined(CFG_TUD_CDC_TX_BUFSIZE)
+#define CFG_TUD_CDC_TX_BUFSIZE    4096
+#endif
 
-#define CFG_TUD_VENDOR_RX_BUFSIZE (4096)
-#define CFG_TUD_VENDOR_TX_BUFSIZE (64)
+#if !defined(CFG_TUD_CDC_EP_BUFSIZE)
+#define CFG_TUD_CDC_EP_BUFSIZE    2048
+#endif
+
+#if !defined(CFG_TUD_VENDOR_EPSIZE)
+#define CFG_TUD_VENDOR_EPSIZE     64
+#endif
+
+#if !defined(CFG_TUD_VENDOR_RX_BUFSIZE)
+#define CFG_TUD_VENDOR_RX_BUFSIZE 64
+#endif
+
+#if !defined(CFG_TUD_VENDOR_TX_BUFSIZE)
+#define CFG_TUD_VENDOR_TX_BUFSIZE 2048
+#endif
 
 #ifdef __cplusplus
  }
