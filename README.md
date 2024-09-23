@@ -109,3 +109,10 @@ Build release image:
 3. Run cmake:</br>```cmake -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles" ..```
 4. Build image:</br>```cmake --build .```
 5. Use ```MioLink.uf2``` to flash device via factory USB-MSC bootloader.
+
+# Flashing
+1. Disconnect USB cable;
+2. Press BOOT (BOOTSEL on Pico and Pico W) button;
+3. Connect USB cable to PC;
+4. Drag-and-Drop ```MioLink.uf2`` file to mass storage device;
+5. The device will be flashed and rebooted automatically, after which it is ready for use.
