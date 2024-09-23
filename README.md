@@ -9,7 +9,7 @@ It also supports debug output via Serial Wire Output (SWO) and RTT. Additionally
 The main board for this device is MioLink.</br>
 Standard Pico and Pico W boards are also supported, as well as the MioLink_Pico, which is an breakout board for Pico and Pico W featuring a power switch and voltage converters.</br>
 The device type is determined at runtime, so all boards use the same firmware.</br>
-All CAD files for the hardware (designed in KiCad) can be found [here](https://github.com/Misaka0x2730/MioLink/tree/main/hardware).</br>
+All hardware CAD files (designed in KiCad) can be found [here](https://github.com/Misaka0x2730/MioLink/tree/main/hardware).</br>
 [rev. A](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/revA)/[rev. B](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/revB) folders contain design files for MioLink rev. A and MioLink rev. B boards respectively.</br>
 [MioLink_Pico](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/MioLink_Pico) is an breakout board for Pico and Pico W.</br>
 [MioLink_adapter](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/MioLink_adapter) is an adapter that allows you to connect the debugger with target boards that have different types of connectors.</br>
