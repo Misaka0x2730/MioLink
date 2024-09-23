@@ -9,7 +9,7 @@ This board is based on RP2040 (2 Cortex-M0+ cores) with 16Mbit on-board QSPI Fla
 The followding tools are required to build this project:
 - git
 - make
-- Python 3
+- Python
 - cmake
 - gcc
 - arm-none-eabi-gcc
