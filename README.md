@@ -29,6 +29,32 @@ rev. A  |  rev. B
 ![image](https://github.com/user-attachments/assets/6d66c3ba-339a-4f94-a554-4b25f85a3c47)  |  ![image](https://github.com/user-attachments/assets/b5c66c69-2552-469a-bd72-b8bd37ff3a03)
 
 ### Pinout
+MioLink use the standard ARM 10-pin 0.1" connector and has additional 4-pin 0.1" UART connector:
+![image](https://github.com/user-attachments/assets/153d3093-a79e-4e01-8b65-bfeeb234098b)
+
+Pin | Descriptiuon | Pin | Description
+:--:|:------------:|:---:|:-----------:
+1 | VTref | 2 | SWDIO/TMS
+3 | GND | 4 | SWDCLK/TCK
+5 | GND | 6 | SWO/TDO/RX (Probe RX, Target TX)
+7 | NC | 8 | NC/TDI/TX (Probe TX, Target RX)
+9 | GND | 10 | RESET
+
+UART connector pinout:
+Pin | Descriptiuon | Pin | Description
+:--:|:------------:|:---:|:-----------:
+1 | RX (Probe RX, Target TX) | 2 | VTref
+3 | TX (Probe TX, Target RX) | 4 | GND
+
+## Connecting target to probe
+## Powering target from probe
+MioLink and MioLink_Pico are able to provide 3.3V power for target on VTref (pin 1).
+
+Board | Max current
+:----:|:----------:
+MioLink | ~350 mA (min. 300, max. 400)
+MioLink_Pico | ~200 mA (min. 175, max. 234)
+Pico or Pico W | Not available
 
 # Building
 ## Requirements
