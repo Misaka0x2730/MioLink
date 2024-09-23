@@ -14,8 +14,7 @@ All CAD files for the hardware (designed in KiCad) can be found [here](https://g
 [MioLink_Pico](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/MioLink_Pico) is an breakout board for Pico and Pico W.</br>
 [MioLink_adapter](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/MioLink_adapter) is an adapter that allows you to connect the debugger with target boards that have different types of connectors.</br>
 
-## MioLink
-### Revisions comparsion
+## MioLink revisions comparsion
 There are currently 2 hardware revisions of the MioLink board (rev.A and rev.B), with the following differences:
 
 Power system: In rev.A, there is a hardware bug that causes the current value provided by the device on pin 1 (Vtref) of the debug connector to be unlimited,
@@ -28,7 +27,7 @@ rev. A  |  rev. B
 :------:|:-------:
 ![image](https://github.com/user-attachments/assets/6d66c3ba-339a-4f94-a554-4b25f85a3c47)  |  ![image](https://github.com/user-attachments/assets/b5c66c69-2552-469a-bd72-b8bd37ff3a03)
 
-### Pinout
+## Pinout
 MioLink use the standard ARM 10-pin 0.1" connector and has additional 4-pin 0.1" UART connector:
 ![image](https://github.com/user-attachments/assets/153d3093-a79e-4e01-8b65-bfeeb234098b)
 
