@@ -21,7 +21,7 @@ Build steps:
 1. Download and install [MSYS2](https://www.msys2.org/);
 2. Run mingw64;
 3. Upgrade packets, MinGW64 will be restarted:</br>```pacman -Syu```
-4. Install all requirements:</br>```pacman -S git mingw-w64-x86_64-python mingw-w64-x86_64-make mingw-w64-x86_64-cmake mingw-w64-x86_64-arm-none-eabi-gcc  mingw-w64-x86_64-gcc```
+4. Install all requirements:</br>```pacman -S git mingw-w64-x86_64-python mingw-w64-x86_64-make mingw-w64-x86_64-cmake mingw-w64-x86_64-arm-none-eabi-gcc mingw-w64-x86_64-gcc```
 5. Clone this project with submodules:</br>```git clone --recurse-submodules https://github.com/Misaka0x2730/MioLink.git```
 6. Change current dir:</br>```cd MioLink/firmware```
 
