@@ -114,5 +114,6 @@ Build release image:
 1. Disconnect USB cable;
 2. Press BOOT (BOOTSEL on Pico and Pico W) button;
 3. Connect USB cable to PC;
-4. Drag-and-Drop ```MioLink.uf2`` file to mass storage device;
-5. The device will be flashed and rebooted automatically, after which it is ready for use.
+4. Release BOOT (BOOTSEL on Pico and Pico W) button;
+5. Drag-and-Drop ```MioLink.uf2`` file to mass storage device;
+6. The device will be flashed and rebooted automatically, after which it is ready for use.
