@@ -1,8 +1,8 @@
 # MioLink
 
-This is basic hardware debugger board (1 non-isolated Target interface + UART) with [Blackmagic Probe](https://github.com/blackmagic-debug/blackmagic) firmware inside.
-This board is based on RP2040 (2 Cortex-M0+ cores) with 16Mbit on-board QSPI Flash (W25Q16).
-
+This project is a port of the [Black Magic Probe project](https://github.com/blackmagic-debug/blackmagic) to a custom platform (MioLink) based on the RP2040 (2 Cortex-M0+ cores at 125MHz) with 16Mbit (2MiB) of QSPI-Flash memory (W25Q16).
+The project is a USB debugger that operates via JTAG and SWD interfaces, supporting many ARM Cortex processors ([see supported device list here](https://black-magic.org/supported-targets.html)).
+It also supports debug output via Serial Wire Output (SWO) and RTT. Additionally, the device has an extra UART serial port that can be accessed through a second Virtual COM port
 
 # Building
 ## Requirements
