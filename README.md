@@ -30,11 +30,11 @@ Build debug image:
 2. Go to working directory:</br>```cd debug```
 3. Run cmake:</br>```cmake -DCMAKE_BUILD_TYPE=Debug -G "MinGW Makefiles" ..```
 4. Build image:</br>```cmake --build .```
-5. Use ```MioLink.uf2``` to flash device via factory UF2 bootloader.
+5. Use ```MioLink.uf2``` to flash device via factory USB-MSC bootloader.
 
 Build release image:
 1. Create working directory:</br>```mkdir release```
 2. Go to working directory:</br>```cd release```
 3. Run cmake:</br>```cmake -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles" ..```
 4. Build image:</br>```cmake --build .```
-5. Use ```MioLink.uf2``` to flash device via factory UF2 bootloader.
+5. Use ```MioLink.uf2``` to flash device via factory USB-MSC bootloader.
