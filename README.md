@@ -1,6 +1,6 @@
 # MioLink
 
-This project is a port of the [Black Magic Probe project](https://github.com/blackmagic-debug/blackmagic) to RP2040 (2 Cortex-M0+ cores at 125MHz).</br>
+This project is a port of the [Black Magic Probe project](https://github.com/blackmagic-debug/blackmagic) to Raspberry Pi RP2040 (2 Cortex-M0+ cores at 125MHz) MCU.</br>
 The project is a USB debugger that operates via JTAG and SWD interfaces, supporting many ARM Cortex processors ([see supported device list here](https://black-magic.org/supported-targets.html)).</br>
 It also supports debug output via Serial Wire Output (SWO) and RTT. Additionally, the device has an extra UART serial port that can be accessed through a second Virtual COM port.</br>
 This README contains only the basic information: information about the hardware, how to build the firmware and flash the probe.</br>
