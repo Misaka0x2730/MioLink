@@ -53,7 +53,9 @@ Pin | Descriptiuon | Pin | Description
 MioLink and MioLink_Pico are able to provide 3.3V power for target on VTref (pin 1).</br>
 PLEASE, pay attention that Vtref and target's JTAG/SWD pins levels should match.
 This means that Vtref pin MUST BE connected to external reference voltage (1.65V to 5.5V) for probe's level translators.</br>
-it's optional in the case, when target is a 3.3V powered MCU, but you MUST power Vtref pin with 3.3V by using ```monitor tpwr enable``` GDB command.
+it's optional in the case, when target is a 3.3V powered MCU, but you MUST power Vtref pin with 3.3V by using ```monitor tpwr enable``` GDB command.</br>
+Pico and Pico W are also able to provide 3.3V power for target, but it is recommended to keep the load on this pin less than 300mA,</br>
+for more information see chapter 2.1, page 8 in [Pico datasheet](https://datasheets.raspberrypi.com/pico/pico-datasheet.pdf) datasheet and chapter 2.1, page 9 in [Pico W datasheet](https://datasheets.raspberrypi.com/picow/pico-w-datasheet.pdf).
 
 Board | Max current
 :----:|:----------:
