@@ -28,7 +28,7 @@ Rev.B uses a DC-DC converter to get 3.3V from 5V, and the current supplied to th
 
 rev. A  |  rev. B
 :------:|:-------:
-![image](https://github.com/user-attachments/assets/6d66c3ba-339a-4f94-a554-4b25f85a3c47)  |  ![image](https://github.com/user-attachments/assets/b5c66c69-2552-469a-bd72-b8bd37ff3a03)
+![image](https://github.com/user-attachments/assets/ca20d195-47d2-4530-8daa-e9d0aed68b91) |  ![image](https://github.com/user-attachments/assets/b5c66c69-2552-469a-bd72-b8bd37ff3a03)
 
 ## Pinout
 MioLink and MioLink_Pico use the standard ARM 10-pin 0.1" connector and has additional 4-pin 0.1" UART connector:</br>
