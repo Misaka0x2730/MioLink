@@ -115,7 +115,7 @@ Build release image:
 4. Build image:</br>```cmake --build .```
 5. Use ```MioLink.uf2``` to flash device via factory USB-MSC bootloader.
 
-## How to flash the device
+## How to flash the probe
 1. Disconnect USB cable;
 2. Press BOOT (BOOTSEL on Pico and Pico W) button;
 3. Connect USB cable to PC;
