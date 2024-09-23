@@ -9,7 +9,7 @@ Detailed instructions on how to use the debugger, how to configure SWO, RTT and 
 # Hardware
 ## General information
 The main board for this device is MioLink: RP2040 + 16Mbit (2MiB) QSPI Flash memory (W25Q16).</br>
-MioLink_Pico is a breakout board for Pico and Pico W featuring a power switch and voltage converters.
+MioLink_Pico is a breakout board for Pico and Pico W featuring a power switch and voltage converters.</br>
 Standard Pico and Pico W boards are also supported.</br>
 The device type is determined at runtime, so all boards use the same firmware.</br>
 All hardware CAD files (designed in KiCad) can be found [here](https://github.com/Misaka0x2730/MioLink/tree/main/hardware).</br>
