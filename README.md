@@ -28,7 +28,7 @@ rev. A  |  rev. B
 ![image](https://github.com/user-attachments/assets/6d66c3ba-339a-4f94-a554-4b25f85a3c47)  |  ![image](https://github.com/user-attachments/assets/b5c66c69-2552-469a-bd72-b8bd37ff3a03)
 
 ## Pinout
-MioLink use the standard ARM 10-pin 0.1" connector and has additional 4-pin 0.1" UART connector:
+MioLink and MioLink_Pico use the standard ARM 10-pin 0.1" connector and has additional 4-pin 0.1" UART connector:
 ![image](https://github.com/user-attachments/assets/153d3093-a79e-4e01-8b65-bfeeb234098b)
 
 Pin | Descriptiuon | Pin | Description
@@ -46,14 +46,34 @@ Pin | Descriptiuon | Pin | Description
 3 | TX (Probe TX, Target RX) | 4 | GND
 
 ## Connecting target to probe
-## Powering target from probe
-MioLink and MioLink_Pico are able to provide 3.3V power for target on VTref (pin 1).
+### Powering target from probe
+MioLink and MioLink_Pico are able to provide 3.3V power for target on VTref (pin 1).</br>
+PLEASE, pay attention that Vtref and target's JTAG/SWD pins levels should match.
+This means that Vtref pin MUST BE connected to external reference voltage (1.65V to 5.5V) for probe's level translators.</br>
+it's optional in the case, when target is a 3.3V powered MCU, but you MUST power Vtref pin with 3.3V by using ```monitor tpwr enable``` GDB command.
 
 Board | Max current
 :----:|:----------:
-MioLink | ~350 mA (min. 300, max. 400)
+MioLink | rev.A: ~200 mA;</br>rev.B: ~350 mA (min. 300, max. 400)
 MioLink_Pico | ~200 mA (min. 175, max. 234)
 Pico or Pico W | Not available
+
+### JTAG
+Pin | Description
+:--:|:----------:
+TMS | Test mode select
+TCK | Test clock
+TDO | Test data output
+TDI | Test data input
+RESET | Optional reset pin
+
+### SWD
+Pin | Description
+:--:|:----------:
+SWDIO | Data input/output
+SWDCLK | SWD clock
+RESET | Optional reset pin
+
 
 # Building
 ## Requirements
