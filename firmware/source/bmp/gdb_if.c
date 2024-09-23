@@ -34,7 +34,7 @@
 #include "task.h"
 
 static uint32_t gdb_to_usb_count;
-static char gdb_to_usb_buf[1024];
+static char gdb_to_usb_buf[1024U];
 
 bool gdb_serial_get_dtr(void)
 {
@@ -87,9 +87,9 @@ void gdb_if_putchar(const char c, const int flush)
 	}
 }
 
-uint8_t usb_to_gdb_buf[1024] = { 0 };
-uint32_t usb_to_gdb_count = 0;
-uint32_t usb_to_gdb_buf_pos = 0;
+static uint8_t usb_to_gdb_buf[1024U] = { 0 };
+static uint32_t usb_to_gdb_count = 0;
+static uint32_t usb_to_gdb_buf_pos = 0;
 
 char gdb_if_getchar(void)
 {

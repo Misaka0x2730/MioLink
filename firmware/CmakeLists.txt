@@ -6,6 +6,7 @@ set(PICOTOOL_FETCH_FROM_GIT_PATH "../firmware/thirdParty/picotool")
 set(PICO_SDK_FETCH_FROM_GIT ON)
 set(PICO_CYW43_SUPPORTED OFF)
 set(PICO_BOARD none)
+set(PICO_PLATFORM rp2040)
 
 string(TOLOWER ${CMAKE_BUILD_TYPE} build_type)
 

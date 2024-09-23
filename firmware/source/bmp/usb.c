@@ -334,12 +334,13 @@ _Noreturn static void usb_task_thread(void *param);
 void blackmagic_usb_init(void)
 {
     TaskHandle_t usb_task;
-    assert(xTaskCreate(usb_task_thread,
-                       "usb_task",
-                       USB_TASK_STACK_SIZE,
-                       NULL,
-                       PLATFORM_PRIORITY_HIGH,
-                       &usb_task) == pdPASS);
+    const BaseType_t result = xTaskCreate(usb_task_thread,
+                                          "usb_task",
+                                          USB_TASK_STACK_SIZE,
+                                          NULL,
+                                          PLATFORM_PRIORITY_HIGH,
+                                          &usb_task);
+    assert(result == pdPASS);
 
 #if configUSE_CORE_AFFINITY
     vTaskCoreAffinitySet(usb_task, USB_TASK_CORE_AFFINITY);

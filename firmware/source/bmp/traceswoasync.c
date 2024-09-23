@@ -502,12 +502,13 @@ _Noreturn static void traceswo_thread(void* params);
 
 void traceswo_task_init(void)
 {
-    assert(xTaskCreate(traceswo_thread,
-                       "target_trace",
-                       TRACESWO_TASK_STACK_SIZE,
-                       NULL,
-                       PLATFORM_PRIORITY_NORMAL,
-                       &traceswo_task) == pdPASS);
+    const BaseType_t result = xTaskCreate(traceswo_thread,
+                                          "target_trace",
+                                          TRACESWO_TASK_STACK_SIZE,
+                                          NULL,
+                                          PLATFORM_PRIORITY_NORMAL,
+                                          &traceswo_task);
+    assert(result == pdPASS);
 
 #if configUSE_CORE_AFFINITY
     vTaskCoreAffinitySet(traceswo_task, TRACESWO_TASK_CORE_AFFINITY);

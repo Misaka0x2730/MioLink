@@ -121,12 +121,14 @@ void main(void)
 
     multicore_reset_core1();
 
-    assert(xTaskCreate(gdb_thread,
-                       "target_gdb",
-					   GDB_TASK_STACK_SIZE,
-                       NULL,
-                       PLATFORM_PRIORITY_LOW,
-                       &gdb_task) == pdPASS);
+    const BaseType_t result = xTaskCreate(gdb_thread,
+                                          "target_gdb",
+				                          GDB_TASK_STACK_SIZE,
+                                          NULL,
+                                          PLATFORM_PRIORITY_LOW,
+                                          &gdb_task);
+
+    assert(result == pdPASS);
 
 #if configUSE_CORE_AFFINITY
     vTaskCoreAffinitySet(gdb_task, GDB_TASK_CORE_AFFINITY);

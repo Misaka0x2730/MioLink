@@ -46,12 +46,12 @@
 #define configUSE_IDLE_HOOK                     0
 #define configUSE_TICK_HOOK                     1
 #define configTICK_RATE_HZ                      ( ( TickType_t ) 1000 )
-#define configMAX_PRIORITIES                    4
+#define configMAX_PRIORITIES                    5
 #define configMINIMAL_STACK_SIZE                ( configSTACK_DEPTH_TYPE ) 128
 #define configCPU_CLOCK_HZ                      (250000000)
 #define configUSE_16_BIT_TICKS                  0
 
-#define configIDLE_SHOULD_YIELD                 1
+#define configIDLE_SHOULD_YIELD                 0
 
 /* Synchronization Related */
 #define configUSE_MUTEXES                       1
