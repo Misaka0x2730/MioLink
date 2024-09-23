@@ -28,7 +28,7 @@ rev. A  |  rev. B
 ![image](https://github.com/user-attachments/assets/6d66c3ba-339a-4f94-a554-4b25f85a3c47)  |  ![image](https://github.com/user-attachments/assets/b5c66c69-2552-469a-bd72-b8bd37ff3a03)
 
 ## Pinout
-MioLink and MioLink_Pico use the standard ARM 10-pin 0.1" connector and has additional 4-pin 0.1" UART connector:
+MioLink and MioLink_Pico use the standard ARM 10-pin 0.1" connector and has additional 4-pin 0.1" UART connector:</br>
 ![image](https://github.com/user-attachments/assets/153d3093-a79e-4e01-8b65-bfeeb234098b)
 
 Pin | Descriptiuon | Pin | Description
