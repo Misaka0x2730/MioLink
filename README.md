@@ -59,7 +59,7 @@ Board | Max current
 :----:|:----------:
 MioLink | rev.A: ~200 mA;</br>rev.B: ~350 mA (min. 300, max. 400)
 MioLink_Pico | ~200 mA (min. 175, max. 234)
-Pico or Pico W | Not available
+Pico or Pico W | ~300 mA from 3V3 pin,</br>see recommendations in</br>Pico and Pico W datasheet.
 
 ### JTAG
 Pin | Description
