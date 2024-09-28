@@ -8,14 +8,12 @@ Detailed instructions on how to use the debugger, how to configure SWO, RTT and 
 
 # Hardware
 ## General information
-The main board for this device is *MioLink*: RP2040 + 16Mbit (2MiB) QSPI Flash memory (W25Q16).</br>
-*MioLink_Pico* is a breakout board for Pico and Pico W featuring a power switch and voltage converters.</br>
+The main board for this device is *MioLink* ([rev. A](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/revA)/[rev. B](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/revB)): RP2040 + 16Mbit (2MiB) QSPI Flash memory (W25Q16).</br>
+[MioLink_Pico](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/MioLink_Pico) is a breakout board for Pico and Pico W featuring a power switch and voltage converters.</br>
 Standard Pico and Pico W boards are also supported.</br>
 The device type is determined at runtime, so all boards use the same firmware.</br>
-All hardware CAD files (designed in KiCad) can be found [here](https://github.com/Misaka0x2730/MioLink/tree/main/hardware).</br>
-[rev. A](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/revA)/[rev. B](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/revB) folders contain design files for MioLink rev. A and MioLink rev. B boards respectively.</br>
-[MioLink_Pico](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/MioLink_Pico) is an breakout board for Pico and Pico W.</br>
 [MioLink_adapter](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/MioLink_adapter) is an adapter that allows you to connect the probe with target boards that have different types of connectors.</br>
+All hardware CAD files (designed in KiCad) can be found [here](https://github.com/Misaka0x2730/MioLink/tree/main/hardware).</br>
 
 ## MioLink revisions comparsion
 There are currently 2 hardware revisions of the MioLink board (rev.A and rev.B), with the following differences:
@@ -31,23 +29,23 @@ rev. A  |  rev. B
 ![image](https://github.com/user-attachments/assets/ca20d195-47d2-4530-8daa-e9d0aed68b91) |  ![image](https://github.com/user-attachments/assets/b5c66c69-2552-469a-bd72-b8bd37ff3a03)
 
 ## Pinout
-MioLink and MioLink_Pico use the standard ARM 10-pin 0.1" connector and has additional 4-pin 0.1" UART connector:</br>
+### Target connector pinout
+*MioLink* and *MioLink_Pico* use the standard ARM 10-pin 0.1" connector and has additional 4-pin 0.1" UART connector:</br>
 ![image](https://github.com/user-attachments/assets/98218707-b79a-4d30-ae67-68f5ac11d38c)
 
+Pin | Name  | Description              | Pin | Name          | Description
+:--:|:-----:|:------------------------:|:---:|:-------------:|:-----------------------------------------------------------------------:
+1   | VTref | Target reference voltage | 2   | SWDIO/TMS     | SWD Data input/output / JTAG Test mode select
+3   | GND   | Ground                   | 4   | SWDCLK/TCK    | SWD Clock / JTAG Test clock
+5   | GND   | Ground                   | 6   | SWO/TDO/RX    | SWD Trace output / JTAG Test data output / UART Probe RX (Target TX)
+7   | NC    | Not connected            | 8   | NC/TDI/TX     | Not connected for SWD / JTAG Test data input / UART Probe TX (Target RX)
+9   | GND   | Ground                   | 10  | RESET         | Reset pin
 
-Pin | Descriptiuon | Pin | Description
-:--:|:------------:|:---:|:-----------:
-1 | VTref | 2 | SWDIO/TMS
-3 | GND | 4 | SWDCLK/TCK
-5 | GND | 6 | SWO/TDO/RX (Probe RX, Target TX)
-7 | NC | 8 | NC/TDI/TX (Probe TX, Target RX)
-9 | GND | 10 | RESET
-
-UART connector pinout:
-Pin | Descriptiuon | Pin | Description
-:--:|:------------:|:---:|:-----------:
-1 | RX (Probe RX, Target TX) | 2 | VTref
-3 | TX (Probe TX, Target RX) | 4 | GND
+### UART connector pinout:
+Pin | Name | Description                    | Pin | Name  | Description
+:--:|:----:|:------------------------------:|:---:|:-----:|:------------------------:
+1   | RX   | UART Probe RX (UART Target TX) | 2   | VTref | Target reference voltage
+3   | TX   | UART Probe TX (UART Target RX) | 4   | GND   | Ground
 
 ## Connecting target to probe
 ### Information about the Vtref pin (pin 1)
@@ -78,15 +76,15 @@ TDI   | Test data input
 RESET | Optional reset pin
 
 ### SWD
-Pin | Description
-:----:|:----------:
-Vtref | Target reference voltage
-GND   | Ground
-SWDIO | Data input/output
+Pin    | Description
+:-----:|:----------:
+Vtref  | Target reference voltage
+GND    | Ground
+SWDIO  | Data input/output
 SWDCLK | Clock signal
-RESET | Optional reset pin
+RESET  | Optional reset pin
 
-# Building and flashing
+# Building and flashing the probe
 ## Requirements
 The following tools are required to build this project:
 - git
