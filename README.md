@@ -83,7 +83,7 @@ RESET | Optional reset pin
 
 # Building and flashing
 ## Requirements
-The followding tools are required to build this project:
+The following tools are required to build this project:
 - git
 - make
 - Python
