@@ -8,14 +8,14 @@ Detailed instructions on how to use the debugger, how to configure SWO, RTT and 
 
 # Hardware
 ## General information
-The main board for this device is MioLink: RP2040 + 16Mbit (2MiB) QSPI Flash memory (W25Q16).</br>
-MioLink_Pico is a breakout board for Pico and Pico W featuring a power switch and voltage converters.</br>
+The main board for this device is *MioLink*: RP2040 + 16Mbit (2MiB) QSPI Flash memory (W25Q16).</br>
+*MioLink_Pico* is a breakout board for Pico and Pico W featuring a power switch and voltage converters.</br>
 Standard Pico and Pico W boards are also supported.</br>
 The device type is determined at runtime, so all boards use the same firmware.</br>
 All hardware CAD files (designed in KiCad) can be found [here](https://github.com/Misaka0x2730/MioLink/tree/main/hardware).</br>
 [rev. A](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/revA)/[rev. B](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/revB) folders contain design files for MioLink rev. A and MioLink rev. B boards respectively.</br>
 [MioLink_Pico](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/MioLink_Pico) is an breakout board for Pico and Pico W.</br>
-[MioLink_adapter](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/MioLink_adapter) is an adapter that allows you to connect the debugger with target boards that have different types of connectors.</br>
+[MioLink_adapter](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/MioLink_adapter) is an adapter that allows you to connect the probe with target boards that have different types of connectors.</br>
 
 ## MioLink revisions comparsion
 There are currently 2 hardware revisions of the MioLink board (rev.A and rev.B), with the following differences:
@@ -50,14 +50,16 @@ Pin | Descriptiuon | Pin | Description
 3 | TX (Probe TX, Target RX) | 4 | GND
 
 ## Connecting target to probe
-### Powering target from probe
-MioLink and MioLink_Pico are able to provide 3.3V power for target on VTref (pin 1).</br>
-PLEASE, pay attention that Vtref and target's JTAG/SWD pins levels should match.
-This means that Vtref pin MUST BE connected to external reference voltage (1.65V to 5.5V) for probe's level translators.</br>
-it's optional in the case, when target is a 3.3V powered MCU, but you MUST power Vtref pin with 3.3V by using ```monitor tpwr enable``` GDB command.</br>
+### Information about the Vtref pin (pin 1)
+PLEASE, note that the Vtref pin (pin 1) on *MioLink* and *MioLink_Pico* MUST always be connected (internally or externally) to the logic level voltage of the target being debugged (from 1.65V to 5.5V) to power the level shifters inside the probe.</br>
+If the target device operates at a 3.3V logic level, this pin can be powered internally by the probe, in this case, the target can be powered by the probe if needed, and the maximum current is specified in the table below, but be careful, accidentally connecting anything to this pin that is not rated for 3.3V may lead to irreversible damage to the external device.</br>
+3.3V power supply on this pin can be enabled with the GDB command ```monitor tpwr enable``` and disabled with the command ```monitor tpwr disable```. By default (after probe reset), it's disabled.</br>
 Pico and Pico W are also able to provide 3.3V power for target, but it is recommended to keep the load on this pin less than 300mA,</br>
-for more information see chapter 2.1, page 8 in [Pico datasheet](https://datasheets.raspberrypi.com/pico/pico-datasheet.pdf) and chapter 2.1, page 9 in [Pico W datasheet](https://datasheets.raspberrypi.com/picow/pico-w-datasheet.pdf).
+for more information see chapter 2.1, page 8 in [Pico datasheet](https://datasheets.raspberrypi.com/pico/pico-datasheet.pdf) and chapter 2.1, page 9 in [Pico W datasheet](https://datasheets.raspberrypi.com/picow/pico-w-datasheet.pdf).</br>
+In all other cases, the Vtref pin (pin 1) functions as an input and must be connected to the logic level voltage of the target device.</br>
+The allowable voltage range is from 1.65V to 5.5V.</br>
 
+#### Maximum output current of the Vtref pin (pin 1):
 Board | Max current
 :----:|:----------:
 MioLink | rev.A: ~200 mA;</br>rev.B: ~350 mA (min. 300, max. 400)
@@ -66,20 +68,23 @@ Pico or Pico W | ~300 mA from 3V3 pin,</br>see recommendations in</br>Pico and P
 
 ### JTAG
 Pin | Description
-:--:|:----------:
-TMS | Test mode select
-TCK | Test clock
-TDO | Test data output
-TDI | Test data input
+:----:|:----------:
+Vtref | Target reference voltage
+GND   | Ground
+TMS   | Test mode select
+TCK   | Test clock
+TDO   | Test data output
+TDI   | Test data input
 RESET | Optional reset pin
 
 ### SWD
 Pin | Description
-:--:|:----------:
+:----:|:----------:
+Vtref | Target reference voltage
+GND   | Ground
 SWDIO | Data input/output
-SWDCLK | SWD clock
+SWDCLK | Clock signal
 RESET | Optional reset pin
-
 
 # Building and flashing
 ## Requirements
