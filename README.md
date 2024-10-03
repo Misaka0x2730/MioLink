@@ -52,8 +52,7 @@ Pin | Name | Description                    | Pin | Name  | Description
 PLEASE, note that the Vtref pin (pin 1) on *MioLink* and *MioLink_Pico* MUST always be connected (internally or externally) to the logic level voltage of the target being debugged (from 1.65V to 5.5V) to power the level shifters inside the probe.</br>
 If the target device operates at a 3.3V logic level, this pin can be powered internally by the probe, in this case, the target can be powered by the probe if needed, and the maximum current is specified in the table below, but be careful, accidentally connecting anything to this pin that is not rated for 3.3V may lead to irreversible damage to the external device.</br>
 3.3V power supply on this pin can be enabled with the GDB command ```monitor tpwr enable``` and disabled with the command ```monitor tpwr disable```. By default (after probe reset), it's disabled.</br>
-Pico and Pico W are also able to provide 3.3V power for target, but it is recommended to keep the load on this pin less than 300mA,</br>
-for more information see chapter 2.1, page 8 in [Pico datasheet](https://datasheets.raspberrypi.com/pico/pico-datasheet.pdf) and chapter 2.1, page 9 in [Pico W datasheet](https://datasheets.raspberrypi.com/picow/pico-w-datasheet.pdf).</br>
+Pico and Pico W are also able to provide 3.3V power for target, but it is recommended to keep the load on this pin less than 300mA, for more information see chapter 2.1, page 8 in [Pico datasheet](https://datasheets.raspberrypi.com/pico/pico-datasheet.pdf) and chapter 2.1, page 9 in [Pico W datasheet](https://datasheets.raspberrypi.com/picow/pico-w-datasheet.pdf).</br>
 In all other cases, the Vtref pin (pin 1) functions as an input and must be connected to the logic level voltage of the target device.</br>
 The allowable voltage range is from 1.65V to 5.5V.</br>
 
