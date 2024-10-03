@@ -29,13 +29,10 @@
 #include "usb_serial.h"
 
 #define USB_TASK_CORE_AFFINITY   (0x01) /* Core 0 only */
-//#define USB_TASK_STACK_SIZE      (256)
 #define USB_TASK_STACK_SIZE      (512)
 
 #define USB_VID   (0x1d50)
 #define USB_PID   (0x6018)
-
-#define BOARD_IDENT "Black Magic Probe " PLATFORM_IDENT "" FIRMWARE_VERSION
 
 #define MAKE_CDC_DESCRIPTOR(_itfnum, _stridx, _ep_notif, _ep_notif_size, _epout, _epin, _epsize) \
   /* Interface Associate */\
@@ -135,15 +132,17 @@ static uint8_t const desc_fs_configuration[] =
 
 #ifdef PLATFORM_HAS_TRACESWO
     /* 3rd interface - TRACESWO */
-    MAKE_TRACE_DESCRIPTOR(ITF_NUM_TRACE, 7, TRACE_ENDPOINT | ENDPOINT_IN_BIT, 64),
+    MAKE_TRACE_DESCRIPTOR(ITF_NUM_TRACE, 7, SWO_ENDPOINT | ENDPOINT_IN_BIT, 64),
 #endif
 };
+
+extern char board_ident[BOARD_IDENT_LENGTH];
 
 static char const *string_desc_arr[] =
 {
     (const char[]) { 0x09, 0x04, 0x00 }, // 0: is supported language is English (0x0409)
     "Black Magic Debug",
-    BOARD_IDENT,
+    board_ident,
     serial_no,
     "Black Magic GDB Server",
     "Black Magic UART Port",
@@ -327,6 +326,36 @@ void tud_cdc_line_coding_cb(uint8_t interface, cdc_line_coding_t const* p_line_c
     {
         xTaskNotify(usb_uart_task, USB_SERIAL_LINE_CODING_UPDATE, eSetBits);
     }
+}
+
+static bool usb_config = false;
+static bool usb_config_updated = false;
+
+void tud_mount_cb(void)
+{
+    usb_config = true;
+    usb_config_updated = true;
+}
+
+void tud_umount_cb(void)
+{
+    usb_config = false;
+    usb_config_updated = true;
+}
+
+uint16_t usb_get_config(void)
+{
+    return usb_config ? 1 : 0;
+}
+
+bool usb_config_is_updated(void)
+{
+    return usb_config_updated;
+}
+
+void usb_config_clear_updated(void)
+{
+    usb_config_updated = false;
 }
 
 _Noreturn static void usb_task_thread(void *param);

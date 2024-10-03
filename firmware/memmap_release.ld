@@ -100,6 +100,7 @@ SECTIONS
     } > FLASH
 
     .rodata : {
+        *cyw43-driver/*.c.obj(.rodata*)
         *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:
                        *tinyusb/src/*.c.obj
                        *FreeRTOS-Kernel/*.c.obj

@@ -27,7 +27,10 @@
 #include "maths_utils.h"
 
 #include "hardware/pio.h"
-#include "target_swd.pio.h"
+#include "miolink_revA_target_swd.pio.h"
+#include "miolink_revB_target_swd.pio.h"
+#include "miolink_pico_target_swd.pio.h"
+#include "pico_target_swd.pio.h"
 
 #include "tap_pio_common.h"
 
@@ -36,14 +39,61 @@ static bool swdptap_seq_in_parity(uint32_t *ret, size_t clock_cycles) __attribut
 static void swdptap_seq_out(uint32_t tms_states, size_t clock_cycles) __attribute__((optimize(3)));
 static void swdptap_seq_out_parity(uint32_t tms_states, size_t clock_cycles) __attribute__((optimize(3)));
 
-#define SWD_START_PROGRAM_POS                  (0)
-#define SWD_SEQ_OUT_TURNAROUND_IN_TO_OUT_POS   (1)
-#define SWD_SEQ_OUT_POS                        (3)
-#define SWD_SEQ_IN_TURNAROUND_OUT_TO_IN_POS    (8)
-#define SWD_SEQ_IN_POS                         (10)
-#define SWD_ADIV5_REQ_TURNAROUND_IN_TO_OUT_POS (15)
-#define SWD_ADIV5_REQ_POS                      (17)
-#define SWD_TURNAROUND_IN_TO_OUT_POS           (26)
+typedef struct
+{
+    uint8_t start;
+    uint8_t seq_out_turnaround_in_to_out;
+    uint8_t seq_out;
+    uint8_t seq_in_turnaround_out_to_in;
+    uint8_t seq_in;
+    uint8_t adiv5_req_turnaround_in_to_out;
+    uint8_t adiv5_req;
+    uint8_t turnaround_in_to_out;
+} swd_program_pos_t;
+
+const swd_program_pos_t miolink_revA_program_pos = {
+        .start = 0,
+        .seq_out_turnaround_in_to_out = 1,
+        .seq_out = 3,
+        .seq_in_turnaround_out_to_in = 8,
+        .seq_in = 10,
+        .adiv5_req_turnaround_in_to_out = 15,
+        .adiv5_req = 17,
+        .turnaround_in_to_out = 26
+};
+
+const swd_program_pos_t miolink_revB_program_pos = {
+        .start = 0,
+        .seq_out_turnaround_in_to_out = 1,
+        .seq_out = 2,
+        .seq_in_turnaround_out_to_in = 7,
+        .seq_in = 8,
+        .adiv5_req_turnaround_in_to_out = 13,
+        .adiv5_req = 14,
+        .turnaround_in_to_out = 22
+};
+
+const swd_program_pos_t miolink_pico_program_pos = {
+        .start = 0,
+        .seq_out_turnaround_in_to_out = 1,
+        .seq_out = 2,
+        .seq_in_turnaround_out_to_in = 7,
+        .seq_in = 8,
+        .adiv5_req_turnaround_in_to_out = 13,
+        .adiv5_req = 14,
+        .turnaround_in_to_out = 22
+};
+
+const swd_program_pos_t pico_program_pos = {
+        .start = 0,
+        .seq_out_turnaround_in_to_out = 1,
+        .seq_out = 2,
+        .seq_in_turnaround_out_to_in = 7,
+        .seq_in = 8,
+        .adiv5_req_turnaround_in_to_out = 13,
+        .adiv5_req = 14,
+        .turnaround_in_to_out = 22
+};
 
 typedef enum swdio_status_e {
 	SWDIO_STATUS_FLOAT = 0,
@@ -56,6 +106,42 @@ static swdio_status_t tms_dir = SWDIO_STATUS_FLOAT;
 
 extern uint32_t target_interface_frequency;
 
+static const swd_program_pos_t *swdtap_get_program_pos(void)
+{
+    const swd_program_pos_t *p_program_pos = NULL;
+    const platform_device_type_t device_type = platform_hwtype();
+    assert(device_type != PLATFORM_DEVICE_TYPE_NOT_SET);
+
+    switch (device_type)
+    {
+        case PLATFORM_DEVICE_TYPE_MIOLINK:
+            if (platform_hwversion() == PLATFORM_MIOLINK_REV_A)
+            {
+                p_program_pos = &miolink_revA_program_pos;
+            }
+            else
+            {
+                p_program_pos = &miolink_revB_program_pos;
+            }
+            break;
+
+        case PLATFORM_DEVICE_TYPE_MIOLINK_PICO:
+            p_program_pos = &miolink_pico_program_pos;
+            break;
+
+        case PLATFORM_DEVICE_TYPE_PICO:
+        case PLATFORM_DEVICE_TYPE_PICO_W:
+            p_program_pos = &pico_program_pos;
+            break;
+
+        default:
+            assert(false);
+            break;
+    }
+
+    return p_program_pos;
+}
+
 void swdptap_init(void)
 {
     pio_sm_set_enabled(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, false);
@@ -65,30 +151,89 @@ void swdptap_init(void)
     pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, false);
     pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, false);
 
-    gpio_init(TARGET_TMS_DIR_PIN);
-    gpio_init(TARGET_TCK_PIN);
-    gpio_init(TARGET_TMS_PIN);
+    const platform_target_pins_t *target_pins = platform_get_target_pins();
 
-    gpio_set_pulls(TARGET_TMS_PIN, true, false);
+    uint32_t tms_dir_mask = 0;
+    if (target_pins->tms_dir != PIN_NOT_CONNECTED)
+    {
+        gpio_init(target_pins->tms_dir);
+        pio_gpio_init(TARGET_SWD_PIO, target_pins->tms_dir);
 
-    pio_gpio_init(TARGET_SWD_PIO, TARGET_TMS_DIR_PIN);
-    pio_gpio_init(TARGET_SWD_PIO, TARGET_TCK_PIN);
-    pio_gpio_init(TARGET_SWD_PIO, TARGET_TMS_PIN);
+        tms_dir_mask = (1 << target_pins->tms_dir);
+    }
+
+    gpio_init(target_pins->tck);
+    gpio_init(target_pins->tms);
+
+    pio_gpio_init(TARGET_SWD_PIO, target_pins->tck);
+    pio_gpio_init(TARGET_SWD_PIO, target_pins->tms);
 
 	pio_clear_instruction_memory(TARGET_SWD_PIO);
 
-    pio_sm_set_pindirs_with_mask(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, (1 << TARGET_TMS_DIR_PIN) | (1 << TARGET_TCK_PIN), (1 << TARGET_TMS_DIR_PIN) | (1 << TARGET_TCK_PIN) | (1 << TARGET_TMS_PIN));
-    pio_sm_set_pins_with_mask(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, 0, (1 << TARGET_TMS_DIR_PIN) | (1 << TARGET_TCK_PIN) | (1 << TARGET_TMS_PIN));
+    pio_sm_set_pindirs_with_mask(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, tms_dir_mask | (1 << target_pins->tck), tms_dir_mask | (1 << target_pins->tck) | (1 << target_pins->tms));
+    pio_sm_set_pins_with_mask(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, 0, tms_dir_mask | (1 << target_pins->tck) | (1 << target_pins->tms));
 
-    tap_pio_common_disable_input_sync(TARGET_SWD_PIO, TARGET_TMS_PIN);
+    const platform_device_type_t device_type = platform_hwtype();
+    assert(device_type != PLATFORM_DEVICE_TYPE_NOT_SET);
 
-    pio_add_program_at_offset(TARGET_SWD_PIO, &target_swd_program, 0);
+    const pio_program_t *program = NULL;
+    pio_sm_config prog_config = { 0 };
+    uint8_t set_pins_base = PIN_NOT_CONNECTED;
+    uint8_t set_pins_count = 1;
+    uint8_t sideset_pins_base = PIN_NOT_CONNECTED;
 
-    pio_sm_config prog_config = target_swd_program_get_default_config(0);
-    sm_config_set_out_pins(&prog_config, TARGET_TMS_PIN, 1);
-    sm_config_set_in_pins(&prog_config, TARGET_TMS_PIN);
-    sm_config_set_sideset_pins(&prog_config, TARGET_TCK_PIN);
-    sm_config_set_set_pins(&prog_config, TARGET_TMS_PIN, 2);
+    switch (device_type)
+    {
+        case PLATFORM_DEVICE_TYPE_MIOLINK:
+            if (platform_hwversion() == PLATFORM_MIOLINK_REV_A)
+            {
+                program = &miolink_revA_target_swd_program;
+                prog_config = miolink_revA_target_swd_program_get_default_config(0);
+                set_pins_base = target_pins->tms;
+                set_pins_count = 2;
+                sideset_pins_base = target_pins->tck;
+            }
+            else
+            {
+                program = &miolink_revB_target_swd_program;
+                prog_config = miolink_revB_target_swd_program_get_default_config(0);
+                set_pins_base = target_pins->tms;
+                set_pins_count = 1;
+                sideset_pins_base = target_pins->tck;
+            }
+            break;
+
+        case PLATFORM_DEVICE_TYPE_MIOLINK_PICO:
+            program = &miolink_pico_target_swd_program;
+            prog_config = miolink_pico_target_swd_program_get_default_config(0);
+            set_pins_base = target_pins->tms;
+            set_pins_count = 1;
+            sideset_pins_base = target_pins->tms_dir;
+            break;
+
+        case PLATFORM_DEVICE_TYPE_PICO:
+        case PLATFORM_DEVICE_TYPE_PICO_W:
+            program = &pico_target_swd_program;
+            prog_config = pico_target_swd_program_get_default_config(0);
+            set_pins_base = target_pins->tms;
+            set_pins_count = 1;
+            sideset_pins_base = target_pins->tck;
+            break;
+
+        default:
+            assert(false);
+            break;
+    }
+
+    assert(program != NULL);
+
+    pio_add_program_at_offset(TARGET_SWD_PIO, program, 0);
+    sm_config_set_set_pins(&prog_config, set_pins_base, set_pins_count);
+    sm_config_set_sideset_pins(&prog_config, sideset_pins_base);
+
+    tap_pio_common_disable_input_sync(TARGET_SWD_PIO, target_pins->tms);
+    sm_config_set_out_pins(&prog_config, target_pins->tms, 1);
+    sm_config_set_in_pins(&prog_config, target_pins->tms);
     sm_config_set_out_shift(&prog_config, true, true, 32);
     sm_config_set_in_shift(&prog_config, true, true, 32);
 
@@ -110,18 +255,20 @@ void swdptap_init(void)
 
 static uint32_t swdptap_seq_in(size_t clock_cycles)
 {
+    const swd_program_pos_t *p_program_pos = swdtap_get_program_pos();
+    assert(p_program_pos != NULL);
+
     if (tms_dir == SWDIO_STATUS_DRIVE)
     {
-        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, SWD_SEQ_IN_TURNAROUND_OUT_TO_IN_POS);
+        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_in_turnaround_out_to_in);
         tms_dir = SWDIO_STATUS_FLOAT;
     }
     else
     {
-        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, SWD_SEQ_IN_POS);
+        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_in);
     }
 
     pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, clock_cycles - 1);
-
 
     while (pio_sm_get_rx_fifo_level(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ) < 1);
     const uint32_t value = (pio_sm_get_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ) >> (32U - clock_cycles));
@@ -134,18 +281,21 @@ static uint32_t swdptap_seq_in(size_t clock_cycles)
 
 static bool swdptap_seq_in_parity(uint32_t *ret, size_t clock_cycles)
 {
+    const swd_program_pos_t *p_program_pos = swdtap_get_program_pos();
+    assert(p_program_pos != NULL);
+
     if (tms_dir == SWDIO_STATUS_DRIVE)
     {
-        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, SWD_SEQ_IN_TURNAROUND_OUT_TO_IN_POS);
+        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_in_turnaround_out_to_in);
         tms_dir = SWDIO_STATUS_FLOAT;
     }
     else
     {
-        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, SWD_SEQ_IN_POS);
+        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_in);
     }
 
     pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, clock_cycles);
-    pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, SWD_TURNAROUND_IN_TO_OUT_POS);
+    pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->turnaround_in_to_out);
 
     while (pio_sm_get_rx_fifo_level(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ) < 1);
 
@@ -173,14 +323,17 @@ static bool swdptap_seq_in_parity(uint32_t *ret, size_t clock_cycles)
 
 static void swdptap_seq_out(const uint32_t tms_states, const size_t clock_cycles)
 {
+    const swd_program_pos_t *p_program_pos = swdtap_get_program_pos();
+    assert(p_program_pos != NULL);
+
     if (tms_dir == SWDIO_STATUS_FLOAT)
     {
-        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, SWD_SEQ_OUT_TURNAROUND_IN_TO_OUT_POS);
+        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_out_turnaround_in_to_out);
         tms_dir = SWDIO_STATUS_DRIVE;
     }
     else
     {
-        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, SWD_SEQ_OUT_POS);
+        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_out);
     }
 
     pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, clock_cycles - 1);
@@ -191,16 +344,19 @@ static void swdptap_seq_out(const uint32_t tms_states, const size_t clock_cycles
 
 static void swdptap_seq_out_parity(const uint32_t tms_states, const size_t clock_cycles)
 {
+    const swd_program_pos_t *p_program_pos = swdtap_get_program_pos();
+    assert(p_program_pos != NULL);
+
     const bool parity = calculate_odd_parity(tms_states);
 
     if (tms_dir == SWDIO_STATUS_FLOAT)
     {
-        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, SWD_SEQ_OUT_TURNAROUND_IN_TO_OUT_POS);
+        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_out_turnaround_in_to_out);
         tms_dir = SWDIO_STATUS_DRIVE;
     }
     else
     {
-        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, SWD_SEQ_OUT_POS);
+        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_out);
     }
 
     pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, clock_cycles);
@@ -222,17 +378,20 @@ static void swdptap_seq_out_parity(const uint32_t tms_states, const size_t clock
 
 uint8_t rp2040_pio_adiv5_swd_raw_access_req(const uint8_t request)
 {
+    const swd_program_pos_t *p_program_pos = swdtap_get_program_pos();
+    assert(p_program_pos != NULL);
+
     pio_sm_set_enabled(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, false);
     pio_sm_set_enabled(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_ADIV5, true);
 
     if (tms_dir == SWDIO_STATUS_FLOAT)
     {
-        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_ADIV5, SWD_ADIV5_REQ_TURNAROUND_IN_TO_OUT_POS);
+        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_ADIV5, p_program_pos->adiv5_req_turnaround_in_to_out);
         tms_dir = SWDIO_STATUS_DRIVE;
     }
     else
     {
-        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_ADIV5,SWD_ADIV5_REQ_POS);
+        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_ADIV5,p_program_pos->adiv5_req);
     }
 
     pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_ADIV5, request);
@@ -249,13 +408,16 @@ uint8_t rp2040_pio_adiv5_swd_raw_access_req(const uint8_t request)
 
 bool rp2040_pio_adiv5_swd_raw_access_data(const uint32_t data_out, uint32_t *data_in, const uint8_t rnw)
 {
+    const swd_program_pos_t *p_program_pos = swdtap_get_program_pos();
+    assert(p_program_pos != NULL);
+
     uint32_t parity = false;
 
     if (rnw)
     {
-        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, SWD_SEQ_IN_POS);
+        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_in);
         pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, 32);
-        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, SWD_SEQ_OUT_TURNAROUND_IN_TO_OUT_POS);
+        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_out_turnaround_in_to_out);
         pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, TARGET_SWD_IDLE_CYCLES - 1);
 
         while (pio_sm_get_rx_fifo_level(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ) < 2);
@@ -271,7 +433,7 @@ bool rp2040_pio_adiv5_swd_raw_access_data(const uint32_t data_out, uint32_t *dat
     {
         parity = calculate_odd_parity(data_out);
 
-        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, SWD_SEQ_OUT_TURNAROUND_IN_TO_OUT_POS);
+        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_out_turnaround_in_to_out);
         pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, 32 + TARGET_SWD_IDLE_CYCLES);
         pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, data_out);
         pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, (parity ? (1 << 0) : 0));
@@ -302,14 +464,17 @@ uint8_t rp2040_pio_adiv5_swd_read_no_check(const uint8_t request, uint32_t *data
 
 void swdptap_seq_out_buffer(const uint32_t *tms_states, const size_t clock_cycles)
 {
+    const swd_program_pos_t *p_program_pos = swdtap_get_program_pos();
+    assert(p_program_pos != NULL);
+
     if (tms_dir == SWDIO_STATUS_FLOAT)
     {
-        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, SWD_SEQ_OUT_TURNAROUND_IN_TO_OUT_POS);
+        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_out_turnaround_in_to_out);
         tms_dir = SWDIO_STATUS_DRIVE;
     }
     else
     {
-        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, SWD_SEQ_OUT_POS);
+        pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_out);
     }
 
     pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, clock_cycles - 1);

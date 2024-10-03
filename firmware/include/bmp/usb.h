@@ -26,4 +26,9 @@
 
 void blackmagic_usb_init(void);
 
+uint16_t usb_get_config(void);
+bool usb_config_is_updated(void);
+void usb_config_clear_updated(void);
+
+
 #endif /* BMP_USB_H */

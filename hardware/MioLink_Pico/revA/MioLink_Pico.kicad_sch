@@ -6523,17 +6523,6 @@
 		)
 		(uuid "4e4d2f1c-15eb-4dd1-8884-dccf911644fe")
 	)
-	(text "GPIO3 (TARGET_VREF_PWR_EN) and\nGPIO16 define device type\n(GPIO3, GPIO16):\n(0, float) - native MioLink;\n(0, 0) - MioLink_Pico\n(adapter board for Pico and Pico W);\n(float, float) - Pico or Pico W."
-		(exclude_from_sim no)
-		(at 168.148 165.1 0)
-		(effects
-			(font
-				(size 2.54 2.54)
-			)
-			(justify left)
-		)
-		(uuid "7203140b-44c5-45ee-9d0a-152800b76ab2")
-	)
 	(text "Yellow"
 		(exclude_from_sim no)
 		(at 87.122 274.066 0)
@@ -6544,6 +6533,17 @@
 			(justify right bottom)
 		)
 		(uuid "7410634e-3cce-4f4e-a2d2-9886be560f37")
+	)
+	(text "GPIO14 and GPIO15 define the hardware\nversion and are used to identify\nthe Pico and Pico W:\n(0, 0) - revA;\n(0, 1) - revB;\n(float, float) - Pico/Pico W.\nGPIO16 determines whether\nthe device is a MioLink or\nMioLink_Pico:\nfloat - native MioLink;\n0 - MioLink_Pico."
+		(exclude_from_sim no)
+		(at 183.134 178.562 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+			)
+			(justify left bottom)
+		)
+		(uuid "87bb473d-08ee-4858-8b1d-0973e2e0fa9e")
 	)
 	(text "MCU with QSPI Flash"
 		(exclude_from_sim no)
@@ -6566,17 +6566,6 @@
 			(justify right bottom)
 		)
 		(uuid "a59f1170-a98f-40c8-9229-41eaa2f1d34e")
-	)
-	(text "GPIO14 and GPIO15 determine\nhardware revision:\n(0, 0 - revA)\n(0, 1 - revB)"
-		(exclude_from_sim no)
-		(at 167.64 140.97 0)
-		(effects
-			(font
-				(size 2.54 2.54)
-			)
-			(justify left)
-		)
-		(uuid "aa02561f-95b4-4d58-befd-ee94bb27cda4")
 	)
 	(text "Target power and Vref measure"
 		(exclude_from_sim no)

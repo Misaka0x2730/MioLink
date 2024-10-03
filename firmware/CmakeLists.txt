@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.15)
 
-set(CMAKE_POLICY_DEFAULT_CMP0169 OLD)
+cmake_policy(SET CMP0169 OLD)
 
 set(PICOTOOL_FETCH_FROM_GIT_PATH "../firmware/thirdParty/picotool")
 set(PICO_SDK_FETCH_FROM_GIT ON)
-set(PICO_CYW43_SUPPORTED OFF)
+set(PICO_CYW43_SUPPORTED ON)
 set(PICO_BOARD none)
 set(PICO_PLATFORM rp2040)
 
@@ -47,6 +47,12 @@ target_compile_definitions(MioLink PUBLIC PICO_BOOT_STAGE2_CHOOSE_W25Q080=1)
 target_compile_definitions(MioLink PUBLIC PICO_FLASH_SPI_CLKDIV=2)
 target_compile_definitions(MioLink PUBLIC PICO_RP2040_B0_SUPPORTED=0)
 target_compile_definitions(MioLink PUBLIC PICO_STDIO_SHORT_CIRCUIT_CLIB_FUNCS=0)
+target_compile_definitions(MioLink PUBLIC CYW43_PIN_WL_HOST_WAKE=24)
+target_compile_definitions(MioLink PUBLIC CYW43_PIN_WL_REG_ON=23)
+target_compile_definitions(MioLink PUBLIC CYW43_WL_GPIO_COUNT=3)
+target_compile_definitions(MioLink PUBLIC CYW43_WL_GPIO_LED_PIN=0)
+target_compile_definitions(MioLink PUBLIC CYW43_LWIP=0)
+target_compile_definitions(MioLink PUBLIC CYW43_TASK_PRIORITY=1)
 
 pico_set_printf_implementation(MioLink "compiler")
 
@@ -61,8 +67,9 @@ target_compile_definitions(MioLink PUBLIC GDB_PACKET_BUFFER_SIZE=8192)
 target_compile_definitions(MioLink PUBLIC PC_HOSTED=0)
 target_compile_definitions(MioLink PUBLIC NO_LIBOPENCM3)
 target_compile_definitions(MioLink PUBLIC DFU_SERIAL_LENGTH=PICO_UNIQUE_BOARD_ID_SIZE_BYTES+1)
-target_compile_definitions(MioLink PUBLIC SYSTICKHZ=1000)
+target_compile_definitions(MioLink PUBLIC SYSTICKHZ=100)
 target_compile_definitions(MioLink PUBLIC ENABLE_RTT=1)
+target_compile_definitions(MioLink PUBLIC PLATFORM_IDENT_DYNAMIC)
 
 # BlackMagic headers
 target_include_directories(MioLink PUBLIC thirdParty/blackmagic/src/include)
@@ -190,11 +197,14 @@ endif()
 
 # Raspberry Pi Pico SDK libraries
 target_link_libraries(MioLink PUBLIC hardware_pio hardware_uart hardware_dma hardware_timer hardware_adc hardware_i2c)
-target_link_libraries(MioLink PUBLIC pico_stdlib pico_unique_id pico_bootrom tinyusb_device tinyusb_board tinyusb_additions)
-target_link_libraries(MioLink PUBLIC FreeRTOS-Kernel FreeRTOS-Kernel-Heap1)
+target_link_libraries(MioLink PUBLIC pico_stdlib pico_unique_id pico_bootrom tinyusb_device tinyusb_board tinyusb_additions pico_cyw43_arch_sys_freertos)
+target_link_libraries(MioLink PUBLIC FreeRTOS-Kernel FreeRTOS-Kernel-Heap4)
 
 # Compile PIO programs
-pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/target_swd.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/miolink_revA_target_swd.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/miolink_revB_target_swd.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/miolink_pico_target_swd.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/pico_target_swd.pio)
 pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/target_jtag.pio)
 
 # Set linker script and set parameter to print memory usage

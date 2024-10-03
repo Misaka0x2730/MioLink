@@ -1,12 +1,12 @@
 [submodule "blackmagic"]
 	path = firmware/thirdParty/blackmagic
-	url = https://github.com/blackmagic-debug/blackmagic.git
+	url = https://github.com/Misaka0x2730/blackmagic
 	branch = main
 [submodule "FreeRTOS-Kernel"]
 	path = firmware/thirdParty/FreeRTOS-Kernel
 	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
 	branch = main
-[submodule "tinyusb_Misaka0x2730"]
+[submodule "tinyusb"]
 	path = firmware/thirdParty/tinyusb
 	url = https://github.com/Misaka0x2730/tinyusb.git
 	branch = master

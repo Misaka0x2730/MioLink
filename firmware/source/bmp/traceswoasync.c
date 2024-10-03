@@ -38,7 +38,8 @@
 #include "platform.h"
 #include "usb_serial.h"
 
-#include "traceswo.h"
+#include "swo.h"
+#include "gdb_packet.h"
 
 #define TRACESWO_UART_RX_INT_FIFO_LEVEL          (16)
 
@@ -63,7 +64,7 @@
 #define TRACESWO_DECODE_THRESHOLD                 (64)
 
 #define TRACESWO_TASK_CORE_AFFINITY               (0x02) /* Core 1 only */
-#define TRACESWO_TASK_STACK_SIZE                  (256)
+#define TRACESWO_TASK_STACK_SIZE                  (512)
 
 static uint8_t uart_rx_buf[TRACESWO_UART_DMA_RX_NUMBER_OF_BUFFERS][TRACESWO_UART_DMA_RX_BUFFER_SIZE] = {0 };
 static uint32_t uart_rx_int_buf_pos = 0;
@@ -76,12 +77,14 @@ static int uart_dma_rx_ctrl_channel = -1;
 static uint32_t uart_rx_next_buffer_to_send = 0;
 static bool uart_rx_ongoing = false;
 
+/* Current SWO decoding mode being used */
+swo_coding_e swo_current_mode = swo_none;
+
 static struct
 {
     uint8_t *address;
 } uart_dma_rx_ctrl_block_info[TRACESWO_UART_DMA_RX_NUMBER_OF_BUFFERS + 1] __attribute__ ((aligned (TRACESWO_UART_DMA_RX_NUMBER_OF_BUFFERS * sizeof(uint32_t))));
 
-static bool traceswo_initialized = false;
 static bool traceswo_decoding = false;
 
 static TaskHandle_t traceswo_task;
@@ -91,14 +94,7 @@ static void uart_dma_handler(void);
 
 void traceswo_update_led(void)
 {
-    if (uart_rx_ongoing)
-    {
-        gpio_set(PICO_GPIO_PORT, LED_SER_PIN);
-    }
-    else
-    {
-        gpio_clear(PICO_GPIO_PORT, LED_SER_PIN);
-    }
+    platform_set_serial_state(uart_rx_ongoing);
 }
 
 static bool usb_trace_send_to_usb(uint8_t *data, const size_t len, const bool flush, const bool allow_drop_buffer)
@@ -414,22 +410,29 @@ static void uart_rx_int_finish(void)
     rp_uart_set_rx_timeout_irq_enabled(TRACESWO_UART, true);
 }
 
-void traceswo_init(uint32_t baudrate, uint32_t swo_chan_bitmask)
+void swo_init(swo_coding_e swo_mode, uint32_t baudrate, uint32_t itm_stream_bitmask)
 {
     usb_serial_uart_release(TRACESWO_UART);
 
     portENTER_CRITICAL();
 
-    traceswo_deinit();
+    swo_deinit(false);
+
+    const platform_target_pins_t *target_pins = platform_get_target_pins();
 
     /* Re-initialize UART */
-    gpio_set_function(TARGET_TDO_PIN, GPIO_FUNC_UART);
-    gpio_set_function(TARGET_TDI_PIN, GPIO_FUNC_SIO);
+    gpio_set_function(target_pins->tdo, GPIO_FUNC_UART);
+    gpio_set_function(target_pins->tdi, GPIO_FUNC_SIO);
 
     irq_handler_t current_handler = irq_get_exclusive_handler(TRACESWO_UART_IRQ);
     assert(current_handler == NULL);
 
     irq_set_exclusive_handler(TRACESWO_UART_IRQ, uart_rx_isr);
+
+    if (baudrate == 0)
+    {
+        baudrate = SWO_DEFAULT_BAUD;
+    }
 
     uart_init(TRACESWO_UART, baudrate);
 
@@ -447,17 +450,21 @@ void traceswo_init(uint32_t baudrate, uint32_t swo_chan_bitmask)
     irq_set_enabled(TRACESWO_UART_IRQ, true);
     //irq_set_priority(TRACESWO_UART_IRQ, 0);
 
-    traceswo_setmask(swo_chan_bitmask);
-    traceswo_decoding = swo_chan_bitmask != 0;
+    traceswo_setmask(itm_stream_bitmask);
+    traceswo_decoding = itm_stream_bitmask != 0;
 
-    traceswo_initialized = true;
+    swo_current_mode = swo_mode;
 
     portEXIT_CRITICAL();
+
+    gdb_outf("Baudrate: %" PRIu32 " ", swo_uart_get_baudrate());
 }
 
-void traceswo_deinit(void)
+void swo_deinit(bool deallocate)
 {
-    if (traceswo_initialized)
+    (void)(deallocate);
+
+    if (swo_current_mode != swo_none)
     {
         portENTER_CRITICAL();
 
@@ -482,18 +489,18 @@ void traceswo_deinit(void)
         uart_rx_int_buf_pos = 0;
         uart_rx_ongoing = false;
 
-        traceswo_initialized = false;
-
         portEXIT_CRITICAL();
     }
+
+    swo_current_mode = swo_none;
 }
 
 bool traceswo_uart_is_used(uart_inst_t *uart_instance)
 {
-    return (traceswo_initialized && (uart_instance == TRACESWO_UART));
+    return ((swo_current_mode != swo_none) && (uart_instance == TRACESWO_UART));
 }
 
-uint32_t traceswo_get_baudrate(void)
+uint32_t swo_uart_get_baudrate(void)
 {
     return rp_uart_get_baudrate(TRACESWO_UART);
 }

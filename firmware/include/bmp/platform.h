@@ -39,10 +39,20 @@
 #if ENABLE_DEBUG == 1
 #define PLATFORM_HAS_DEBUG
 extern bool debug_bmp;
-#define PLATFORM_IDENT "(MioLink, ENABLE_DEBUG=1) "
+#define PLATFORM_IDENT              "(Unknown MioLink, ENABLE_DEBUG=1) "
+#define PLATFORM_IDENT_MIOLINK      "MioLink, ENABLE_DEBUG=1"
+#define PLATFORM_IDENT_MIOLINK_PICO "MioLink_Pico, ENABLE_DEBUG=1"
+#define PLATFORM_IDENT_PICO         "Pico, ENABLE_DEBUG=1"
+#define PLATFORM_IDENT_PICO_W       "Pico W, ENABLE_DEBUG=1"
 #else
-#define PLATFORM_IDENT "(MioLink) "
+#define PLATFORM_IDENT              "(Unknown MioLink) "
+#define PLATFORM_IDENT_MIOLINK      "MioLink"
+#define PLATFORM_IDENT_MIOLINK_PICO "MioLink_Pico"
+#define PLATFORM_IDENT_PICO         "Pico"
+#define PLATFORM_IDENT_PICO_W       "Pico W"
 #endif
+
+#define BOARD_IDENT_LENGTH   (256U)
 
 #define PLATFORM_MIOLINK
 #define PLATFORM_MIOLINK_REV_A   (1)
@@ -59,42 +69,80 @@ extern bool debug_bmp;
 #define SERIAL_ENDPOINT                 (0x02)
 
 #ifdef PLATFORM_HAS_TRACESWO
-#define TRACESWO_PROTOCOL               (2)
-#define TRACE_ENDPOINT                  (0x83)
+#define SWO_ENCODING                    (2)
+#define SWO_ENDPOINT                    (0x83)
 #endif
 
-#define PICO_GPIO_PORT                  (0)
+#define PIN_NOT_CONNECTED               (0xFF)
 
+/* Common pins */
 #define HWVERSION_PIN_0                 (14)
 #define HWVERSION_PIN_1                 (15)
 
-#define TARGET_VOLTAGE_ADC_CHANNEL      (3)
-#define TARGET_VOLTAGE_ENABLE_PIN       (3)
-#define TARGET_VOLTAGE_FAULT_PIN        (1)
+#define HWVERSION_PICO                  (0x03 + 1) /* All bits are 1 + 1 */
 
-#define NRST_PIN                        (18)
+#define HWTYPE_PIN_0                    (16)
 
-#define LED_ACT_PIN                     (13)
-#define LED_ERR_PIN                     (10)
-#define LED_SER_PIN                     (12)
+/* MioLink pins */
+#define MIOLINK_TARGET_VOLTAGE_ADC_CHANNEL      (3)
+#define MIOLINK_TARGET_VOLTAGE_ENABLE_PIN       (3)
+#define MIOLINK_TARGET_VOLTAGE_FAULT_PIN        (1)
 
-#define TARGET_TCK_PIN                  (24)
-#define TARGET_TDO_PIN                  (17)
-#define TARGET_TDI_PIN                  (28)
-#define TARGET_TMS_PIN                  (26)
-#define TARGET_TMS_DIR_PIN              (27)
+#define MIOLINK_LED_ACT_PIN                     (13)
+#define MIOLINK_LED_ERR_PIN                     (10)
+#define MIOLINK_LED_SER_PIN                     (12)
 
-#define UART_TX_PIN                     (8)
-#define UART_RX_PIN                     (21)
+#define MIOLINK_TARGET_TCK_PIN          (24)
+#define MIOLINK_TARGET_TDO_PIN          (17)
+#define MIOLINK_TARGET_TDI_PIN          (28)
+#define MIOLINK_TARGET_TMS_PIN          (26)
+#define MIOLINK_TARGET_TMS_DIR_PIN      (27)
 
-#define gpio_clear(port, pin)           do { sio_hw->gpio_clr = (1ul << pin); } while(0)
-#define gpio_set(port, pin)             do { sio_hw->gpio_set = (1ul << pin); } while(0)
-#define gpio_get(port, pin)             (!!(gpio_get_all() & (1ul << pin)))
-#define gpio_set_val(port, pin, state)  do { if (state) gpio_set(port, pin); else gpio_clear(port, pin); } while(0)
+#define MIOLINK_TARGET_UART_TX_PIN      (8)
+#define MIOLINK_TARGET_UART_RX_PIN      (21)
+
+#define MIOLINK_TARGET_NRST_PIN         (18)
+
+/* MioLink_pico pins */
+#define MIOLINK_PICO_TARGET_VOLTAGE_ADC_CHANNEL      (1)
+#define MIOLINK_PICO_TARGET_VOLTAGE_ENABLE_PIN       (3)
+#define MIOLINK_PICO_TARGET_VOLTAGE_FAULT_PIN        (1)
+
+#define MIOLINK_PICO_LED_ACT_PIN                     (13)
+#define MIOLINK_PICO_LED_ERR_PIN                     (10)
+#define MIOLINK_PICO_LED_SER_PIN                     (12)
+
+#define MIOLINK_PICO_TARGET_TCK_PIN          (20)
+#define MIOLINK_PICO_TARGET_TDO_PIN          (17)
+#define MIOLINK_PICO_TARGET_TDI_PIN          (28)
+#define MIOLINK_PICO_TARGET_TMS_PIN          (26)
+#define MIOLINK_PICO_TARGET_TMS_DIR_PIN      (19)
+
+#define MIOLINK_PICO_TARGET_UART_TX_PIN      (8)
+#define MIOLINK_PICO_TARGET_UART_RX_PIN      (21)
+
+#define MIOLINK_PICO_TARGET_NRST_PIN         (18)
+
+/* Raspberry Pi Pico and Pico W pins */
+#define PICO_LED_ACT_PIN             (25)
+
+#define PICO_TARGET_TCK_PIN          (10)
+#define PICO_TARGET_TDO_PIN          (13)
+#define PICO_TARGET_TDI_PIN          (12)
+#define PICO_TARGET_TMS_PIN          (11)
+
+#define PICO_TARGET_UART_TX_PIN      (8)
+#define PICO_TARGET_UART_RX_PIN      (9)
+
+#define PICO_TARGET_NRST_PIN         (7)
+
+#define PICO_DETECT_ADC_PIN          (29)
+#define PICO_DETECT_ADC_CHANNEL      (3)
+#define PICO_DETECT_ADC_THRESHOLD    (0x100)
 
 #define SET_RUN_STATE(state)            running_status = (state)
-#define SET_IDLE_STATE(state)           gpio_set_val(PICO_GPIO_PORT, LED_ACT_PIN, state)
-#define SET_ERROR_STATE(state)          gpio_set_val(PICO_GPIO_PORT, LED_ERR_PIN, state)
+#define SET_IDLE_STATE(state)           platform_set_idle_state(state)
+#define SET_ERROR_STATE(state)          platform_set_error_state(state)
 
 #define USB_SERIAL_UART_MAIN            (uart1)
 #define USB_SERIAL_UART_TDI_TDO         (uart0)
@@ -106,10 +154,57 @@ extern bool debug_bmp;
 
 #define USB_SERIAL_TRACESWO_DMA_IRQ     (DMA_IRQ_0)
 
-#define PLATFORM_PRIORITY_LOW           (configMAX_PRIORITIES - 4)
-#define PLATFORM_PRIORITY_NORMAL        (configMAX_PRIORITIES - 3)
-#define PLATFORM_PRIORITY_HIGH          (configMAX_PRIORITIES - 2)
+#define PLATFORM_PRIORITY_LOW           (tskIDLE_PRIORITY + 1)
+#define PLATFORM_PRIORITY_NORMAL        (tskIDLE_PRIORITY + 2)
+#define PLATFORM_PRIORITY_HIGH          (tskIDLE_PRIORITY + 3)
 
 bool platform_target_is_power_ok(void);
+
+typedef enum
+{
+    PLATFORM_DEVICE_TYPE_NOT_SET = 0,
+    PLATFORM_DEVICE_TYPE_MIOLINK,
+    PLATFORM_DEVICE_TYPE_MIOLINK_PICO,
+    PLATFORM_DEVICE_TYPE_PICO,
+    PLATFORM_DEVICE_TYPE_PICO_W,
+} platform_device_type_t;
+
+typedef struct
+{
+    uint8_t tck;
+    uint8_t tms;
+    uint8_t tms_dir;
+    uint8_t tdi;
+    uint8_t tdo;
+    uint8_t uart_tx;
+    uint8_t uart_rx;
+    uint8_t reset;
+    bool reset_inverted;
+} platform_target_pins_t;
+
+typedef struct
+{
+    uint8_t act;
+    uint8_t ser;
+    uint8_t err;
+} platform_led_pins_t;
+
+typedef struct
+{
+    uint8_t enable_pin;
+    uint8_t fault_pin;
+    uint8_t adc_channel;
+} platform_vtref_info_t;
+
+void platform_update_sys_freq(void);
+platform_device_type_t platform_hwtype(void);
+void platform_update_hwtype(void);
+const platform_target_pins_t *platform_get_target_pins(void);
+const platform_led_pins_t *platform_get_led_pins(void);
+const platform_vtref_info_t *platform_get_adc_info(void);
+void platform_set_idle_state(const bool state);
+void platform_toggle_idle_state(void);
+void platform_set_error_state(const bool state);
+void platform_set_serial_state(const bool state);
 
 #endif /* PLATFORMS_MIOLINK_PLATFORM_H */

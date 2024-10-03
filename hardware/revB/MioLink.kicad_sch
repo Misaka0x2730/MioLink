@@ -10464,17 +10464,6 @@
 		)
 		(uuid "067f0df3-5d0c-4fc7-9fb9-7009baf648c7")
 	)
-	(text "GPIO3 (TARGET_VREF_PWR_EN) and\nGPIO16 define device type\n(GPIO3, GPIO16):\n(0, float) - native MioLink;\n(0, 0) - MioLink_Pico\n(adapter board for Pico and Pico W);\n(float, float) - Pico or Pico W."
-		(exclude_from_sim no)
-		(at 133.35 100.33 0)
-		(effects
-			(font
-				(size 2.54 2.54)
-			)
-			(justify left)
-		)
-		(uuid "2e5ff439-7f7d-4ef4-a5b3-9db484b6b4f3")
-	)
 	(text "Target buffers"
 		(exclude_from_sim no)
 		(at 397.51 245.11 0)
@@ -10541,9 +10530,9 @@
 		)
 		(uuid "a59f1170-a98f-40c8-9229-41eaa2f1d34e")
 	)
-	(text "GPIO14 and GPIO15 determine\nhardware revision:\n(0, 0 - revA)\n(0, 1 - revB)"
+	(text "GPIO14 and GPIO15 define the hardware\nversion and are used to identify\nthe Pico and Pico W:\n(0, 0) - revA;\n(0, 1) - revB;\n(float, float) - Pico/Pico W.\nGPIO16 determines whether\nthe device is a MioLink or\nMioLink_Pico:\nfloat - native MioLink;\n0 - MioLink_Pico."
 		(exclude_from_sim no)
-		(at 133.35 83.312 0)
+		(at 132.334 112.522 0)
 		(effects
 			(font
 				(size 2.54 2.54)

@@ -27,6 +27,7 @@
 
 #include "general.h"
 #include "platform.h"
+#include "usb.h"
 #include "usb_serial.h"
 #include "tusb.h"
 #include "gdb_if.h"
@@ -39,11 +40,6 @@ static char gdb_to_usb_buf[1024U];
 bool gdb_serial_get_dtr(void)
 {
     return tud_cdc_n_get_line_state(USB_SERIAL_GDB) & 0x01;
-}
-
-uint16_t usb_get_config(void)
-{
-    return tud_mounted() ? 1 : 0;
 }
 
 void gdb_if_putchar(const char c, const int flush)

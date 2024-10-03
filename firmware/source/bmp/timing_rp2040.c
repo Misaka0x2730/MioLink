@@ -23,6 +23,7 @@
 #include "platform.h"
 #include "morse.h"
 #include "timing_rp2040.h"
+#include "usb.h"
 
 #include "pico/time.h"
 
@@ -44,17 +45,29 @@ static uint8_t monitor_error_count = 0;
 
 uint32_t target_interface_frequency = PLATFORM_DEFAULT_FREQUENCY;
 
-void vApplicationTickHook( void )
+static void usb_config_morse_msg_update(void)
+{
+    if (usb_config_is_updated())
+    {
+        if (usb_get_config() == 0)
+            morse("NO USB HOST.", true);
+        else
+            morse(NULL, false);
+
+        usb_config_clear_updated();
+    }
+}
+
+static void timing_application_timer_cb(TimerHandle_t xTimer)
 {
     time_ms += SYSTICKMS;
     if (morse_tick >= MORSECNT)
     {
         if (running_status)
         {
-            gpio_xor_mask(1ul << LED_ACT_PIN);
+            platform_toggle_idle_state();
         }
-        //TODO: Update this
-        //usb_config_morse_msg_update();
+        usb_config_morse_msg_update();
         SET_ERROR_STATE(morse_update());
         morse_tick = 0;
     }
@@ -95,10 +108,14 @@ void vApplicationTickHook( void )
     {
         monitor_ticks = 0;
     }
+
 }
 
 void platform_timing_init(void)
 {
+    TimerHandle_t application_timer = xTimerCreate("app_timer", pdMS_TO_TICKS(SYSTICKMS), true, NULL, timing_application_timer_cb);
+    assert(application_timer != NULL);
+    xTimerStart(application_timer, 0);
 }
 
 void platform_delay(uint32_t ms)
@@ -111,10 +128,42 @@ uint32_t platform_time_ms(void)
 	return time_ms;
 }
 
-void platform_max_frequency_set(uint32_t freq)
+static uint32_t platform_get_max_interface_freq(void)
 {
     const uint32_t sys_freq = clock_get_hz(clk_sys);
-    const uint32_t interface_freq = sys_freq / 10;
+    uint32_t interface_freq = 0;
+
+    const platform_device_type_t device_type = platform_hwtype();
+    assert(device_type != PLATFORM_DEVICE_TYPE_NOT_SET);
+
+    switch (device_type)
+    {
+        case PLATFORM_DEVICE_TYPE_MIOLINK:
+            if (platform_hwversion() == PLATFORM_MIOLINK_REV_A)
+            {
+                interface_freq = sys_freq / 10;
+            }
+            else
+            {
+                interface_freq = sys_freq / 8;
+            }
+            break;
+
+        case PLATFORM_DEVICE_TYPE_MIOLINK_PICO:
+            interface_freq = sys_freq / 8;
+            break;
+
+        default:
+            interface_freq = sys_freq / 10;
+            break;
+    }
+
+    return interface_freq;
+}
+
+void platform_max_frequency_set(uint32_t freq)
+{
+    const uint32_t interface_freq = platform_get_max_interface_freq();
 
     const uint32_t min_freq = (interface_freq >> 16); /* Max divider = 65536 */
     const uint32_t max_freq = interface_freq;
@@ -159,8 +208,7 @@ void platform_max_frequency_set(uint32_t freq)
 
 uint32_t platform_max_frequency_get(void)
 {
-    const uint32_t sys_freq = clock_get_hz(clk_sys);
-    const uint32_t interface_freq = sys_freq / 10;
+    const uint32_t interface_freq = platform_get_max_interface_freq();
 
     uint32_t clkdiv_int = (TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM_SEQ].clkdiv & PIO_SM0_CLKDIV_INT_BITS) >> PIO_SM0_CLKDIV_INT_LSB;
     uint32_t clkdiv_frac = (TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM_SEQ].clkdiv & PIO_SM0_CLKDIV_FRAC_BITS) >> PIO_SM0_CLKDIV_FRAC_LSB;

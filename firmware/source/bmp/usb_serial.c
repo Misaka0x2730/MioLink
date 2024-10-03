@@ -42,7 +42,7 @@
 #endif
 
 #ifdef PLATFORM_HAS_TRACESWO
-#include "traceswo.h"
+#include "swo.h"
 #endif
 
 #ifdef ENABLE_RTT
@@ -74,7 +74,7 @@
 #define USB_SERIAL_UART_DMA_TX_CHECK_FINISHED_PERIOD  (2)
 
 #define USB_SERIAL_TASK_CORE_AFFINITY                 (0x02) /* Core 0 only */
-#define USB_SERIAL_TASK_STACK_SIZE                    (256)
+#define USB_SERIAL_TASK_STACK_SIZE                    (512)
 
 static uint8_t uart_rx_buf[USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS][USB_SERIAL_UART_DMA_RX_BUFFER_SIZE] = { 0 };
 static uint32_t uart_rx_int_buf_pos = 0;
@@ -111,15 +111,11 @@ void usb_serial_update_led(void)
 {
     if (tud_cdc_n_connected(USB_SERIAL_TARGET) == false)
     {
-        gpio_clear(PICO_GPIO_PORT, LED_SER_PIN);
-    }
-    else if ((uart_rx_ongoing) || (uart_tx_ongoing))
-    {
-        gpio_set(PICO_GPIO_PORT, LED_SER_PIN);
+        platform_set_serial_state(false);
     }
     else
     {
-        gpio_clear(PICO_GPIO_PORT, LED_SER_PIN);
+        platform_set_serial_state(uart_rx_ongoing || uart_tx_ongoing);
     }
 }
 
@@ -311,8 +307,10 @@ static bool uart_rx_dma_finish_receiving(void)
     const uint32_t data_in_buffer = sizeof(uart_rx_buf[0]) - remaining;
 
     dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
+    rp_dma_set_chain_to(uart_dma_rx_channel, uart_dma_rx_channel);
     dma_channel_abort(uart_dma_rx_channel);
     dma_channel_acknowledge_irq0(uart_dma_rx_channel);
+    rp_dma_set_chain_to(uart_dma_rx_channel, uart_dma_rx_ctrl_channel);
 
     dma_channel_set_read_addr(uart_dma_rx_ctrl_channel, (void*)(uart_dma_rx_ctrl_block_info + uart_rx_dma_current_buffer), true);
     rp_uart_set_rx_and_timeout_irq_enabled(current_uart, true, true);
@@ -530,10 +528,12 @@ static void uart_update_config(cdc_line_coding_t *line_coding)
         current_uart = USB_SERIAL_UART_MAIN;
     }
 
+    const platform_target_pins_t *target_pins = platform_get_target_pins();
+
     if (current_uart == USB_SERIAL_UART_MAIN)
     {
-        gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
-    	gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
+        gpio_set_function(target_pins->uart_tx, GPIO_FUNC_UART);
+    	gpio_set_function(target_pins->uart_rx, GPIO_FUNC_UART);
 
         irq_handler_t current_handler = irq_get_exclusive_handler(USB_SERIAL_UART_MAIN_IRQ);
 
@@ -546,8 +546,8 @@ static void uart_update_config(cdc_line_coding_t *line_coding)
     }
     else
     {
-        gpio_set_function(TARGET_TDO_PIN, GPIO_FUNC_UART);
-    	gpio_set_function(TARGET_TDI_PIN, GPIO_FUNC_UART);
+        gpio_set_function(target_pins->tdo, GPIO_FUNC_UART);
+    	gpio_set_function(target_pins->tdi, GPIO_FUNC_UART);
 
         irq_handler_t current_handler = irq_get_exclusive_handler(USB_SERIAL_UART_TDI_TDO_IRQ);
         if (current_handler != NULL)

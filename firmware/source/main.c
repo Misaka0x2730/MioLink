@@ -32,7 +32,7 @@
 #endif
 
 #ifdef PLATFORM_HAS_TRACESWO
-#include "traceswo.h"
+#include "swo.h"
 #endif
 
 #if ENABLE_DEBUG
@@ -89,6 +89,12 @@ static void bmp_poll_loop(void)
 
 _Noreturn static void gdb_thread(void* params)
 {
+    platform_init();
+    platform_timing_init();
+    blackmagic_usb_init();
+    usb_serial_init();
+    traceswo_task_init();
+
     while (1)
     {
         TRY (EXCEPTION_ALL) {
@@ -113,17 +119,14 @@ void main(void)
 #if ENABLE_SYSVIEW_TRACE
     traceSTART();
 #endif
-    platform_init();
-    platform_timing_init();
-    blackmagic_usb_init();
-    usb_serial_init();
-    traceswo_task_init();
+
+    platform_update_sys_freq();
 
     multicore_reset_core1();
 
     const BaseType_t result = xTaskCreate(gdb_thread,
                                           "target_gdb",
-				                          GDB_TASK_STACK_SIZE,
+                                          GDB_TASK_STACK_SIZE,
                                           NULL,
                                           PLATFORM_PRIORITY_LOW,
                                           &gdb_task);

@@ -47,4 +47,9 @@ static inline void rp_dma_set_channel_enabled(const uint32_t dma_channel, const 
     }
 }
 
+static inline void rp_dma_set_chain_to(const uint32_t dma_channel, const uint32_t chain_to)
+{
+    hw_write_masked(&(dma_hw->ch[dma_channel].al1_ctrl), chain_to << DMA_CH0_CTRL_TRIG_CHAIN_TO_LSB, DMA_CH0_CTRL_TRIG_CHAIN_TO_BITS);
+}
+
 #endif //MIOLINK_RP_DMA_H
