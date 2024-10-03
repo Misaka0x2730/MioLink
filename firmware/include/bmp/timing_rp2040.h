@@ -26,7 +26,7 @@
 
 #include "platform_support.h"
 
-#define PLATFORM_DEFAULT_FREQUENCY    (4000000UL)
+#define PLATFORM_DEFAULT_FREQUENCY (4000000UL)
 
 extern bool running_status;
 

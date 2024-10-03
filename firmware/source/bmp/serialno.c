@@ -30,5 +30,5 @@ char serial_no[DFU_SERIAL_LENGTH];
 
 void read_serial_number(void)
 {
-    pico_get_unique_board_id_string(serial_no, sizeof(serial_no));
+	pico_get_unique_board_id_string(serial_no, sizeof(serial_no));
 }

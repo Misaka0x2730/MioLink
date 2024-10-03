@@ -52,148 +52,144 @@ extern bool debug_bmp;
 #define PLATFORM_IDENT_PICO_W       "Pico W"
 #endif
 
-#define BOARD_IDENT_LENGTH   (256U)
+#define BOARD_IDENT_LENGTH (256U)
 
 #define PLATFORM_MIOLINK
-#define PLATFORM_MIOLINK_REV_A   (1)
-#define PLATFORM_MIOLINK_REV_B   (2)
+#define PLATFORM_MIOLINK_REV_A (1)
+#define PLATFORM_MIOLINK_REV_B (2)
 
 #define PLATFORM_HAS_TRACESWO
 #define PLATFORM_HAS_CUSTOM_COMMANDS
 #define PLATFORM_HAS_POWER_SWITCH
 
-#define GDB_ENDPOINT_NOTIF              (0x84)
-#define GDB_ENDPOINT                    (0x01)
+#define GDB_ENDPOINT_NOTIF (0x84)
+#define GDB_ENDPOINT       (0x01)
 
-#define SERIAL_ENDPOINT_NOTIF           (0x85)
-#define SERIAL_ENDPOINT                 (0x02)
+#define SERIAL_ENDPOINT_NOTIF (0x85)
+#define SERIAL_ENDPOINT       (0x02)
 
 #ifdef PLATFORM_HAS_TRACESWO
-#define SWO_ENCODING                    (2)
-#define SWO_ENDPOINT                    (0x83)
+#define SWO_ENCODING (2)
+#define SWO_ENDPOINT (0x83)
 #endif
 
-#define PIN_NOT_CONNECTED               (0xFF)
+#define PIN_NOT_CONNECTED (0xFF)
 
 /* Common pins */
-#define HWVERSION_PIN_0                 (14)
-#define HWVERSION_PIN_1                 (15)
+#define HWVERSION_PIN_0 (14)
+#define HWVERSION_PIN_1 (15)
 
-#define HWVERSION_PICO                  (0x03 + 1) /* All bits are 1 + 1 */
+#define HWVERSION_PICO (0x03 + 1) /* All bits are 1 + 1 */
 
-#define HWTYPE_PIN_0                    (16)
+#define HWTYPE_PIN_0 (16)
 
 /* MioLink pins */
-#define MIOLINK_TARGET_VOLTAGE_ADC_CHANNEL      (3)
-#define MIOLINK_TARGET_VOLTAGE_ENABLE_PIN       (3)
-#define MIOLINK_TARGET_VOLTAGE_FAULT_PIN        (1)
+#define MIOLINK_TARGET_VOLTAGE_ADC_CHANNEL (3)
+#define MIOLINK_TARGET_VOLTAGE_ENABLE_PIN  (3)
+#define MIOLINK_TARGET_VOLTAGE_FAULT_PIN   (1)
 
-#define MIOLINK_LED_ACT_PIN                     (13)
-#define MIOLINK_LED_ERR_PIN                     (10)
-#define MIOLINK_LED_SER_PIN                     (12)
+#define MIOLINK_LED_ACT_PIN (13)
+#define MIOLINK_LED_ERR_PIN (10)
+#define MIOLINK_LED_SER_PIN (12)
 
-#define MIOLINK_TARGET_TCK_PIN          (24)
-#define MIOLINK_TARGET_TDO_PIN          (17)
-#define MIOLINK_TARGET_TDI_PIN          (28)
-#define MIOLINK_TARGET_TMS_PIN          (26)
-#define MIOLINK_TARGET_TMS_DIR_PIN      (27)
+#define MIOLINK_TARGET_TCK_PIN     (24)
+#define MIOLINK_TARGET_TDO_PIN     (17)
+#define MIOLINK_TARGET_TDI_PIN     (28)
+#define MIOLINK_TARGET_TMS_PIN     (26)
+#define MIOLINK_TARGET_TMS_DIR_PIN (27)
 
-#define MIOLINK_TARGET_UART_TX_PIN      (8)
-#define MIOLINK_TARGET_UART_RX_PIN      (21)
+#define MIOLINK_TARGET_UART_TX_PIN (8)
+#define MIOLINK_TARGET_UART_RX_PIN (21)
 
-#define MIOLINK_TARGET_NRST_PIN         (18)
+#define MIOLINK_TARGET_NRST_PIN (18)
 
 /* MioLink_pico pins */
-#define MIOLINK_PICO_TARGET_VOLTAGE_ADC_CHANNEL      (1)
-#define MIOLINK_PICO_TARGET_VOLTAGE_ENABLE_PIN       (3)
-#define MIOLINK_PICO_TARGET_VOLTAGE_FAULT_PIN        (1)
+#define MIOLINK_PICO_TARGET_VOLTAGE_ADC_CHANNEL (1)
+#define MIOLINK_PICO_TARGET_VOLTAGE_ENABLE_PIN  (3)
+#define MIOLINK_PICO_TARGET_VOLTAGE_FAULT_PIN   (1)
 
-#define MIOLINK_PICO_LED_ACT_PIN                     (13)
-#define MIOLINK_PICO_LED_ERR_PIN                     (10)
-#define MIOLINK_PICO_LED_SER_PIN                     (12)
+#define MIOLINK_PICO_LED_ACT_PIN (13)
+#define MIOLINK_PICO_LED_ERR_PIN (10)
+#define MIOLINK_PICO_LED_SER_PIN (12)
 
-#define MIOLINK_PICO_TARGET_TCK_PIN          (20)
-#define MIOLINK_PICO_TARGET_TDO_PIN          (17)
-#define MIOLINK_PICO_TARGET_TDI_PIN          (28)
-#define MIOLINK_PICO_TARGET_TMS_PIN          (26)
-#define MIOLINK_PICO_TARGET_TMS_DIR_PIN      (19)
+#define MIOLINK_PICO_TARGET_TCK_PIN     (20)
+#define MIOLINK_PICO_TARGET_TDO_PIN     (17)
+#define MIOLINK_PICO_TARGET_TDI_PIN     (28)
+#define MIOLINK_PICO_TARGET_TMS_PIN     (26)
+#define MIOLINK_PICO_TARGET_TMS_DIR_PIN (19)
 
-#define MIOLINK_PICO_TARGET_UART_TX_PIN      (8)
-#define MIOLINK_PICO_TARGET_UART_RX_PIN      (21)
+#define MIOLINK_PICO_TARGET_UART_TX_PIN (8)
+#define MIOLINK_PICO_TARGET_UART_RX_PIN (21)
 
-#define MIOLINK_PICO_TARGET_NRST_PIN         (18)
+#define MIOLINK_PICO_TARGET_NRST_PIN (18)
 
 /* Raspberry Pi Pico and Pico W pins */
-#define PICO_LED_ACT_PIN             (25)
+#define PICO_LED_ACT_PIN (25)
 
-#define PICO_TARGET_TCK_PIN          (10)
-#define PICO_TARGET_TDO_PIN          (13)
-#define PICO_TARGET_TDI_PIN          (12)
-#define PICO_TARGET_TMS_PIN          (11)
+#define PICO_TARGET_TCK_PIN (10)
+#define PICO_TARGET_TDO_PIN (13)
+#define PICO_TARGET_TDI_PIN (12)
+#define PICO_TARGET_TMS_PIN (11)
 
-#define PICO_TARGET_UART_TX_PIN      (8)
-#define PICO_TARGET_UART_RX_PIN      (9)
+#define PICO_TARGET_UART_TX_PIN (8)
+#define PICO_TARGET_UART_RX_PIN (9)
 
-#define PICO_TARGET_NRST_PIN         (7)
+#define PICO_TARGET_NRST_PIN (7)
 
-#define PICO_DETECT_ADC_PIN          (29)
-#define PICO_DETECT_ADC_CHANNEL      (3)
-#define PICO_DETECT_ADC_THRESHOLD    (0x100)
+#define PICO_DETECT_ADC_PIN       (29)
+#define PICO_DETECT_ADC_CHANNEL   (3)
+#define PICO_DETECT_ADC_THRESHOLD (0x100)
 
-#define SET_RUN_STATE(state)            running_status = (state)
-#define SET_IDLE_STATE(state)           platform_set_idle_state(state)
-#define SET_ERROR_STATE(state)          platform_set_error_state(state)
+#define SET_RUN_STATE(state)   running_status = (state)
+#define SET_IDLE_STATE(state)  platform_set_idle_state(state)
+#define SET_ERROR_STATE(state) platform_set_error_state(state)
 
-#define USB_SERIAL_UART_MAIN            (uart1)
-#define USB_SERIAL_UART_TDI_TDO         (uart0)
-#define TRACESWO_UART                   (uart0)
+#define USB_SERIAL_UART_MAIN    (uart1)
+#define USB_SERIAL_UART_TDI_TDO (uart0)
+#define TRACESWO_UART           (uart0)
 
-#define USB_SERIAL_UART_MAIN_IRQ        (UART_IRQ_NUM(USB_SERIAL_UART_MAIN))
-#define USB_SERIAL_UART_TDI_TDO_IRQ     (UART_IRQ_NUM(USB_SERIAL_UART_TDI_TDO))
-#define TRACESWO_UART_IRQ               (UART_IRQ_NUM(TRACESWO_UART))
+#define USB_SERIAL_UART_MAIN_IRQ    (UART_IRQ_NUM(USB_SERIAL_UART_MAIN))
+#define USB_SERIAL_UART_TDI_TDO_IRQ (UART_IRQ_NUM(USB_SERIAL_UART_TDI_TDO))
+#define TRACESWO_UART_IRQ           (UART_IRQ_NUM(TRACESWO_UART))
 
-#define USB_SERIAL_TRACESWO_DMA_IRQ     (DMA_IRQ_0)
+#define USB_SERIAL_TRACESWO_DMA_IRQ (DMA_IRQ_0)
 
-#define PLATFORM_PRIORITY_LOW           (tskIDLE_PRIORITY + 1)
-#define PLATFORM_PRIORITY_NORMAL        (tskIDLE_PRIORITY + 2)
-#define PLATFORM_PRIORITY_HIGH          (tskIDLE_PRIORITY + 3)
+#define PLATFORM_PRIORITY_LOW    (tskIDLE_PRIORITY + 1)
+#define PLATFORM_PRIORITY_NORMAL (tskIDLE_PRIORITY + 2)
+#define PLATFORM_PRIORITY_HIGH   (tskIDLE_PRIORITY + 3)
 
 bool platform_target_is_power_ok(void);
 
-typedef enum
-{
-    PLATFORM_DEVICE_TYPE_NOT_SET = 0,
-    PLATFORM_DEVICE_TYPE_MIOLINK,
-    PLATFORM_DEVICE_TYPE_MIOLINK_PICO,
-    PLATFORM_DEVICE_TYPE_PICO,
-    PLATFORM_DEVICE_TYPE_PICO_W,
+typedef enum {
+	PLATFORM_DEVICE_TYPE_NOT_SET = 0,
+	PLATFORM_DEVICE_TYPE_MIOLINK,
+	PLATFORM_DEVICE_TYPE_MIOLINK_PICO,
+	PLATFORM_DEVICE_TYPE_PICO,
+	PLATFORM_DEVICE_TYPE_PICO_W,
 } platform_device_type_t;
 
-typedef struct
-{
-    uint8_t tck;
-    uint8_t tms;
-    uint8_t tms_dir;
-    uint8_t tdi;
-    uint8_t tdo;
-    uint8_t uart_tx;
-    uint8_t uart_rx;
-    uint8_t reset;
-    bool reset_inverted;
+typedef struct {
+	uint8_t tck;
+	uint8_t tms;
+	uint8_t tms_dir;
+	uint8_t tdi;
+	uint8_t tdo;
+	uint8_t uart_tx;
+	uint8_t uart_rx;
+	uint8_t reset;
+	bool reset_inverted;
 } platform_target_pins_t;
 
-typedef struct
-{
-    uint8_t act;
-    uint8_t ser;
-    uint8_t err;
+typedef struct {
+	uint8_t act;
+	uint8_t ser;
+	uint8_t err;
 } platform_led_pins_t;
 
-typedef struct
-{
-    uint8_t enable_pin;
-    uint8_t fault_pin;
-    uint8_t adc_channel;
+typedef struct {
+	uint8_t enable_pin;
+	uint8_t fault_pin;
+	uint8_t adc_channel;
 } platform_vtref_info_t;
 
 void platform_update_sys_freq(void);

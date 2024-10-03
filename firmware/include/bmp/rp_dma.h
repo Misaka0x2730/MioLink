@@ -23,33 +23,31 @@
 #include "general.h"
 #include "hardware/dma.h"
 
-static inline void* rp_dma_get_al2_write_addr_trig(const uint32_t dma_channel)
+static inline void *rp_dma_get_al2_write_addr_trig(const uint32_t dma_channel)
 {
-    return (void*)(&(dma_hw->ch[dma_channel].al2_write_addr_trig));
+	return (void *)(&(dma_hw->ch[dma_channel].al2_write_addr_trig));
 }
 
 static inline uint32_t rp_dma_get_trans_count(const uint32_t dma_channel)
 {
-    return dma_hw->ch[dma_channel].transfer_count;
+	return dma_hw->ch[dma_channel].transfer_count;
 }
 
 static inline void rp_dma_set_channel_enabled(const uint32_t dma_channel, const bool enabled, const bool trigger)
 {
-    if (trigger)
-    {
-        hw_write_masked(&(dma_hw->ch[dma_channel].ctrl_trig), (bool_to_bit(enabled) << DMA_CH0_CTRL_TRIG_EN_LSB),
-                        DMA_CH0_CTRL_TRIG_EN_BITS);
-    }
-    else
-    {
-        hw_write_masked(&(dma_hw->ch[dma_channel].al1_ctrl), (bool_to_bit(enabled) << DMA_CH0_CTRL_TRIG_EN_LSB),
-                        DMA_CH0_CTRL_TRIG_EN_BITS);
-    }
+	if (trigger) {
+		hw_write_masked(&(dma_hw->ch[dma_channel].ctrl_trig), (bool_to_bit(enabled) << DMA_CH0_CTRL_TRIG_EN_LSB),
+			DMA_CH0_CTRL_TRIG_EN_BITS);
+	} else {
+		hw_write_masked(&(dma_hw->ch[dma_channel].al1_ctrl), (bool_to_bit(enabled) << DMA_CH0_CTRL_TRIG_EN_LSB),
+			DMA_CH0_CTRL_TRIG_EN_BITS);
+	}
 }
 
 static inline void rp_dma_set_chain_to(const uint32_t dma_channel, const uint32_t chain_to)
 {
-    hw_write_masked(&(dma_hw->ch[dma_channel].al1_ctrl), chain_to << DMA_CH0_CTRL_TRIG_CHAIN_TO_LSB, DMA_CH0_CTRL_TRIG_CHAIN_TO_BITS);
+	hw_write_masked(&(dma_hw->ch[dma_channel].al1_ctrl), chain_to << DMA_CH0_CTRL_TRIG_CHAIN_TO_LSB,
+		DMA_CH0_CTRL_TRIG_CHAIN_TO_BITS);
 }
 
 #endif //MIOLINK_RP_DMA_H

@@ -49,21 +49,20 @@
 
 static char BMD_ALIGN_DEF(8) gdb_buffer[GDB_PACKET_BUFFER_SIZE + 1U];
 
-#define GDB_TASK_CORE_AFFINITY     (0x01) /* Core 0 only */
-#define GDB_TASK_STACK_SIZE        (1024)
+#define GDB_TASK_CORE_AFFINITY (0x01) /* Core 0 only */
+#define GDB_TASK_STACK_SIZE    (1024)
 
 TaskHandle_t gdb_task;
 
 char *gdb_packet_buffer()
 {
-    return gdb_buffer;
+	return gdb_buffer;
 }
 
 static void bmp_poll_loop(void)
 {
 	SET_IDLE_STATE(false);
-	while (gdb_target_running && cur_target)
-    {
+	while (gdb_target_running && cur_target) {
 		gdb_poll_target();
 
 		// Check again, as `gdb_poll_target()` may
@@ -87,56 +86,51 @@ static void bmp_poll_loop(void)
 	gdb_main(gdb_buffer, GDB_PACKET_BUFFER_SIZE, size);
 }
 
-_Noreturn static void gdb_thread(void* params)
+_Noreturn static void gdb_thread(void *params)
 {
-    platform_init();
-    platform_timing_init();
-    blackmagic_usb_init();
-    usb_serial_init();
-    traceswo_task_init();
+	platform_init();
+	platform_timing_init();
+	blackmagic_usb_init();
+	usb_serial_init();
+	traceswo_task_init();
 
-    while (1)
-    {
-        TRY (EXCEPTION_ALL) {
-            bmp_poll_loop();
-        }
-        CATCH () {
-        default:
-            gdb_putpacketz("EFF");
-            target_list_free();
-            gdb_outf("Uncaught exception: %s\n", exception_frame.msg);
-            morse("TARGET LOST.", true);
-        }
-    }
+	while (1) {
+		TRY (EXCEPTION_ALL) {
+			bmp_poll_loop();
+		}
+		CATCH () {
+		default:
+			gdb_putpacketz("EFF");
+			target_list_free();
+			gdb_outf("Uncaught exception: %s\n", exception_frame.msg);
+			morse("TARGET LOST.", true);
+		}
+	}
 }
 
 void main(void)
 {
 #if ENABLE_DEBUG
-    SEGGER_RTT_Init();
+	SEGGER_RTT_Init();
 #endif
 
 #if ENABLE_SYSVIEW_TRACE
-    traceSTART();
+	traceSTART();
 #endif
 
-    platform_update_sys_freq();
+	platform_update_sys_freq();
 
-    multicore_reset_core1();
+	multicore_reset_core1();
 
-    const BaseType_t result = xTaskCreate(gdb_thread,
-                                          "target_gdb",
-                                          GDB_TASK_STACK_SIZE,
-                                          NULL,
-                                          PLATFORM_PRIORITY_LOW,
-                                          &gdb_task);
+	const BaseType_t result =
+		xTaskCreate(gdb_thread, "target_gdb", GDB_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_LOW, &gdb_task);
 
-    assert(result == pdPASS);
+	assert(result == pdPASS);
 
 #if configUSE_CORE_AFFINITY
-    vTaskCoreAffinitySet(gdb_task, GDB_TASK_CORE_AFFINITY);
+	vTaskCoreAffinitySet(gdb_task, GDB_TASK_CORE_AFFINITY);
 #endif
-    vTaskStartScheduler();
+	vTaskStartScheduler();
 
 	assert(false);
 }

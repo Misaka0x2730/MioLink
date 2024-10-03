@@ -59,17 +59,15 @@ void rtt_serial_receive_callback(void)
 {
 	char usb_buf[64];
 
-    const uint32_t len = tud_cdc_n_read(USB_SERIAL_TARGET, usb_buf, sizeof(usb_buf));
+	const uint32_t len = tud_cdc_n_read(USB_SERIAL_TARGET, usb_buf, sizeof(usb_buf));
 
 	/* skip flag: drop packet if not enough free buffer space */
-	if (rtt_flag_skip && len > recv_bytes_free())
-    {
+	if (rtt_flag_skip && len > recv_bytes_free()) {
 		return;
 	}
 
 	/* copy data to recv_buf */
-	for (int i = 0; i < len; i++)
-    {
+	for (int i = 0; i < len; i++) {
 		uint32_t next_recv_head = (recv_head + 1U) % sizeof(recv_buf);
 		if (next_recv_head == recv_tail)
 			break; /* overflow */
@@ -82,7 +80,7 @@ void rtt_serial_receive_callback(void)
 int32_t rtt_getchar(const uint32_t channel)
 {
 	int retval;
-    (void)channel;
+	(void)channel;
 
 	if (recv_head == recv_tail)
 		return -1;
@@ -95,9 +93,9 @@ int32_t rtt_getchar(const uint32_t channel)
 /* rtt host to target: true if no characters available for reading */
 bool rtt_nodata(const uint32_t channel)
 {
-    /* only support reading from down channel 0 */
-    if (channel != 0U)
-        return true;
+	/* only support reading from down channel 0 */
+	if (channel != 0U)
+		return true;
 
 	return recv_head == recv_tail;
 }
@@ -105,15 +103,11 @@ bool rtt_nodata(const uint32_t channel)
 /* rtt target to host: write string */
 uint32_t rtt_write(const uint32_t channel, const char *buf, uint32_t len)
 {
-    /* only support writing to up channel 0 */
-    if (channel != 0U)
-        return len;
+	/* only support writing to up channel 0 */
+	if (channel != 0U)
+		return len;
 
-	if ((len != 0) &&
-        usb_get_config() &&
-        gdb_serial_get_dtr() &&
-        tud_cdc_n_connected(USB_SERIAL_TARGET))
-    {
+	if ((len != 0) && usb_get_config() && gdb_serial_get_dtr() && tud_cdc_n_connected(USB_SERIAL_TARGET)) {
 		for (uint32_t p = 0; p < len; p += 64) {
 			uint32_t plen = MIN(64, len - p);
 			uint32_t start_ms = platform_time_ms();
@@ -122,7 +116,7 @@ uint32_t rtt_write(const uint32_t channel, const char *buf, uint32_t len)
 					return 0; /* drop silently */
 			}
 		}
-        tud_cdc_n_write_flush(USB_SERIAL_TARGET);
+		tud_cdc_n_write_flush(USB_SERIAL_TARGET);
 	}
 	return len;
 }

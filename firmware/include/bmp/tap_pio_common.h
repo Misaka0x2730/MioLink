@@ -23,31 +23,32 @@
 #include "general.h"
 #include "hardware/pio.h"
 
-#define TARGET_SWD_PIO                  (pio0)
-#define TARGET_SWD_PIO_SM_SEQ           (0)
-#define TARGET_SWD_PIO_SM_ADIV5         (1)
+#define TARGET_SWD_PIO          (pio0)
+#define TARGET_SWD_PIO_SM_SEQ   (0)
+#define TARGET_SWD_PIO_SM_ADIV5 (1)
 
-#define TARGET_JTAG_PIO                 (pio0)
-#define TARGET_JTAG_PIO_SM_NEXT_CYCLE   (0)
-#define TARGET_JTAG_PIO_SM_TMS_SEQ      (1)
-#define TARGET_JTAG_PIO_SM_TDI_TDO_SEQ  (2)
-#define TARGET_JTAG_PIO_SM_TDI_SEQ      (3)
+#define TARGET_JTAG_PIO                (pio0)
+#define TARGET_JTAG_PIO_SM_NEXT_CYCLE  (0)
+#define TARGET_JTAG_PIO_SM_TMS_SEQ     (1)
+#define TARGET_JTAG_PIO_SM_TDI_TDO_SEQ (2)
+#define TARGET_JTAG_PIO_SM_TDI_SEQ     (3)
 
 static inline bool tap_pio_common_is_not_tx_stalled(PIO pio, uint32_t sm)
 {
-    pio->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + sm));
-    return ((pio->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + sm))) == 0);
+	pio->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + sm));
+	return ((pio->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + sm))) == 0);
 }
 
 static inline void tap_pio_common_wait_for_tx_stall(PIO pio, uint32_t sm)
 {
-    pio->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + sm));
-    while((pio->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + sm))) == 0);
+	pio->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + sm));
+	while ((pio->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + sm))) == 0)
+		;
 }
 
 static inline void tap_pio_common_disable_input_sync(PIO pio, uint32_t pin)
 {
-    pio->input_sync_bypass |= (1u << pin);
+	pio->input_sync_bypass |= (1u << pin);
 }
 
 #endif //MIOLINK_TAP_PIO_COMMON_H

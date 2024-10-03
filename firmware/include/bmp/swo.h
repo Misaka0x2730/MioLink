@@ -24,16 +24,15 @@
 
 #include <stdlib.h>
 
-
-#define TRACESWO_BUF_SIZE    (1024)
+#define TRACESWO_BUF_SIZE (1024)
 
 /* Default line rate, used as default for a request without baudrate */
 #define SWO_DEFAULT_BAUD 2250000U
 
 typedef enum swo_coding {
-    swo_none,
-    swo_manchester,
-    swo_nrz_uart,
+	swo_none,
+	swo_manchester,
+	swo_nrz_uart,
 } swo_coding_e;
 
 extern swo_coding_e swo_current_mode;

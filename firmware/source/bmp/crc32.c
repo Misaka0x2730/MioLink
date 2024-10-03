@@ -28,72 +28,65 @@ static int crc_dma_channel = -1;
 
 static bool rp2040_crc32(target_s *const target, uint32_t *const result, const uint32_t base, const size_t len)
 {
-    uint8_t bytes[2048U]; /* ADIv5 MEM-AP AutoInc range */
+	uint8_t bytes[2048U]; /* ADIv5 MEM-AP AutoInc range */
 
-    uint32_t last_time = platform_time_ms();
-    const size_t adjusted_len = len & ~3U;
-    uint32_t crc = 0xFFFFFFFF;
+	uint32_t last_time = platform_time_ms();
+	const size_t adjusted_len = len & ~3U;
+	uint32_t crc = 0xFFFFFFFF;
 
-    if (crc_dma_channel == -1) {
-        crc_dma_channel = dma_claim_unused_channel(true);
-    }
+	if (crc_dma_channel == -1) {
+		crc_dma_channel = dma_claim_unused_channel(true);
+	}
 
-    dma_channel_config c = dma_channel_get_default_config(crc_dma_channel);
-    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-    channel_config_set_read_increment(&c, true);
-    channel_config_set_write_increment(&c, false);
+	dma_channel_config c = dma_channel_get_default_config(crc_dma_channel);
+	channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+	channel_config_set_read_increment(&c, true);
+	channel_config_set_write_increment(&c, false);
 
-    channel_config_set_sniff_enable(&c, true);
-    dma_sniffer_enable(crc_dma_channel, DMA_SNIFF_CTRL_CALC_VALUE_CRC32, true);
-    dma_sniffer_set_byte_swap_enabled(false);
-    dma_sniffer_set_output_reverse_enabled(false);
+	channel_config_set_sniff_enable(&c, true);
+	dma_sniffer_enable(crc_dma_channel, DMA_SNIFF_CTRL_CALC_VALUE_CRC32, true);
+	dma_sniffer_set_byte_swap_enabled(false);
+	dma_sniffer_set_output_reverse_enabled(false);
 
-    for (size_t offset = 0; offset < adjusted_len; offset += sizeof(bytes)) {
-        const uint32_t actual_time = platform_time_ms();
-        if (actual_time > last_time + 1000U) {
-            last_time = actual_time;
-            gdb_if_putchar(0, true);
-        }
-        const size_t read_len = MIN(sizeof(bytes), adjusted_len - offset);
-        if (target_mem32_read(target, bytes, base + offset, read_len)) {
-            DEBUG_ERROR("%s: error around address 0x%08" PRIx32 "\n", __func__, (uint32_t)(base + offset));
-            return false;
-        }
+	for (size_t offset = 0; offset < adjusted_len; offset += sizeof(bytes)) {
+		const uint32_t actual_time = platform_time_ms();
+		if (actual_time > last_time + 1000U) {
+			last_time = actual_time;
+			gdb_if_putchar(0, true);
+		}
+		const size_t read_len = MIN(sizeof(bytes), adjusted_len - offset);
+		if (target_mem32_read(target, bytes, base + offset, read_len)) {
+			DEBUG_ERROR("%s: error around address 0x%08" PRIx32 "\n", __func__, (uint32_t)(base + offset));
+			return false;
+		}
 
-        uint32_t dummy_dst = 0;
+		uint32_t dummy_dst = 0;
 
-        dma_sniffer_set_data_accumulator(crc);
-        dma_channel_configure(
-                crc_dma_channel,
-                &c,
-                &dummy_dst,
-                bytes,
-                read_len / 4,
-                true
-        );
+		dma_sniffer_set_data_accumulator(crc);
+		dma_channel_configure(crc_dma_channel, &c, &dummy_dst, bytes, read_len / 4, true);
 
-        dma_channel_wait_for_finish_blocking(crc_dma_channel);
-        crc = dma_sniffer_get_data_accumulator();
-    }
+		dma_channel_wait_for_finish_blocking(crc_dma_channel);
+		crc = dma_sniffer_get_data_accumulator();
+	}
 
-    const size_t remainder = len - adjusted_len;
-    if (remainder) {
-        if (target_mem32_read(target, bytes, base + adjusted_len, remainder)) {
-            DEBUG_ERROR("%s: error around address 0x%08" PRIx32 "\n", __func__, (uint32_t)(base + adjusted_len));
-            return false;
-        }
-        for (size_t offset = 0; offset < remainder; ++offset) {
-            crc ^= bytes[offset] << 24U;
-            for (size_t i = 0; i < 8U; i++) {
-                if (crc & 0x80000000U)
-                    crc = (crc << 1U) ^ 0x4c11db7U;
-                else
-                    crc <<= 1U;
-            }
-        }
-    }
-    *result = crc;
-    return true;
+	const size_t remainder = len - adjusted_len;
+	if (remainder) {
+		if (target_mem32_read(target, bytes, base + adjusted_len, remainder)) {
+			DEBUG_ERROR("%s: error around address 0x%08" PRIx32 "\n", __func__, (uint32_t)(base + adjusted_len));
+			return false;
+		}
+		for (size_t offset = 0; offset < remainder; ++offset) {
+			crc ^= bytes[offset] << 24U;
+			for (size_t i = 0; i < 8U; i++) {
+				if (crc & 0x80000000U)
+					crc = (crc << 1U) ^ 0x4c11db7U;
+				else
+					crc <<= 1U;
+			}
+		}
+	}
+	*result = crc;
+	return true;
 }
 
 /* Shim to dispatch host-specific implementation (and keep the `__func__` meaningful) */

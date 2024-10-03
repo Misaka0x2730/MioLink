@@ -67,8 +67,8 @@ static void swd_line_reset_sequence(const bool idle_cycles)
 	 *
 	 * for robustness, we use 60 HIGH cycles and 4 idle cycles
 	 */
-    const uint32_t data[] = {0xffffffffU, 0x0fffffffU};
-    swdptap_seq_out_buffer(data, 32 + (idle_cycles ? 32U : 28U));
+	const uint32_t data[] = {0xffffffffU, 0x0fffffffU};
+	swdptap_seq_out_buffer(data, 32 + (idle_cycles ? 32U : 28U));
 }
 
 /* Switch out of dormant state into SWD */
@@ -84,7 +84,7 @@ static void dormant_to_swd_sequence(void)
 	/* Send at least 8 SWCLKTCK cycles with SWDIOTMS HIGH */
 	swd_line_reset_sequence(false);
 	/* Send the 128-bit Selection Alert sequence on SWDIOTMS */
-    /*
+	/*
 	 * We combine the last two sequences in a single seq_out as an optimization
 	 *
 	 * Send 4 SWCLKTCK cycles with SWDIOTMS LOW
@@ -93,10 +93,9 @@ static void dormant_to_swd_sequence(void)
 	 * The bits are shifted out to the right, so we shift the second sequence left by the size of the first sequence
 	 * The first sequence is 4 bits and the second 8 bits, totaling 12 bits in the combined sequence
 	 */
-    const uint32_t data[] = {ADIV5_SELECTION_ALERT_SEQUENCE_0, ADIV5_SELECTION_ALERT_SEQUENCE_1,
-                             ADIV5_SELECTION_ALERT_SEQUENCE_2, ADIV5_SELECTION_ALERT_SEQUENCE_3,
-                             ADIV5_ACTIVATION_CODE_ARM_SWD_DP << 4U};
-    swdptap_seq_out_buffer(data, 32U*4 + 12U);
+	const uint32_t data[] = {ADIV5_SELECTION_ALERT_SEQUENCE_0, ADIV5_SELECTION_ALERT_SEQUENCE_1,
+		ADIV5_SELECTION_ALERT_SEQUENCE_2, ADIV5_SELECTION_ALERT_SEQUENCE_3, ADIV5_ACTIVATION_CODE_ARM_SWD_DP << 4U};
+	swdptap_seq_out_buffer(data, 32U * 4 + 12U);
 
 	/*
 	 * The target is in the protocol error state after selecting SWD
@@ -138,8 +137,8 @@ bool adiv5_swd_write_no_check(const uint16_t addr, const uint32_t data)
 uint32_t adiv5_swd_read_no_check(const uint16_t addr)
 {
 	const uint8_t request = make_packet_request(ADIV5_LOW_READ, addr);
-    uint32_t data = 0;
-    const uint8_t res = rp2040_pio_adiv5_swd_read_no_check(request, &data);
+	uint32_t data = 0;
+	const uint8_t res = rp2040_pio_adiv5_swd_read_no_check(request, &data);
 	return res == SWDP_ACK_OK ? data : 0;
 }
 
@@ -388,7 +387,7 @@ uint32_t adiv5_swd_raw_access(adiv5_debug_port_s *dp, const uint8_t rnw, const u
 	platform_timeout_s timeout;
 	platform_timeout_set(&timeout, 250U);
 	do {
-        ack = rp2040_pio_adiv5_swd_raw_access_req(request);
+		ack = rp2040_pio_adiv5_swd_raw_access_req(request);
 		if (ack == SWDP_ACK_FAULT) {
 			DEBUG_ERROR("SWD access resulted in fault, retrying\n");
 			/* On fault, abort the request and repeat */
@@ -430,7 +429,7 @@ uint32_t adiv5_swd_raw_access(adiv5_debug_port_s *dp, const uint8_t rnw, const u
 			raise_exception(EXCEPTION_ERROR, "SWD parity error");
 		}
 	} else
-        rp2040_pio_adiv5_swd_raw_access_data(value, NULL, rnw);
+		rp2040_pio_adiv5_swd_raw_access_data(value, NULL, rnw);
 
 	return response;
 }
