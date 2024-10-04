@@ -2,7 +2,7 @@
  * The MIT License (MIT)
  *
  * Copyright (c) 2019 Ha Thach (tinyusb.org)
- * Modified 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
+ * Modified by Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal

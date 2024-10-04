@@ -8,7 +8,7 @@
  * Modified by Uwe Bonnes <bon@elektron.ikp.physik.tu-darmstadt.de>
  * Modified by Rachel Mant <git@dragonmux.network>
  * Modified by ALTracer <tolstov_den@mail.ru>
- * Modified 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
+ * Modified by Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

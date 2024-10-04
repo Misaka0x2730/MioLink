@@ -4,7 +4,7 @@
  * Copyright (C) 2015 Gareth McMullin <gareth@blacksphere.co.nz>
  * Copyright (C) 2023 1BitSquared <info@1bitsquared.com>
  * Modified by Rachel Mant <git@dragonmux.network>
- * Modified 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
+ * Modified by Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -118,28 +118,7 @@ uint32_t platform_time_ms(void)
 static uint32_t platform_get_max_interface_freq(void)
 {
 	const uint32_t sys_freq = clock_get_hz(clk_sys);
-	uint32_t interface_freq = 0;
-
-	const platform_device_type_t device_type = platform_hwtype();
-	assert(device_type != PLATFORM_DEVICE_TYPE_NOT_SET);
-
-	switch (device_type) {
-	case PLATFORM_DEVICE_TYPE_MIOLINK:
-		if (platform_hwversion() == PLATFORM_MIOLINK_REV_A) {
-			interface_freq = sys_freq / 10;
-		} else {
-			interface_freq = sys_freq / 8;
-		}
-		break;
-
-	case PLATFORM_DEVICE_TYPE_MIOLINK_PICO:
-		interface_freq = sys_freq / 8;
-		break;
-
-	default:
-		interface_freq = sys_freq / 10;
-		break;
-	}
+	const uint32_t interface_freq = sys_freq / 8;
 
 	return interface_freq;
 }

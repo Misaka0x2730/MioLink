@@ -4,7 +4,7 @@
  * Copyright (C) 2011  Black Sphere Technologies Ltd.
  * Written by Gareth McMullin <gareth@blacksphere.co.nz>
  * Copyright (C) 2020- 2021 Uwe Bonnes (bon@elektron.ikp.physik.tu-darmstadt.de)
- * Modified 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
+ * Modified by Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

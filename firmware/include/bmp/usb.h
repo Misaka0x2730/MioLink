@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2022 1BitSquared <info@1bitsquared.com>
  * Written by Rachel Mant <git@dragonmux.network>
- * Modified 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
+ * Modified by Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
