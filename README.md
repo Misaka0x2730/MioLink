@@ -8,11 +8,11 @@ Detailed instructions on how to use the debugger, how to configure SWO, RTT and 
 
 # Hardware
 ## General information
-The main board for this device is *MioLink* ([rev. A](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/revA)/[rev. B](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/revB)): RP2040 + 16Mbit (2MiB) QSPI Flash memory (W25Q16).</br>
-[MioLink_Pico](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/MioLink_Pico) is a breakout board for Pico and Pico W featuring a power switch and voltage converters.</br>
+The main board for this device is *MioLink* ([rev. A](https://github.com/Misaka0x2730/MioLink/blob/main/hardware/revA/MioLink_revA.pdf)/[rev. B](https://github.com/Misaka0x2730/MioLink/blob/main/hardware/revB/MioLink_revB.pdf)): RP2040 + 16Mbit (2MiB) QSPI Flash memory (W25Q16).</br>
+[MioLink_Pico](https://github.com/Misaka0x2730/MioLink/blob/main/hardware/MioLink_Pico/revA/MioLink_Pico_revA.pdf) is a breakout board for Pico and Pico W featuring a power switch and voltage converters.</br>
 Standard Pico and Pico W boards are also supported.</br>
 The device type is determined at runtime, so all boards use the same firmware.</br>
-[MioLink_adapter](https://github.com/Misaka0x2730/MioLink/tree/main/hardware/MioLink_adapter) is an adapter that allows you to connect the probe with target boards that have different types of connectors.</br>
+[MioLink_adapter](https://github.com/Misaka0x2730/MioLink/blob/main/hardware/MioLink_adapter/revA/MioLink_adapter_revA.pdf) is an adapter that allows you to connect the probe with target boards that have different types of connectors.</br>
 All hardware CAD files (designed in KiCad) can be found [here](https://github.com/Misaka0x2730/MioLink/tree/main/hardware).</br>
 
 ## MioLink revisions comparsion
