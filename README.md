@@ -42,6 +42,7 @@ Pin | Name  | Description              | Pin | Name          | Description
 9   | GND   | Ground                   | 10  | RESET         | Reset pin
 
 ### UART connector pinout:
+
 Pin | Name | Description                    | Pin | Name  | Description
 :--:|:----:|:------------------------------:|:---:|:-----:|:------------------------:
 1   | RX   | UART Probe RX (UART Target TX) | 2   | VTref | Target reference voltage
@@ -57,6 +58,7 @@ In all other cases, the Vtref pin (pin 1) functions as an input and must be conn
 The allowable voltage range is from 1.65V to 5.5V.</br>
 
 #### Maximum output current of the Vtref pin (pin 1):
+
 Board | Max current
 :----:|:----------:
 MioLink | rev.A: ~200 mA;</br>rev.B: ~350 mA (min. 300, max. 400)
@@ -64,6 +66,7 @@ MioLink_Pico | ~200 mA (min. 175, max. 234)
 Pico or Pico W | ~300 mA from 3V3 pin,</br>see recommendations in</br>Pico and Pico W datasheets.
 
 ### JTAG
+
 Pin | Description
 :----:|:----------:
 Vtref | Target reference voltage
@@ -75,6 +78,7 @@ TDI   | Test data input
 RESET | Optional reset pin
 
 ### SWD
+
 Pin    | Description
 :-----:|:----------:
 Vtref  | Target reference voltage
