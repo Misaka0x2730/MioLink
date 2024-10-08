@@ -1,7 +1,9 @@
 /*
- * This file is part of the MioLink project.
+ * This file is part of the Black Magic Debug project.
  *
- * Copyright (C) 2024 Dmitry Rezvanov <gareth@blacksphere.co.nz>
+ * Copyright (C) 2011  Black Sphere Technologies Ltd.
+ * Written by Gareth McMullin <gareth@blacksphere.co.nz>
+ * Modified by Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +18,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+/* Provides main entry point. Initialise subsystems and enter GDB protocol loop. */
 
 #include "general.h"
 
@@ -50,7 +54,7 @@
 static char BMD_ALIGN_DEF(8) gdb_buffer[GDB_PACKET_BUFFER_SIZE + 1U];
 
 #define GDB_TASK_CORE_AFFINITY (0x01) /* Core 0 only */
-#define GDB_TASK_STACK_SIZE    (1024)
+#define GDB_TASK_STACK_SIZE    (1536)
 
 TaskHandle_t gdb_task;
 
@@ -69,8 +73,8 @@ static void bmp_poll_loop(void)
 		// alter these variables.
 		if (!gdb_target_running || !cur_target)
 			break;
-		char c = gdb_if_getchar_to(0);
-		if (c == '\x03' || c == '\x04')
+		const char data = gdb_if_getchar_to(0);
+		if (data == '\x03' || data == '\x04')
 			target_halt_request(cur_target);
 #ifdef ENABLE_RTT
 		if (rtt_enabled)
@@ -88,8 +92,9 @@ static void bmp_poll_loop(void)
 
 _Noreturn static void gdb_thread(void *params)
 {
+	(void)params;
+
 	platform_init();
-	platform_timing_init();
 	blackmagic_usb_init();
 	usb_serial_init();
 	traceswo_task_init();

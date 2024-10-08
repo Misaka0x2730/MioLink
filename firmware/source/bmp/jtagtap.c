@@ -29,13 +29,12 @@
 #include "jtagtap.h"
 #include "target_jtag.pio.h"
 
-static void jtagtap_reset(void) __attribute__((optimize(3)));
-static void jtagtap_tms_seq(uint32_t tms_states, size_t ticks) __attribute__((optimize(3)));
-static void jtagtap_tdi_tdo_seq(uint8_t *data_out, bool final_tms, const uint8_t *data_in, size_t clock_cycles)
-	__attribute__((optimize(3)));
-static void jtagtap_tdi_seq(bool final_tms, const uint8_t *data_in, size_t clock_cycles) __attribute__((optimize(3)));
-static bool jtagtap_next(bool tms, bool tdi) __attribute__((optimize(3)));
-static void jtagtap_cycle(bool tms, bool tdi, size_t clock_cycles) __attribute__((optimize(3)));
+static void jtagtap_reset(void);
+static void jtagtap_tms_seq(uint32_t tms_states, size_t ticks);
+static void jtagtap_tdi_tdo_seq(uint8_t *data_out, bool final_tms, const uint8_t *data_in, size_t clock_cycles);
+static void jtagtap_tdi_seq(bool final_tms, const uint8_t *data_in, size_t clock_cycles);
+static bool jtagtap_next(bool tms, bool tdi);
+static void jtagtap_cycle(bool tms, bool tdi, size_t clock_cycles);
 
 #define JTAG_PROGRAM_START_POS            (target_jtag_wrap_target)
 #define JTAG_TDI_SEQ_POS                  (3)
@@ -66,67 +65,46 @@ void jtagtap_init(void)
 
 	const platform_target_pins_t *target_pins = platform_get_target_pins();
 
-	gpio_init(target_pins->tck);
-	gpio_set_dir(target_pins->tck, GPIO_OUT);
-
-	gpio_init(target_pins->tdo);
-
-	gpio_init(target_pins->tdi);
-	gpio_set_dir(target_pins->tdi, GPIO_OUT);
-
-	gpio_init(target_pins->tms);
-	gpio_set_dir(target_pins->tms, GPIO_OUT);
-
 	if (target_pins->tms_dir != PIN_NOT_CONNECTED) {
 		gpio_init(target_pins->tms_dir);
 		gpio_set_dir(target_pins->tms_dir, GPIO_OUT);
 		gpio_put(target_pins->tms_dir, true);
 	}
 
-	gpio_set_pulls(target_pins->tdo, true, false);
-
+	gpio_init(target_pins->tck);
 	pio_gpio_init(TARGET_JTAG_PIO, target_pins->tck);
+
+	gpio_init(target_pins->tdo);
+	gpio_set_pulls(target_pins->tdo, true, false);
 	pio_gpio_init(TARGET_JTAG_PIO, target_pins->tdo);
+
+	gpio_init(target_pins->tdi);
 	pio_gpio_init(TARGET_JTAG_PIO, target_pins->tdi);
+
+	gpio_init(target_pins->tms);
 	pio_gpio_init(TARGET_JTAG_PIO, target_pins->tms);
 
 	pio_clear_instruction_memory(TARGET_JTAG_PIO);
 
-	pio_sm_set_pindirs_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE,
-		(1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tms),
-		(1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tdo) | (1 << target_pins->tms));
-	pio_sm_set_pins_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, 0,
-		(1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tms));
+	const uint32_t pindirs_value = (1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tms);
+	const uint32_t pindirs_mask =
+		(1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tdo) | (1 << target_pins->tms);
+	const uint32_t pins_value = 0;
+	const uint32_t pins_mask = (1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tms);
 
-	pio_sm_set_pindirs_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ,
-		(1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tms),
-		(1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tdo) | (1 << target_pins->tms));
-	pio_sm_set_pins_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, 0,
-		(1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tms));
-
-	pio_sm_set_pindirs_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ,
-		(1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tms),
-		(1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tdo) | (1 << target_pins->tms));
-	pio_sm_set_pins_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, 0,
-		(1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tms));
-
-	pio_sm_set_pindirs_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ,
-		(1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tms),
-		(1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tdo) | (1 << target_pins->tms));
-	pio_sm_set_pins_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, 0,
-		(1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tms));
+	pio_sm_set_pindirs_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, pindirs_value, pindirs_mask);
+	pio_sm_set_pins_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, pins_value, pins_mask);
 
 	tap_pio_common_disable_input_sync(TARGET_JTAG_PIO, target_pins->tdo);
 
 	pio_add_program_at_offset(TARGET_JTAG_PIO, &target_jtag_program, JTAG_PROGRAM_START_POS);
 
-	pio_sm_config prog_config = pio_get_default_sm_config();
+	pio_sm_config prog_config = target_jtag_program_get_default_config(0);
 
 	/* JTAG next and cycle SM */
 	sm_config_set_wrap(&prog_config, JTAG_PROGRAM_START_POS, JTAG_SM_NEXT_CYCLE_WRAP);
-	sm_config_set_sideset(&prog_config, 2, true, false);
-	sm_config_set_out_pins(&prog_config, target_pins->tdi, 1);
 	sm_config_set_in_pins(&prog_config, target_pins->tdo);
+	sm_config_set_out_pins(&prog_config, target_pins->tdi, 1);
 	sm_config_set_sideset_pins(&prog_config, target_pins->tck);
 	sm_config_set_set_pins(&prog_config, target_pins->tms, 1);
 	sm_config_set_out_shift(&prog_config, true, true, 8);
@@ -137,9 +115,8 @@ void jtagtap_init(void)
 
 	/* JTAG TMS sequence SM */
 	sm_config_set_wrap(&prog_config, JTAG_PROGRAM_START_POS, JTAG_SM_TMS_SEQ_WRAP);
-	sm_config_set_sideset(&prog_config, 2, true, false);
-	sm_config_set_out_pins(&prog_config, target_pins->tms, 1);
 	sm_config_set_in_pins(&prog_config, target_pins->tdo);
+	sm_config_set_out_pins(&prog_config, target_pins->tms, 1);
 	sm_config_set_sideset_pins(&prog_config, target_pins->tck);
 	sm_config_set_set_pins(&prog_config, target_pins->tdi, 1);
 	sm_config_set_out_shift(&prog_config, true, true, 32);
@@ -150,9 +127,8 @@ void jtagtap_init(void)
 
 	/* JTAG TDI/TDO sequence SM */
 	sm_config_set_wrap(&prog_config, JTAG_PROGRAM_START_POS, JTAG_SM_TDI_TDO_SEQ_WRAP);
-	sm_config_set_sideset(&prog_config, 2, true, false);
-	sm_config_set_out_pins(&prog_config, target_pins->tdi, 1);
 	sm_config_set_in_pins(&prog_config, target_pins->tdo);
+	sm_config_set_out_pins(&prog_config, target_pins->tdi, 1);
 	sm_config_set_sideset_pins(&prog_config, target_pins->tck);
 	sm_config_set_set_pins(&prog_config, target_pins->tms, 1);
 	sm_config_set_out_shift(&prog_config, true, true, 8);
@@ -163,9 +139,8 @@ void jtagtap_init(void)
 
 	/* JTAG TDI sequence SM */
 	sm_config_set_wrap(&prog_config, JTAG_PROGRAM_START_POS, JTAG_SM_TDI_SEQ_WRAP);
-	sm_config_set_sideset(&prog_config, 2, true, false);
-	sm_config_set_out_pins(&prog_config, target_pins->tdi, 1);
 	sm_config_set_in_pins(&prog_config, target_pins->tdo);
+	sm_config_set_out_pins(&prog_config, target_pins->tdi, 1);
 	sm_config_set_sideset_pins(&prog_config, target_pins->tck);
 	sm_config_set_set_pins(&prog_config, target_pins->tms, 1);
 	sm_config_set_out_shift(&prog_config, true, true, 8);
@@ -200,20 +175,15 @@ static bool jtagtap_next(const bool tms, const bool tdi)
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, true);
 
 	pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, 0); /* Number of cycles - 1 */
+	pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE,
+		tms ? JTAG_NEXT_CYCLE_INITIAL_SET_1_POS : JTAG_NEXT_CYCLE_INITIAL_SET_0_POS);
 
-	if (tms) {
-		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_1_POS);
-	} else {
-		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_0_POS);
-	}
-
-	pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (tdi ? (1 << 0) : 0));
+	pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (tdi ? 1 : 0));
 	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
 
 	const bool result = (pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE) != 0);
 
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, false);
-
 	return result;
 }
 
@@ -248,7 +218,7 @@ static void jtagtap_tdi_tdo_seq(
 		}
 		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, data_in[0]);
 
-		data_out[0] = (pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) != 0) ? (1 << 0) : 0;
+		data_out[0] = (pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) != 0) ? 1 : 0;
 	} else {
 		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, (clock_cycles - 2));
 		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, JTAG_TDI_TDO_SEQ_POS);
@@ -339,13 +309,11 @@ static void jtagtap_cycle(const bool tms, const bool tdi, const size_t clock_cyc
 		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_0_POS);
 	}
 
-	pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (tdi ? (1 << 0) : 0));
-
-	volatile uint32_t rx_data = 0;
+	pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (tdi ? 1 : 0));
 
 	while (tap_pio_common_is_not_tx_stalled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE)) {
 		if (pio_sm_is_rx_fifo_empty(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE) == false) {
-			rx_data = pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
+			pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
 		}
 	}
 

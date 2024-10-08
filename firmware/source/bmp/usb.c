@@ -144,7 +144,7 @@ static char const *string_desc_arr[] = {
 #endif
 };
 
-static uint16_t _desc_str[512] = {0};
+static uint16_t string_descriptor[512] = {0};
 
 // Invoked when received GET DEVICE DESCRIPTOR
 // Application return pointer to descriptor
@@ -165,29 +165,30 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
 
 	if (index >= (sizeof(string_desc_arr) / sizeof(string_desc_arr[0]))) {
 		return NULL;
+	}
+
+	size_t chr_count = 0;
+
+	if (index == 0) {
+		string_descriptor[1] = string_desc_arr[0][0] + ((uint16_t)(string_desc_arr[0][1]) << 8);
+		chr_count = 1;
 	} else {
-		size_t chr_count = 0;
-
-		if (index == 0) {
-			_desc_str[1] = string_desc_arr[0][0] + ((uint16_t)(string_desc_arr[0][1]) << 8);
-			chr_count = 1;
-		} else {
-			const char *str = string_desc_arr[index];
-			chr_count = strlen(str);
-			const size_t max_count = (sizeof(_desc_str) / sizeof(_desc_str[0])) - 1;
-			if (chr_count > max_count) {
-				chr_count = max_count;
-			}
-
-			for (size_t i = 0; i < chr_count; i++) {
-				_desc_str[1 + i] = str[i];
-			}
+		const char *str = string_desc_arr[index];
+		chr_count = strlen(str);
+		const size_t max_count = (sizeof(string_descriptor) / sizeof(string_descriptor[0])) - 1;
+		if (chr_count > max_count) {
+			chr_count = max_count;
 		}
 
-		// first byte is length (including header), second byte is string type
-		_desc_str[0] = (uint16_t)((TUSB_DESC_STRING << 8) | (2 * chr_count + 2));
+		for (size_t i = 0; i < chr_count; i++) {
+			string_descriptor[1 + i] = str[i];
+		}
 	}
-	return _desc_str;
+
+	// first byte is length (including header), second byte is string type
+	string_descriptor[0] = (uint16_t)((TUSB_DESC_STRING << 8) | (2 * chr_count + 2));
+
+	return string_descriptor;
 }
 
 #define BOS_TOTAL_LEN (TUD_BOS_DESC_LEN + TUD_BOS_MICROSOFT_OS_DESC_LEN)
@@ -195,7 +196,7 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
 #define MS_OS_20_DESC_LEN (10 + 8 + (8 + 20 + 128) * 2)
 
 static const uint8_t desc_ms_os_20[] = {
-	// Set header: length, type, windows version, total length
+	// Set header: length, type, Windows version, total length
 	U16_TO_U8S_LE(0x000A),
 	U16_TO_U8S_LE(MS_OS_20_SET_HEADER_DESCRIPTOR),
 	U32_TO_U8S_LE(0x06030000),
@@ -535,10 +536,10 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_requ
 
 	if (request->bRequest == 1 && request->wIndex == 7) {
 		// Get Microsoft OS 2.0 compatible descriptor
-		return tud_control_xfer(rhport, request, (void *)(uintptr_t)desc_ms_os_20, sizeof(desc_ms_os_20));
-	} else {
-		return false;
+		return tud_control_xfer(rhport, request, (void *)desc_ms_os_20, sizeof(desc_ms_os_20));
 	}
+
+	return false;
 }
 
 extern TaskHandle_t usb_uart_task;
@@ -567,6 +568,7 @@ void tud_cdc_line_state_cb(uint8_t interface, bool dtr, bool rts)
 
 void tud_cdc_line_coding_cb(uint8_t interface, cdc_line_coding_t const *p_line_coding)
 {
+	(void)p_line_coding;
 	if (interface == USB_SERIAL_TARGET) {
 		xTaskNotify(usb_uart_task, USB_SERIAL_LINE_CODING_UPDATE, eSetBits);
 	}

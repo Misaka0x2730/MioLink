@@ -47,8 +47,8 @@
 #define configUSE_TICK_HOOK      0
 #define configTICK_RATE_HZ       ((TickType_t)1000)
 #define configMAX_PRIORITIES     5
-#define configMINIMAL_STACK_SIZE (configSTACK_DEPTH_TYPE)128
-#define configCPU_CLOCK_HZ       (250000000)
+#define configMINIMAL_STACK_SIZE ((configSTACK_DEPTH_TYPE)128)
+#define configCPU_CLOCK_HZ       (250000000UL)
 #define configUSE_16_BIT_TICKS   0
 
 #define configIDLE_SHOULD_YIELD 0
@@ -75,7 +75,7 @@
 #define configTOTAL_HEAP_SIZE            (18 * 1024)
 #define configAPPLICATION_ALLOCATED_HEAP 0
 
-#define configMAX_TASK_NAME_LEN (16)
+#define configMAX_TASK_NAME_LEN 32
 
 /* Hook function related definitions. */
 #define configCHECK_FOR_STACK_OVERFLOW     2
@@ -98,13 +98,6 @@
 #define configTIMER_QUEUE_LENGTH     10
 #define configTIMER_TASK_STACK_DEPTH 256
 
-/* Interrupt nesting behaviour configuration. */
-/*
-#define configKERNEL_INTERRUPT_PRIORITY         [dependent of processor]
-#define configMAX_SYSCALL_INTERRUPT_PRIORITY    [dependent on processor and application]
-#define configMAX_API_CALL_INTERRUPT_PRIORITY   [dependent on processor and application]
-*/
-
 /* SMP port only */
 #define configNUMBER_OF_CORES         1
 #define configTICK_CORE               0
@@ -120,8 +113,6 @@
 #else
 #define configUSE_CORE_AFFINITY 0
 #endif
-
-//extern void System_Assert(const char* file, const int line);
 
 /* Define to trap errors during development. */
 #define configASSERT assert

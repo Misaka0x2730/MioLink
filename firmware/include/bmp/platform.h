@@ -32,8 +32,8 @@
 #include "hardware/pio.h"
 
 #define TARGET_SWD_IDLE_CYCLES (8)
-#if (TARGET_SWD_IDLE_CYCLES <= 0)
-#error "TARGET_SWD_IDLE_CYCLES should be at least 1"
+#if (TARGET_SWD_IDLE_CYCLES < 8)
+#error "TARGET_SWD_IDLE_CYCLES should be at least 8"
 #endif
 
 #if ENABLE_DEBUG == 1
@@ -76,32 +76,52 @@ extern bool debug_bmp;
 #define PIN_NOT_CONNECTED (0xFF)
 
 /* Common pins */
+#define HWTYPE_PIN_0 (16) /* If 1 - MioLink or Pico/Pico W, if 0 - MioLink_Pico */
+
 #define HWVERSION_PIN_0 (14)
 #define HWVERSION_PIN_1 (15)
 
 #define HWVERSION_PICO (0x03 + 1) /* All bits are 1 + 1 */
 
-#define HWTYPE_PIN_0 (16)
+/* MioLink revA pins */
+#define MIOLINK_REVA_TARGET_VOLTAGE_ADC_CHANNEL (3)
+#define MIOLINK_REVA_TARGET_VOLTAGE_ENABLE_PIN  (3)
+#define MIOLINK_REVA_TARGET_VOLTAGE_FAULT_PIN   (1)
 
-/* MioLink pins */
-#define MIOLINK_TARGET_VOLTAGE_ADC_CHANNEL (3)
-#define MIOLINK_TARGET_VOLTAGE_ENABLE_PIN  (3)
-#define MIOLINK_TARGET_VOLTAGE_FAULT_PIN   (1)
+#define MIOLINK_REVA_LED_ACT_PIN (13)
+#define MIOLINK_REVA_LED_ERR_PIN (10)
+#define MIOLINK_REVA_LED_SER_PIN (12)
 
-#define MIOLINK_LED_ACT_PIN (13)
-#define MIOLINK_LED_ERR_PIN (10)
-#define MIOLINK_LED_SER_PIN (12)
+#define MIOLINK_REVA_TARGET_TCK_PIN     (24)
+#define MIOLINK_REVA_TARGET_TDO_PIN     (17)
+#define MIOLINK_REVA_TARGET_TDI_PIN     (28)
+#define MIOLINK_REVA_TARGET_TMS_PIN     (26)
+#define MIOLINK_REVA_TARGET_TMS_DIR_PIN (27)
 
-#define MIOLINK_TARGET_TCK_PIN     (24)
-#define MIOLINK_TARGET_TDO_PIN     (17)
-#define MIOLINK_TARGET_TDI_PIN     (28)
-#define MIOLINK_TARGET_TMS_PIN     (26)
-#define MIOLINK_TARGET_TMS_DIR_PIN (27)
+#define MIOLINK_REVA_TARGET_UART_TX_PIN (8)
+#define MIOLINK_REVA_TARGET_UART_RX_PIN (21)
 
-#define MIOLINK_TARGET_UART_TX_PIN (8)
-#define MIOLINK_TARGET_UART_RX_PIN (21)
+#define MIOLINK_REVA_TARGET_NRST_PIN (18)
 
-#define MIOLINK_TARGET_NRST_PIN (18)
+/* MioLink revB pins */
+#define MIOLINK_REVB_TARGET_VOLTAGE_ADC_CHANNEL (3)
+#define MIOLINK_REVB_TARGET_VOLTAGE_ENABLE_PIN  (3)
+#define MIOLINK_REVB_TARGET_VOLTAGE_FAULT_PIN   (1)
+
+#define MIOLINK_REVB_LED_ACT_PIN (13)
+#define MIOLINK_REVB_LED_ERR_PIN (10)
+#define MIOLINK_REVB_LED_SER_PIN (12)
+
+#define MIOLINK_REVB_TARGET_TCK_PIN     (24)
+#define MIOLINK_REVB_TARGET_TDO_PIN     (17)
+#define MIOLINK_REVB_TARGET_TDI_PIN     (28)
+#define MIOLINK_REVB_TARGET_TMS_PIN     (26)
+#define MIOLINK_REVB_TARGET_TMS_DIR_PIN (25)
+
+#define MIOLINK_REVB_TARGET_UART_TX_PIN (8)
+#define MIOLINK_REVB_TARGET_UART_RX_PIN (21)
+
+#define MIOLINK_REVB_TARGET_NRST_PIN (18)
 
 /* MioLink_pico pins */
 #define MIOLINK_PICO_TARGET_VOLTAGE_ADC_CHANNEL (1)
@@ -136,7 +156,6 @@ extern bool debug_bmp;
 
 #define PICO_TARGET_NRST_PIN (7)
 
-#define PICO_DETECT_ADC_PIN       (29)
 #define PICO_DETECT_ADC_CHANNEL   (3)
 #define PICO_DETECT_ADC_THRESHOLD (0x100)
 
@@ -197,10 +216,14 @@ platform_device_type_t platform_hwtype(void);
 void platform_update_hwtype(void);
 const platform_target_pins_t *platform_get_target_pins(void);
 const platform_led_pins_t *platform_get_led_pins(void);
-const platform_vtref_info_t *platform_get_adc_info(void);
-void platform_set_idle_state(const bool state);
+const platform_vtref_info_t *platform_get_vtref_info(void);
+void platform_make_board_ident(void);
+
+void platform_vtref_init(void);
+
+void platform_set_idle_state(bool state);
 void platform_toggle_idle_state(void);
-void platform_set_error_state(const bool state);
-void platform_set_serial_state(const bool state);
+void platform_set_error_state(bool state);
+void platform_set_serial_state(bool state);
 
 #endif /* PLATFORMS_MIOLINK_PLATFORM_H */

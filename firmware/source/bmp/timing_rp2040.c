@@ -25,8 +25,6 @@
 #include "timing_rp2040.h"
 #include "usb.h"
 
-#include "pico/time.h"
-
 #include "hardware/pio.h"
 #include "hardware/clocks.h"
 
@@ -37,7 +35,6 @@
 
 bool running_status = false;
 static volatile uint32_t time_ms = 0;
-uint32_t target_clk_divider = UINT32_MAX;
 
 static size_t morse_tick = 0;
 static uint8_t monitor_ticks = 0;
@@ -59,6 +56,8 @@ static void usb_config_morse_msg_update(void)
 
 static void timing_application_timer_cb(TimerHandle_t xTimer)
 {
+	(void)xTimer;
+
 	time_ms += SYSTICKMS;
 	if (morse_tick >= MORSECNT) {
 		if (running_status) {
@@ -115,12 +114,14 @@ uint32_t platform_time_ms(void)
 	return time_ms;
 }
 
+void platform_update_sys_freq(void)
+{
+	set_sys_clock_hz(configCPU_CLOCK_HZ, true);
+}
+
 static uint32_t platform_get_max_interface_freq(void)
 {
-	const uint32_t sys_freq = clock_get_hz(clk_sys);
-	const uint32_t interface_freq = sys_freq / 8;
-
-	return interface_freq;
+	return clock_get_hz(clk_sys) / 8;
 }
 
 void platform_max_frequency_set(uint32_t freq)
@@ -184,16 +185,18 @@ uint32_t platform_max_frequency_get(void)
 	return target_interface_frequency;
 }
 
-uint32_t platform_timeout_time_left(const platform_timeout_s *const t)
+uint32_t platform_timeout_time_left(const platform_timeout_s *const timeout)
 {
 	/* Cache the current time for the whole calculation */
 	const uint32_t counter = platform_time_ms();
 
-	if ((counter & UINT32_C(0x80000000)) && !(t->time & UINT32_C(0x80000000))) {
-		return UINT32_MAX - counter + t->time + 1;
-	} else if (t->time > counter) {
-		return t->time - counter;
-	} else {
-		return 0;
+	if ((counter & UINT32_C(0x80000000)) && !(timeout->time & UINT32_C(0x80000000))) {
+		return UINT32_MAX - counter + timeout->time + 1;
 	}
+
+	if (timeout->time > counter) {
+		return timeout->time - counter;
+	}
+
+	return 0;
 }

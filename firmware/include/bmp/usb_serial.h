@@ -44,9 +44,11 @@ typedef enum usb_serial_interface_e {
 
 extern bool use_uart_on_tdi_tdo;
 
+bool usb_serial_get_dtr(void);
 void usb_serial_update_led(void);
 uint16_t usb_serial_get_available(void);
-bool usb_serial_send_to_usb(uint8_t *data, size_t len, bool flush, const bool allow_drop_buffer);
+uint32_t usb_serial_read(uint8_t *data, uint32_t buffer_size);
+bool usb_serial_send_to_usb(uint8_t *data, size_t len, bool flush, bool allow_drop_buffer);
 
 uint16_t usb_get_config(void);
 bool gdb_serial_get_dtr(void);

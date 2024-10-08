@@ -38,12 +38,12 @@ static bool rp2040_crc32(target_s *const target, uint32_t *const result, const u
 		crc_dma_channel = dma_claim_unused_channel(true);
 	}
 
-	dma_channel_config c = dma_channel_get_default_config(crc_dma_channel);
-	channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-	channel_config_set_read_increment(&c, true);
-	channel_config_set_write_increment(&c, false);
+	dma_channel_config dma_config = dma_channel_get_default_config(crc_dma_channel);
+	channel_config_set_transfer_data_size(&dma_config, DMA_SIZE_32);
+	channel_config_set_read_increment(&dma_config, true);
+	channel_config_set_write_increment(&dma_config, false);
 
-	channel_config_set_sniff_enable(&c, true);
+	channel_config_set_sniff_enable(&dma_config, true);
 	dma_sniffer_enable(crc_dma_channel, DMA_SNIFF_CTRL_CALC_VALUE_CRC32, true);
 	dma_sniffer_set_byte_swap_enabled(false);
 	dma_sniffer_set_output_reverse_enabled(false);
@@ -63,7 +63,7 @@ static bool rp2040_crc32(target_s *const target, uint32_t *const result, const u
 		uint32_t dummy_dst = 0;
 
 		dma_sniffer_set_data_accumulator(crc);
-		dma_channel_configure(crc_dma_channel, &c, &dummy_dst, bytes, read_len / 4, true);
+		dma_channel_configure(crc_dma_channel, &dma_config, &dummy_dst, bytes, read_len / 4, true);
 
 		dma_channel_wait_for_finish_blocking(crc_dma_channel);
 		crc = dma_sniffer_get_data_accumulator();

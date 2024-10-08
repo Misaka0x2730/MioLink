@@ -35,20 +35,20 @@
 
 static inline bool tap_pio_common_is_not_tx_stalled(PIO pio, uint32_t sm)
 {
-	pio->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + sm));
-	return ((pio->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + sm))) == 0);
+	pio->fdebug = (1UL << (PIO_FDEBUG_TXSTALL_LSB + sm));
+	return ((pio->fdebug & (1UL << (PIO_FDEBUG_TXSTALL_LSB + sm))) == 0);
 }
 
 static inline void tap_pio_common_wait_for_tx_stall(PIO pio, uint32_t sm)
 {
-	pio->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + sm));
-	while ((pio->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + sm))) == 0)
+	pio->fdebug = (1UL << (PIO_FDEBUG_TXSTALL_LSB + sm));
+	while ((pio->fdebug & (1UL << (PIO_FDEBUG_TXSTALL_LSB + sm))) == 0)
 		;
 }
 
 static inline void tap_pio_common_disable_input_sync(PIO pio, uint32_t pin)
 {
-	pio->input_sync_bypass |= (1u << pin);
+	pio->input_sync_bypass |= (1UL << pin);
 }
 
 #endif //MIOLINK_TAP_PIO_COMMON_H

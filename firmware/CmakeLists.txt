@@ -10,13 +10,13 @@ set(PICO_PLATFORM rp2040)
 
 string(TOLOWER ${CMAKE_BUILD_TYPE} build_type)
 
+set(LOG 0)
+
 if (build_type STREQUAL debug)
     set(PICO_DEOPTIMIZED_DEBUG 1)
-    set(LOG 3)
-else()
+else ()
     set(PICO_DEOPTIMIZED_DEBUG 0)
-    set(LOG 0)
-endif()
+endif ()
 
 include(pico_sdk_import.cmake)
 include(pico_extras_import_optional.cmake)
@@ -39,6 +39,7 @@ set(PICO_STDIO_UART OFF)
 # initialize the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+# Add project executable
 add_executable(MioLink)
 
 # Raspberry Pi Pico SDK parameters
@@ -59,9 +60,9 @@ pico_set_printf_implementation(MioLink "compiler")
 # BlackMagic parameters
 if (build_type STREQUAL debug)
     target_compile_definitions(MioLink PUBLIC ENABLE_DEBUG=1)
-else()
+else ()
     target_compile_definitions(MioLink PUBLIC ENABLE_DEBUG=0)
-endif()
+endif ()
 
 target_compile_definitions(MioLink PUBLIC GDB_PACKET_BUFFER_SIZE=8192)
 target_compile_definitions(MioLink PUBLIC PC_HOSTED=0)
@@ -90,96 +91,29 @@ execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ../../.git describe --tags -
 configure_file("git_version.h.in" "git_version.h")
 
 # BlackMagic sources
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/morse.c)
+target_sources(MioLink PUBLIC thirdParty/blackmagic/src/command.c)
+target_sources(MioLink PUBLIC thirdParty/blackmagic/src/exception.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/gdb_main.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/gdb_packet.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/hex_utils.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/command.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/maths_utils.c)
+target_sources(MioLink PUBLIC thirdParty/blackmagic/src/morse.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/remote.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/exception.c)
+target_sources(MioLink PUBLIC thirdParty/blackmagic/src/rtt.c)
 target_sources(MioLink PUBLIC thirdParty/blackmagic/src/timing.c)
 
-# BlackMagic targets
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/adi.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/adiv5.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/adiv5_jtag.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/adiv6.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/at32f43x.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/ch32f1.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/ch579.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/cortex.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/cortexar.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/cortexm.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/efm32.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/gdb_reg.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/hc32l110.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/imxrt.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/jtag_devs.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/jtag_scan.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/kinetis.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/lmi.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/lpc11xx.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/lpc15xx.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/lpc17xx.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/lpc40xx.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/lpc43xx.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/lpc55xx.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/lpc546xx.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/lpc_common.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/msp432e4.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/msp432p4.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/nrf51.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/nrf91.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/nxpke04.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/puya.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/renesas_ra.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/renesas_rz.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/riscv32.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/riscv64.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/riscv_debug.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/riscv_jtag_dtm.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/rp2040.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/rp2350.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/s32k3xx.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/sam3x.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/sam4l.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/samd.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/samx5x.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/semihosting.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/sfdp.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/spi.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/stm32_common.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/stm32f1.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/stm32f4.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/stm32g0.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/stm32h5.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/stm32h7.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/stm32l0.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/stm32l4.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/stm32mp15.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/target.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/target_flash.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/target_probe.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/target/zynq7000.c)
+# BlackMagic targets sources
+file(GLOB blackmagic_targets CONFIGURE_DEPENDS "thirdParty/blackmagic/src/target/*.c")
+list(FILTER blackmagic_targets EXCLUDE REGEX ".*adiv5_swd\\.c$")
+list(FILTER blackmagic_targets EXCLUDE REGEX ".*swdptap_generic\\.c$")
+target_sources(MioLink PUBLIC ${blackmagic_targets})
 
 # MioLink sources
-target_sources(MioLink PUBLIC source/main.c)
-target_sources(MioLink PUBLIC source/bmp/platform.c)
-target_sources(MioLink PUBLIC source/bmp/timing_rp2040.c)
-target_sources(MioLink PUBLIC source/bmp/serialno.c)
-target_sources(MioLink PUBLIC source/bmp/usb_serial.c)
-target_sources(MioLink PUBLIC source/bmp/gdb_if.c)
-target_sources(MioLink PUBLIC source/bmp/swdptap.c)
-target_sources(MioLink PUBLIC source/bmp/usb.c)
-target_sources(MioLink PUBLIC source/bmp/jtagtap.c)
-target_sources(MioLink PUBLIC source/bmp/crc32.c)
-target_sources(MioLink PUBLIC source/bmp/adiv5_swd.c)
-target_sources(MioLink PUBLIC source/bmp/rtt_if.c)
-target_sources(MioLink PUBLIC thirdParty/blackmagic/src/rtt.c)
-target_sources(MioLink PUBLIC source/bmp/traceswoasync.c)
-target_sources(MioLink PUBLIC source/bmp/traceswodecode.c)
+file(GLOB miolink_bmp_sources CONFIGURE_DEPENDS "source/bmp/*.c")
+target_sources(MioLink PUBLIC ${miolink_bmp_sources}
+                              source/main.c)
 
+# SEGGER RTT sources (need only in the debug configuration)
 if (build_type STREQUAL debug)
     target_sources(MioLink PUBLIC source/SysView/SEGGER_RTT.c)
     target_sources(MioLink PUBLIC source/SysView/SEGGER_RTT_printf.c)
@@ -191,14 +125,27 @@ if (build_type STREQUAL debug)
     target_sources(MioLink PUBLIC source/SysView/SEGGER_SYSVIEW.c)
     target_sources(MioLink PUBLIC source/SysView/SEGGER_SYSVIEW_Config_FreeRTOS.c)
     target_sources(MioLink PUBLIC source/SysView/SEGGER_SYSVIEW_FreeRTOS.c)
-else()
+else ()
     target_compile_definitions(MioLink PUBLIC ENABLE_SYSVIEW_TRACE=0)
-endif()
+endif ()
 
 # Raspberry Pi Pico SDK libraries
-target_link_libraries(MioLink PUBLIC hardware_pio hardware_uart hardware_dma hardware_timer hardware_adc hardware_i2c)
-target_link_libraries(MioLink PUBLIC pico_stdlib pico_unique_id pico_bootrom tinyusb_device tinyusb_board tinyusb_additions pico_cyw43_arch_sys_freertos)
-target_link_libraries(MioLink PUBLIC FreeRTOS-Kernel FreeRTOS-Kernel-Heap4)
+target_link_libraries(MioLink PUBLIC hardware_pio
+                                     hardware_uart
+                                     hardware_dma
+                                     hardware_timer
+                                     hardware_adc)
+
+target_link_libraries(MioLink PUBLIC pico_stdlib
+                                     pico_unique_id
+                                     pico_bootrom
+                                     tinyusb_device
+                                     tinyusb_board
+                                     tinyusb_additions
+                                     pico_cyw43_arch_sys_freertos)
+
+target_link_libraries(MioLink PUBLIC FreeRTOS-Kernel
+                                     FreeRTOS-Kernel-Heap4)
 
 # Compile PIO programs
 pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/miolink_revA_target_swd.pio)
@@ -210,9 +157,9 @@ pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/target_jta
 # Set linker script and set parameter to print memory usage
 if (build_type STREQUAL debug)
     pico_set_linker_script(MioLink ${CMAKE_CURRENT_LIST_DIR}/memmap_debug.ld)
-else()
+else ()
     pico_set_linker_script(MioLink ${CMAKE_CURRENT_LIST_DIR}/memmap_release.ld)
-endif()
+endif ()
 target_link_options(MioLink PRIVATE -Xlinker --print-memory-usage)
 
 # Add MioLink output

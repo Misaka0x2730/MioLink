@@ -26,8 +26,6 @@
  */
 
 #include "general.h"
-#include "platform.h"
-#include <assert.h>
 #include "usb_serial.h"
 #include "rtt.h"
 #include "rtt_if.h"
@@ -59,7 +57,7 @@ void rtt_serial_receive_callback(void)
 {
 	char usb_buf[64];
 
-	const uint32_t len = tud_cdc_n_read(USB_SERIAL_TARGET, usb_buf, sizeof(usb_buf));
+	const uint32_t len = usb_serial_read((uint8_t *)usb_buf, sizeof(usb_buf));
 
 	/* skip flag: drop packet if not enough free buffer space */
 	if (rtt_flag_skip && len > recv_bytes_free()) {
@@ -107,16 +105,15 @@ uint32_t rtt_write(const uint32_t channel, const char *buf, uint32_t len)
 	if (channel != 0U)
 		return len;
 
-	if ((len != 0) && usb_get_config() && gdb_serial_get_dtr() && tud_cdc_n_connected(USB_SERIAL_TARGET)) {
-		for (uint32_t p = 0; p < len; p += 64) {
-			uint32_t plen = MIN(64, len - p);
+	if ((len != 0) && usb_get_config() && gdb_serial_get_dtr() && usb_serial_get_dtr()) {
+		for (uint32_t pos = 0; pos < len; pos += 64) {
+			uint32_t plen = MIN(64, len - pos);
 			uint32_t start_ms = platform_time_ms();
-			while (tud_cdc_n_write(USB_SERIAL_TARGET, buf + p, plen) != plen) {
+			while (usb_serial_send_to_usb((uint8_t *)(buf + pos), plen, false, false) == false) {
 				if (platform_time_ms() - start_ms >= 25)
 					return 0; /* drop silently */
 			}
 		}
-		tud_cdc_n_write_flush(USB_SERIAL_TARGET);
 	}
 	return len;
 }

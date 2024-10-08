@@ -39,12 +39,12 @@ static char gdb_to_usb_buf[1024U];
 
 bool gdb_serial_get_dtr(void)
 {
-	return tud_cdc_n_get_line_state(USB_SERIAL_GDB) & 0x01;
+	return (tud_cdc_n_get_line_state(USB_SERIAL_GDB) & 0x01) != 0;
 }
 
-void gdb_if_putchar(const char c, const int flush)
+void gdb_if_putchar(const char character, const int flush)
 {
-	gdb_to_usb_buf[gdb_to_usb_count++] = c;
+	gdb_to_usb_buf[gdb_to_usb_count++] = character;
 	if (flush || gdb_to_usb_count == sizeof(gdb_to_usb_buf)) {
 		/* Refuse to send if USB isn't configured, and
 		 * don't bother if nobody's listening */
@@ -80,7 +80,7 @@ static uint32_t usb_to_gdb_buf_pos = 0;
 
 char gdb_if_getchar(void)
 {
-	uint32_t notificationValue = 0;
+	uint32_t notification_value = 0;
 
 	do {
 		if (!gdb_serial_get_dtr()) {
@@ -93,18 +93,18 @@ char gdb_if_getchar(void)
 
 		if (usb_to_gdb_buf_pos != usb_to_gdb_count) {
 			return (char)usb_to_gdb_buf[usb_to_gdb_buf_pos++];
-		} else {
-			usb_to_gdb_buf_pos = 0;
-			usb_to_gdb_count = 0;
 		}
+
+		usb_to_gdb_buf_pos = 0;
+		usb_to_gdb_count = 0;
 
 		if (tud_cdc_n_available(USB_SERIAL_GDB) > 0) {
 			usb_to_gdb_count = tud_cdc_n_read(USB_SERIAL_GDB, usb_to_gdb_buf, sizeof(usb_to_gdb_buf));
 			continue;
 		}
 
-		if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(portMAX_DELAY)) != pdFALSE) {
-			if (notificationValue & USB_SERIAL_DATA_RX) {
+		if (xTaskNotifyWait(0, UINT32_MAX, &notification_value, pdMS_TO_TICKS(portMAX_DELAY)) != pdFALSE) {
+			if (notification_value & USB_SERIAL_DATA_RX) {
 				usb_to_gdb_count = tud_cdc_n_read(USB_SERIAL_GDB, usb_to_gdb_buf, sizeof(usb_to_gdb_buf));
 				continue;
 			}
@@ -114,7 +114,7 @@ char gdb_if_getchar(void)
 
 char gdb_if_getchar_to(const uint32_t timeout)
 {
-	uint32_t notificationValue = 0;
+	uint32_t notification_value = 0;
 
 	if (!gdb_serial_get_dtr()) {
 		return '\x04';
@@ -126,10 +126,10 @@ char gdb_if_getchar_to(const uint32_t timeout)
 
 	if (usb_to_gdb_buf_pos != usb_to_gdb_count) {
 		return (char)usb_to_gdb_buf[usb_to_gdb_buf_pos++];
-	} else {
-		usb_to_gdb_buf_pos = 0;
-		usb_to_gdb_count = 0;
 	}
+
+	usb_to_gdb_buf_pos = 0;
+	usb_to_gdb_count = 0;
 
 	if (tud_cdc_n_available(USB_SERIAL_GDB) > 0) {
 		usb_to_gdb_count = tud_cdc_n_read(USB_SERIAL_GDB, usb_to_gdb_buf, sizeof(usb_to_gdb_buf));
@@ -145,8 +145,8 @@ char gdb_if_getchar_to(const uint32_t timeout)
 		const uint32_t timeout_left = platform_timeout_time_left(&receive_timeout);
 
 		if ((timeout_left == 0) ||
-			(xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(timeout_left)) != pdFALSE)) {
-			if (notificationValue & USB_SERIAL_DATA_RX) {
+			(xTaskNotifyWait(0, UINT32_MAX, &notification_value, pdMS_TO_TICKS(timeout_left)) != pdFALSE)) {
+			if (notification_value & USB_SERIAL_DATA_RX) {
 				usb_to_gdb_count = tud_cdc_n_read(USB_SERIAL_GDB, usb_to_gdb_buf, sizeof(usb_to_gdb_buf));
 				if (usb_to_gdb_count > 0) {
 					return (char)usb_to_gdb_buf[usb_to_gdb_buf_pos++];

@@ -23,6 +23,7 @@
 #define PLATFORMS_COMMON_TRACESWO_H
 
 #include <stdlib.h>
+#include "FreeRTOS.h"
 
 #define TRACESWO_BUF_SIZE (1024)
 
@@ -46,11 +47,11 @@ uint32_t swo_uart_get_baudrate(void);
 void traceswo_setmask(uint32_t mask);
 
 /* Print decoded SWO packet on USB serial */
-bool traceswo_decode(const void *buf, uint16_t len, const bool flush, const bool drop_if_no_space);
+bool traceswo_decode(const void *buf, uint16_t len, bool flush, bool drop_if_no_space);
 
 void traceswo_task_init(void);
 
-uint32_t traceswo_uart_dma_handler(void);
+BaseType_t traceswo_uart_dma_handler(void);
 
 bool traceswo_uart_is_used(uart_inst_t *uart_instance);
 

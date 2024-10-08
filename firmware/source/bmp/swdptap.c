@@ -34,10 +34,10 @@
 
 #include "tap_pio_common.h"
 
-static uint32_t swdptap_seq_in(size_t clock_cycles) __attribute__((optimize(3)));
-static bool swdptap_seq_in_parity(uint32_t *ret, size_t clock_cycles) __attribute__((optimize(3)));
-static void swdptap_seq_out(uint32_t tms_states, size_t clock_cycles) __attribute__((optimize(3)));
-static void swdptap_seq_out_parity(uint32_t tms_states, size_t clock_cycles) __attribute__((optimize(3)));
+static uint32_t swdptap_seq_in(size_t clock_cycles);
+static bool swdptap_seq_in_parity(uint32_t *ret, size_t clock_cycles);
+static void swdptap_seq_out(uint32_t tms_states, size_t clock_cycles);
+static void swdptap_seq_out_parity(uint32_t tms_states, size_t clock_cycles);
 
 typedef struct {
 	uint8_t start;
@@ -50,7 +50,7 @@ typedef struct {
 	uint8_t turnaround_in_to_out;
 } swd_program_pos_t;
 
-const swd_program_pos_t miolink_revA_program_pos = {.start = 0,
+const swd_program_pos_t miolink_rev_a_program_pos = {.start = 0,
 	.seq_out_turnaround_in_to_out = 1,
 	.seq_out = 3,
 	.seq_in_turnaround_out_to_in = 8,
@@ -59,7 +59,7 @@ const swd_program_pos_t miolink_revA_program_pos = {.start = 0,
 	.adiv5_req = 17,
 	.turnaround_in_to_out = 26};
 
-const swd_program_pos_t miolink_revB_program_pos = {.start = 0,
+const swd_program_pos_t miolink_rev_b_program_pos = {.start = 0,
 	.seq_out_turnaround_in_to_out = 1,
 	.seq_out = 2,
 	.seq_in_turnaround_out_to_in = 7,
@@ -106,9 +106,9 @@ static const swd_program_pos_t *swdtap_get_program_pos(void)
 	switch (device_type) {
 	case PLATFORM_DEVICE_TYPE_MIOLINK:
 		if (platform_hwversion() == PLATFORM_MIOLINK_REV_A) {
-			p_program_pos = &miolink_revA_program_pos;
+			p_program_pos = &miolink_rev_a_program_pos;
 		} else {
-			p_program_pos = &miolink_revB_program_pos;
+			p_program_pos = &miolink_rev_b_program_pos;
 		}
 		break;
 
@@ -202,6 +202,8 @@ void swdptap_init(void)
 		set_pins_base = target_pins->tms;
 		set_pins_count = 1;
 		sideset_pins_base = target_pins->tck;
+
+		gpio_set_pulls(target_pins->tms, true, false);
 		break;
 
 	default:
@@ -216,8 +218,8 @@ void swdptap_init(void)
 	sm_config_set_sideset_pins(&prog_config, sideset_pins_base);
 
 	tap_pio_common_disable_input_sync(TARGET_SWD_PIO, target_pins->tms);
-	sm_config_set_out_pins(&prog_config, target_pins->tms, 1);
 	sm_config_set_in_pins(&prog_config, target_pins->tms);
+	sm_config_set_out_pins(&prog_config, target_pins->tms, 1);
 	sm_config_set_out_shift(&prog_config, true, true, 32);
 	sm_config_set_in_shift(&prog_config, true, true, 32);
 
@@ -287,7 +289,7 @@ static bool swdptap_seq_in_parity(uint32_t *ret, size_t clock_cycles)
 			;
 		bit = (pio_sm_get_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ) != 0);
 	} else {
-		bit = ((value & (1u << clock_cycles)) != 0);
+		bit = ((value & (1UL << clock_cycles)) != 0);
 	}
 
 	tms_dir = SWDIO_STATUS_DRIVE;
@@ -335,7 +337,7 @@ static void swdptap_seq_out_parity(const uint32_t tms_states, const size_t clock
 
 	if (clock_cycles <= 31) {
 		uint32_t value = tms_states;
-		value |= (parity ? (1u << clock_cycles) : 0);
+		value |= (parity ? (1UL << clock_cycles) : 0);
 		pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, value);
 	} else {
 		pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, tms_states);
@@ -377,25 +379,23 @@ bool rp2040_pio_adiv5_swd_raw_access_data(const uint32_t data_out, uint32_t *dat
 	const swd_program_pos_t *p_program_pos = swdtap_get_program_pos();
 	assert(p_program_pos != NULL);
 
-	uint32_t parity = false;
+	bool parity = false;
 
 	if (rnw) {
 		pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_in);
 		pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, 32);
 		pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_out_turnaround_in_to_out);
 		pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, TARGET_SWD_IDLE_CYCLES - 1);
-
-		while (pio_sm_get_rx_fifo_level(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ) < 2)
-			;
 		pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, 0);
 
 		*data_in = pio_sm_get_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ);
-		parity = (pio_sm_get_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ) != 0) == calculate_odd_parity(*data_in);
+		parity =
+			(pio_sm_get_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ) != 0) == (calculate_odd_parity(*data_in) != 0);
 
 		tap_pio_common_wait_for_tx_stall(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ);
 		pio_sm_clear_fifos(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ);
 	} else {
-		parity = calculate_odd_parity(data_out);
+		parity = (calculate_odd_parity(data_out) != 0);
 
 		pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, p_program_pos->seq_out_turnaround_in_to_out);
 		pio_sm_put_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, 32 + TARGET_SWD_IDLE_CYCLES);

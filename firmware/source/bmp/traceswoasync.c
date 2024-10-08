@@ -191,10 +191,10 @@ static BaseType_t uart_rx_dma_start_receiving(void)
 
 	rp_uart_set_dma_req_enabled(TRACESWO_UART, true, false);
 
-	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	BaseType_t higher_priority_task_woken = pdFALSE;
 
-	xTimerResetFromISR(uart_rx_dma_timeout_timer, &xHigherPriorityTaskWoken);
-	return xHigherPriorityTaskWoken;
+	xTimerResetFromISR(uart_rx_dma_timeout_timer, &higher_priority_task_woken);
+	return higher_priority_task_woken;
 }
 
 static void uart_rx_dma_process_buffers(void)
@@ -395,7 +395,6 @@ void swo_init(swo_coding_e swo_mode, uint32_t baudrate, uint32_t itm_stream_bitm
 	memset(uart_rx_buf, 0xAA, sizeof(uart_rx_buf));
 
 	irq_set_enabled(TRACESWO_UART_IRQ, true);
-	//irq_set_priority(TRACESWO_UART_IRQ, 0);
 
 	traceswo_setmask(itm_stream_bitmask);
 	traceswo_decoding = itm_stream_bitmask != 0;
@@ -515,7 +514,7 @@ static void uart_rx_isr(void)
 
 	uint32_t notify_bits = 0;
 
-	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	BaseType_t higher_priority_task_woken = pdFALSE;
 
 	if (uart_rx_use_dma == false) {
 		if (uart_int_status & RP_UART_INT_RX_BITS) {
@@ -541,37 +540,37 @@ static void uart_rx_isr(void)
 			notify_bits |= USB_SERIAL_DATA_UART_RX_FLUSH;
 		}
 	} else {
-		xHigherPriorityTaskWoken = uart_rx_dma_start_receiving();
+		higher_priority_task_woken = uart_rx_dma_start_receiving();
 		rp_uart_clear_rx_and_rx_timeout_irq_flags(TRACESWO_UART);
 
 		traceswo_update_led();
 
-		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+		portYIELD_FROM_ISR(higher_priority_task_woken);
 
 		return;
 	}
 
-	xTaskNotifyFromISR(traceswo_task, notify_bits, eSetBits, &xHigherPriorityTaskWoken);
-	portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+	xTaskNotifyFromISR(traceswo_task, notify_bits, eSetBits, &higher_priority_task_woken);
+	portYIELD_FROM_ISR(higher_priority_task_woken);
 }
 
-uint32_t traceswo_uart_dma_handler(void)
+BaseType_t traceswo_uart_dma_handler(void)
 {
 	assert(uart_dma_rx_channel != -1);
 
-	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	BaseType_t higher_priority_task_woken = pdFALSE;
 
 	if (dma_channel_get_irq0_status(uart_dma_rx_channel)) {
 		dma_channel_acknowledge_irq0(uart_dma_rx_channel);
 
-		uart_rx_dma_buffer_full_mask |= (1u << uart_rx_dma_current_buffer);
+		uart_rx_dma_buffer_full_mask |= (1UL << uart_rx_dma_current_buffer);
 
 		if (++uart_rx_dma_current_buffer >= TRACESWO_UART_DMA_RX_NUMBER_OF_BUFFERS) {
 			uart_rx_dma_current_buffer = 0;
 		}
 
-		xTaskNotifyFromISR(traceswo_task, USB_SERIAL_DATA_UART_RX_FLUSH, eSetBits, &xHigherPriorityTaskWoken);
+		xTaskNotifyFromISR(traceswo_task, USB_SERIAL_DATA_UART_RX_FLUSH, eSetBits, &higher_priority_task_woken);
 	}
 
-	return xHigherPriorityTaskWoken;
+	return higher_priority_task_woken;
 }

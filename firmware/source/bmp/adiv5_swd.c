@@ -32,9 +32,12 @@
 #include "target.h"
 #include "target_internal.h"
 
-extern void swdptap_seq_out_buffer(const uint32_t *tms_states, const size_t clock_cycles);
-extern uint8_t rp2040_pio_adiv5_swd_write_no_check(const uint8_t request, const uint32_t data);
-extern uint8_t rp2040_pio_adiv5_swd_read_no_check(const uint8_t request, uint32_t *data);
+extern void swdptap_seq_out_buffer(const uint32_t *tms_states, size_t clock_cycles);
+extern uint8_t rp2040_pio_adiv5_swd_write_no_check(uint8_t request, uint32_t data);
+extern uint8_t rp2040_pio_adiv5_swd_read_no_check(uint8_t request, uint32_t *data);
+
+extern uint8_t rp2040_pio_adiv5_swd_raw_access_req(uint8_t request);
+extern uint8_t rp2040_pio_adiv5_swd_raw_access_data(uint32_t data_out, uint32_t *data_in, uint8_t rnw);
 
 uint8_t make_packet_request(uint8_t rnw, uint16_t addr)
 {
@@ -95,7 +98,7 @@ static void dormant_to_swd_sequence(void)
 	 */
 	const uint32_t data[] = {ADIV5_SELECTION_ALERT_SEQUENCE_0, ADIV5_SELECTION_ALERT_SEQUENCE_1,
 		ADIV5_SELECTION_ALERT_SEQUENCE_2, ADIV5_SELECTION_ALERT_SEQUENCE_3, ADIV5_ACTIVATION_CODE_ARM_SWD_DP << 4U};
-	swdptap_seq_out_buffer(data, 32U * 4 + 12U);
+	swdptap_seq_out_buffer(data, (32U * 4) + 12U);
 
 	/*
 	 * The target is in the protocol error state after selecting SWD
@@ -370,11 +373,6 @@ uint32_t adiv5_swd_clear_error(adiv5_debug_port_s *const dp, const bool protocol
 	dp->fault = 0;
 	return err;
 }
-
-#include "hardware/pio.h"
-
-extern uint8_t rp2040_pio_adiv5_swd_raw_access_req(const uint8_t request);
-extern uint8_t rp2040_pio_adiv5_swd_raw_access_data(const uint32_t data_out, uint32_t *data_in, const uint8_t rnw);
 
 uint32_t adiv5_swd_raw_access(adiv5_debug_port_s *dp, const uint8_t rnw, const uint16_t addr, const uint32_t value)
 {

@@ -1,77 +1,85 @@
 .program miolink_revA_target_swd
 .side_set 1 opt
 
-; Pin mapping for SWD:
-; Autopull should be enabled, with a threshold of 32,
-; except for swd_adiv5_raw_access_req command, for this command autopull threshold should be 8
-; to save 1 cycle on "out null, 32"
-; Autopush should be enabled, with a threshold of 32,
-; except for swd_adiv5_raw_access_req command, for this command autopush threshold should be 3
-; to save 1 cycle on "push" after ACK reading
+; Pin mapping for this program:
 ; IN - TMS
 ; OUT - TMS
 ; Side-set - TCK
-; Set - pin 0 is TMS, pin 1 is TMS_DIR (to change direction through set pindirs)
+; Set - pin 0 is TMS (to change direction through set pindirs),
+;       pin 1 is TMS_DIR (to change the external level shifter direction through set pins).
+; Autopull should be enabled, with a threshold of 32,
+; except for the swd_adiv5_raw_access_req command, where the autopull threshold should be 8
+; to save 1 cycle on "out null, 32".
+; Autopush should be enabled, with a threshold of 32,
+; except for the swd_adiv5_raw_access_req command, where the autopush threshold should be 3
+; to save 1 cycle on "push" after reading ACK.
+; Additional 3 delay cycles reduce the time spent on non-data instructions, but at the same time
+; limit the maximum interface frequency. In our case (3 additional delay cycles after each edge),
+; the limit is set to sys_clk / 8, as 3 + 1 + 3 + 1 = 8.
 
-.wrap_target
+.wrap_target ; start of the program
 
-swd_start_prog:     ; Program start
-    out pc, 32      ; wait for next command
+swd_start_prog:     ; program start
+    out pc, 32      ; wait for the next command
 
-swd_seq_out_turnaround_in_to_out:   ; TMS turnaround from float to drive state
-    set pins, 2 side 1    [3]       ; set TMS_DIR pin to 1 (2t45 dir = output) and rising edge on TCK
-    set pindirs, 3 side 0 [3]       ; set TMS_DIR and TMS pindirs to outputs (3 = 0b11) and falling edge on TCK
+swd_seq_out_turnaround_in_to_out:   ; TMS turnaround from input to output state
+    set pins, 2 side 1 [3]          ; set the TMS_DIR pin to 1 (2 = 0b10, level shifter - output) and a rising edge on TCK
+    set pindirs, 3 side 0 [2]       ; set TMS_DIR and TMS pindirs to outputs (3 = 0b11) and a falling edge on TCK
 
 swd_seq_out:                        ; TMS sequence out program
-                                    ; TMS direction should be output and TMS_DIR state should be 1
-    out x, 32                       ; load number of cycles from TX FIFO
+                                    ; TMS direction should be output, and TMS_DIR state should be 1
+    out x, 32                       ; load the number of cycles from the TX FIFO
     swd_seq_out_loop:
-        out pins, 1 side 0              [3] ; set TMS pin state and falling edge on TCK
-        jmp x-- swd_seq_out_loop side 1 [3] ; decrement cycle counter and set rising edge on TCK
+        out pins, 1 side 0 [3]              ; output TMS pin state and a falling edge on TCK
+        jmp x-- swd_seq_out_loop side 1 [3] ; decrement the cycle counter and a rising edge on TCK
 
-    pull block side 0                   ; flush remaining data in osr and set falling edge on TCK
-    out pc, 32                          ; wait for next command
+    pull block side 0 [2]  ; flush remaining data in OSR and a falling edge on TCK
+    out pc, 32             ; wait for the next command
 
-swd_seq_in_turnaround_out_to_in:        ; TMS turnaround from drive to float state
-    set pindirs, 2 side 1 [3]           ; set TMS_DIR pindir to output, TMS pindir to input (2 = 0b10) and rising edge on TCK
-    set pins, 0 side 0 [3]              ; set TMS_DIR pin to 0 (2t45 dir = input) and falling edge on TCK
+swd_seq_in_turnaround_out_to_in:    ; TMS turnaround from output to input state
+    set pindirs, 2 side 1 [3]       ; set the TMS_DIR pindir to output, TMS pindir to input (2 = 0b10)
+                                    ; and a rising edge on TCK
+    set pins, 0 side 0 [2]          ; set the TMS_DIR pin to 0 (level shifter - input) and a falling edge on TCK
 
 swd_seq_in:                             ; TMS sequence in program
-                                        ; TMS direction should be input and TMS_DIR state should be 0
-    out x, 32                           ; load number of cycles from TX FIFO
+                                        ; TMS direction should be input, and TMS_DIR state should be 0
+    out x, 32                           ; load the number of cycles from the TX FIFO
     swd_seq_in_loop:
-        in pins, 1 side 0 [3]              ; read TMS pin state into isr and falling edge on TCK
-        jmp x-- swd_seq_in_loop side 1 [3] ; decrement cycle counter and set rising edge on TCK
+        in pins, 1 side 0 [3]               ; read TMS pin state into ISR and a falling edge on TCK,
+        jmp x-- swd_seq_in_loop side 1 [3]  ; decrement the cycle counter and a rising edge on TCK
 
-    push side 0                        ; push isr content to RX FIFO for the case when cycle counter < 32 (autopush threshold)
-                                       ; and set falling edge on TCK
-    out pc, 32                         ; wait for next command
+    push side 0 [2]                     ; push ISR content to RX FIFO if the cycle counter < 32 (autopush threshold)
+                                        ; and a falling edge on TCK
+    out pc, 32                          ; wait for the next command
 
-swd_adiv5_req_turnaround_in_to_out:    ; TMS turnaround from float to drive state for SWD ADIv5 request (saves 1 cycle on "out pc, 32")
-    set pins, 2 side 1    [3]          ; set TMS_DIR pin to 1 (2t45 dir = output) and rising edge on TCK
-    set pindirs, 3 side 0 [3]          ; set TMS_DIR and TMS pindirs to outputs (3 = 0b11) and falling edge on TCK
+swd_adiv5_req_turnaround_in_to_out:     ; TMS turnaround from input to output state for the SWD ADIv5 request.
+                                        ; This program saves at least one cycle on the "out pc, 32" instruction.
+    set pins, 2 side 1 [3]              ; set the TMS_DIR pin to 1 (2 = 0b10, level shifter - output) and a rising edge on TCK
+    set pindirs, 3 side 0 [2]           ; set TMS_DIR and TMS pindirs to outputs (3 = 0b11) and a falling edge on TCK
 
-swd_adiv5_req:                                    ; SWD ADIv5 request program (sends request and receives ACK)
-                                                  ; for this command autopull threshold should be 8
-                                                  ; and autopush threshold should be 3
-    set x, 7                                      ; set cycle counter, should be (number of cycles - 1)m
-                                                  ; request length is 8, so set 8-1=7
-    swd_adiv5_req_out_loop:                       ; Send 8 bits request
-        out pins, 1 side 0  [3]                   ; set TMS pin state and falling edge on TCK
-        jmp x-- swd_adiv5_req_out_loop side 1 [3] ; decrement cycle counter and set rising edge on TCK
-    set x, 2 side 0 [3]                           ; set cycle counter for ACK (ACK length is 3 bits, so 3-1=2)
-                                                  ; and falling edge on TCK
+swd_adiv5_req:                          ; SWD ADIv5 request program (sends request and receives ACK).
+                                        ; For this command, the autopull threshold should be 8
+                                        ; and the autopush threshold should be 3.
+    set x, 7                            ; set the cycle counter to (number of cycles - 1).
+                                        ; The request length is 8, so set 8-1=7.
+    swd_adiv5_req_out_loop:                       ; Send an 8-bit request
+        out pins, 1 side 0 [3]                    ; output TMS pin state and a falling edge on TCK
+        jmp x-- swd_adiv5_req_out_loop side 1 [3] ; decrement the cycle counter and a rising edge on TCK
 
-                                ; then, after request, perform a turnaround cycle from out to in to read ACK
-    set pindirs, 2 side 1 [3]   ; set TMS_DIR pindir to output, TMS pindir to input (2 = 0b10) and rising edge on TCK
-    set pins, 0 side 0 [3]      ; set TMS_DIR pin to 0 (2t45 dir = input) and falling edge on TCK
+    set x, 2 side 0 [3]                 ; set the cycle counter for ACK (ACK length is 3 bits, so 3-1=2),
+                                        ; and a falling edge on TCK.
 
-    swd_adiv5_req_ack_loop:                       ; Read the acknowledgement
-        in pins, 1 side 0 [3]                     ; read TMS pin state into isr and falling edge on TCK
-        jmp x-- swd_adiv5_req_ack_loop side 1 [3] ; decrement cycle counter and set rising edge on TCK
-    out pc, 32 side 0                             ; wait for next command and set falling edge on TCK
+                                        ; perform a turnaround cycle from output to input to read the ACK after the request
+    set pindirs, 2 side 1 [3]           ; set the TMS_DIR pindir to output, TMS pindir to input (2 = 0b10)
+                                        ; and a rising edge on TCK.
+    set pins, 0 side 0 [3]              ; set the TMS_DIR pin to 0 (level shifter - input) and a falling edge on TCK.
 
-swd_turnaround_in_to_out:        ; Separate TMS turnaround in to out program for seq_in_parity
-    set pins, 2 side 1    [3]    ; set TMS_DIR pin to 1 (2t45 dir = output) and rising edge on TCK
-    set pindirs, 3 side 0 [3]    ; set TMS_DIR and TMS pindirs to outputs (3 = 0b11) and falling edge on TCK
-.wrap
+    swd_adiv5_req_ack_loop:                       ; read the acknowledgement
+        in pins, 1 side 0 [3]                     ; read the TMS pin state into the ISR and a falling edge on TCK
+        jmp x-- swd_adiv5_req_ack_loop side 1 [3] ; decrement the cycle counter and a rising edge on TCK.
+    out pc, 32 side 0 [3]                         ; wait for the next command and a falling edge on TCK.
+
+swd_turnaround_in_to_out:               ; Separate TMS turnaround from input to output state for seq_in_parity
+    set pins, 2 side 1 [3]              ; set the TMS_DIR pin to 1 (2 = 0b10, level shifter - output) and a rising edge on TCK.
+    set pindirs, 3 side 0 [3]           ; set TMS_DIR and TMS pindirs to outputs (3 = 0b11) and a falling edge on TCK.
+.wrap ; program wraps to the start

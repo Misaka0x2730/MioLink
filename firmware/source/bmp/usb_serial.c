@@ -107,6 +107,11 @@ static uart_inst_t *current_uart = USB_SERIAL_UART_MAIN;
 static void uart_rx_isr(void);
 static void uart_dma_handler(void);
 
+bool usb_serial_get_dtr(void)
+{
+	return (tud_cdc_n_get_line_state(USB_SERIAL_TARGET) & 0x01) != 0;
+}
+
 void usb_serial_update_led(void)
 {
 	if (tud_cdc_n_connected(USB_SERIAL_TARGET) == false) {
@@ -121,14 +126,21 @@ uint16_t usb_serial_get_available(void)
 	return tud_cdc_n_write_available(USB_SERIAL_TARGET);
 }
 
+uint32_t usb_serial_read(uint8_t *data, const uint32_t buffer_size)
+{
+	return tud_cdc_n_read(USB_SERIAL_TARGET, data, buffer_size);
+}
+
 bool usb_serial_send_to_usb(uint8_t *data, const size_t len, bool flush, const bool allow_drop_buffer)
 {
 	bool result = false;
 	const uint32_t write_available = tud_cdc_n_write_available(USB_SERIAL_TARGET);
 
-	if ((tud_cdc_n_get_line_state(USB_SERIAL_TARGET) & 0x01) == 0) {
+	if (usb_serial_get_dtr() == false) {
 		return true;
-	} else if (write_available < len) {
+	}
+
+	if (write_available < len) {
 		if (allow_drop_buffer) {
 			tud_cdc_n_write(USB_SERIAL_TARGET, data, write_available);
 			result = true;
@@ -219,10 +231,10 @@ static BaseType_t uart_rx_dma_start_receiving(void)
 
 	rp_uart_set_dma_req_enabled(current_uart, true, true);
 
-	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	BaseType_t higher_priority_task_woken = pdFALSE;
 
-	xTimerResetFromISR(uart_rx_dma_timeout_timer, &xHigherPriorityTaskWoken);
-	return xHigherPriorityTaskWoken;
+	xTimerResetFromISR(uart_rx_dma_timeout_timer, &higher_priority_task_woken);
+	return higher_priority_task_woken;
 }
 
 static void uart_rx_dma_process_buffers(void)
@@ -231,7 +243,7 @@ static void uart_rx_dma_process_buffers(void)
 
 	while (1) {
 		const uint32_t buffer_state = uart_rx_dma_buffer_full_mask;
-		const uint32_t buffer_bit = (1u << uart_rx_next_buffer_to_send);
+		const uint32_t buffer_bit = (1UL << uart_rx_next_buffer_to_send);
 		const bool allow_drop_buffer =
 			(__builtin_popcount(buffer_state) >= USB_SERIAL_UART_DMA_RX_DROP_BUFFER_THRESHOLD);
 		const uint32_t data_len = sizeof(uart_rx_buf[uart_rx_next_buffer_to_send]);
@@ -289,7 +301,7 @@ static bool uart_rx_dma_finish_receiving(void)
 
 	while (1) {
 		const uint32_t buffer_state = uart_rx_dma_buffer_full_mask;
-		const uint32_t buffer_bit = (1u << uart_rx_next_buffer_to_send);
+		const uint32_t buffer_bit = (1UL << uart_rx_next_buffer_to_send);
 		if (buffer_state & buffer_bit) {
 			usb_serial_send_to_usb(uart_rx_buf[uart_rx_next_buffer_to_send],
 				sizeof(uart_rx_buf[uart_rx_next_buffer_to_send]), false, true);
@@ -559,7 +571,9 @@ extern void rtt_serial_receive_callback(void);
 
 _Noreturn static void target_serial_thread(void *params)
 {
-	uint32_t notificationValue = 0;
+	(void)params;
+
+	uint32_t notification_value = 0;
 
 	uart_rx_dma_timeout_timer = xTimerCreate("SERIAL_UART_RX", pdMS_TO_TICKS(USB_SERIAL_UART_DMA_RX_MAX_TIMEOUT),
 		pdFALSE, NULL, uart_rx_dma_timeout_callback);
@@ -576,26 +590,24 @@ _Noreturn static void target_serial_thread(void *params)
 	irq_set_exclusive_handler(USB_SERIAL_TRACESWO_DMA_IRQ, uart_dma_handler);
 	irq_set_enabled(USB_SERIAL_TRACESWO_DMA_IRQ, true);
 
-	//irq_set_priority(USB_SERIAL_TRACESWO_DMA_IRQ, 0);
-
 	uint32_t wait_time = USB_SERIAL_TASK_NOTIFY_WAIT_PERIOD;
 
 	while (1) {
-		if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(wait_time)) == pdPASS) {
-			if (notificationValue & USB_SERIAL_LINE_CODING_UPDATE) {
+		if (xTaskNotifyWait(0, UINT32_MAX, &notification_value, pdMS_TO_TICKS(wait_time)) == pdPASS) {
+			if (notification_value & USB_SERIAL_LINE_CODING_UPDATE) {
 				cdc_line_coding_t line_coding = {0};
 				tud_cdc_n_get_line_coding(USB_SERIAL_TARGET, &line_coding);
 
 				uart_update_config(&line_coding);
 			}
 
-			if (notificationValue & (USB_SERIAL_DATA_UART_RX_AVAILABLE | USB_SERIAL_DATA_UART_RX_FLUSH)) {
-				if (notificationValue & USB_SERIAL_DATA_UART_RX_AVAILABLE) {
+			if (notification_value & (USB_SERIAL_DATA_UART_RX_AVAILABLE | USB_SERIAL_DATA_UART_RX_FLUSH)) {
+				if (notification_value & USB_SERIAL_DATA_UART_RX_AVAILABLE) {
 					assert(uart_rx_use_dma == false);
 					uart_rx_int_process();
 				}
 
-				if (notificationValue & USB_SERIAL_DATA_UART_RX_FLUSH) {
+				if (notification_value & USB_SERIAL_DATA_UART_RX_FLUSH) {
 					if (uart_rx_use_dma == false) {
 						uart_rx_int_finish();
 					} else {
@@ -604,15 +616,15 @@ _Noreturn static void target_serial_thread(void *params)
 				}
 			}
 
-			if (notificationValue & USB_SERIAL_DATA_UART_TX_COMPLETE) {
+			if (notification_value & USB_SERIAL_DATA_UART_TX_COMPLETE) {
 				uart_tx_dma_send();
 			}
 
-			if ((notificationValue & USB_SERIAL_DATA_UART_RX_TIMEOUT) && (uart_rx_ongoing != false)) {
+			if ((notification_value & USB_SERIAL_DATA_UART_RX_TIMEOUT) && (uart_rx_ongoing != false)) {
 				uart_rx_dma_finish_receiving();
 			}
 
-			if ((notificationValue & USB_SERIAL_DATA_RX) && (uart_tx_ongoing == false)) {
+			if ((notification_value & USB_SERIAL_DATA_RX) && (uart_tx_ongoing == false)) {
 #ifdef ENABLE_RTT
 				if (rtt_enabled) {
 					rtt_serial_receive_callback();
@@ -657,7 +669,7 @@ static void uart_rx_isr(void)
 
 	uint32_t notify_bits = 0;
 
-	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	BaseType_t higher_priority_task_woken = pdFALSE;
 
 	if (uart_rx_use_dma == false) {
 		if (uart_int_status & RP_UART_INT_RX_BITS) {
@@ -683,25 +695,25 @@ static void uart_rx_isr(void)
 			notify_bits |= USB_SERIAL_DATA_UART_RX_FLUSH;
 		}
 	} else {
-		xHigherPriorityTaskWoken = uart_rx_dma_start_receiving();
+		higher_priority_task_woken = uart_rx_dma_start_receiving();
 		rp_uart_clear_rx_and_rx_timeout_irq_flags(current_uart);
 
 		usb_serial_update_led();
 
-		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+		portYIELD_FROM_ISR(higher_priority_task_woken);
 
 		return;
 	}
 
-	xTaskNotifyFromISR(usb_uart_task, notify_bits, eSetBits, &xHigherPriorityTaskWoken);
-	portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+	xTaskNotifyFromISR(usb_uart_task, notify_bits, eSetBits, &higher_priority_task_woken);
+	portYIELD_FROM_ISR(higher_priority_task_woken);
 }
 
 static void uart_dma_handler(void)
 {
 	traceISR_ENTER();
 
-	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	BaseType_t higher_priority_task_woken = pdFALSE;
 
 	assert((uart_dma_rx_channel != -1) && (uart_dma_tx_channel != -1));
 
@@ -709,25 +721,25 @@ static void uart_dma_handler(void)
 		dma_channel_set_irq0_enabled(uart_dma_tx_channel, false);
 		dma_channel_acknowledge_irq0(uart_dma_tx_channel);
 
-		xTaskNotifyFromISR(usb_uart_task, USB_SERIAL_DATA_UART_TX_COMPLETE, eSetBits, &xHigherPriorityTaskWoken);
+		xTaskNotifyFromISR(usb_uart_task, USB_SERIAL_DATA_UART_TX_COMPLETE, eSetBits, &higher_priority_task_woken);
 	}
 
 	if (dma_channel_get_irq0_status(uart_dma_rx_channel)) {
 		dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
-		uart_rx_dma_buffer_full_mask |= (1u << uart_rx_dma_current_buffer);
+		uart_rx_dma_buffer_full_mask |= (1UL << uart_rx_dma_current_buffer);
 
 		if (++uart_rx_dma_current_buffer >= USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS) {
 			uart_rx_dma_current_buffer = 0;
 		}
-		-xTaskNotifyFromISR(usb_uart_task, USB_SERIAL_DATA_UART_RX_FLUSH, eSetBits, &xHigherPriorityTaskWoken);
+		-xTaskNotifyFromISR(usb_uart_task, USB_SERIAL_DATA_UART_RX_FLUSH, eSetBits, &higher_priority_task_woken);
 	}
 
 #ifdef PLATFORM_HAS_TRACESWO
-	const BaseType_t xHigherPriorityTaskWokenTrace = traceswo_uart_dma_handler();
+	const BaseType_t higher_priority_task_woken_trace = traceswo_uart_dma_handler();
 
-	portYIELD_FROM_ISR(xHigherPriorityTaskWoken || xHigherPriorityTaskWokenTrace);
+	portYIELD_FROM_ISR(higher_priority_task_woken || higher_priority_task_woken_trace);
 #else
-	portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+	portYIELD_FROM_ISR(higher_priority_task_woken);
 #endif
 }
 
@@ -746,13 +758,17 @@ __attribute__((used)) int _write(const int file, const void *const ptr, const si
 {
 	(void)file;
 #ifdef PLATFORM_HAS_DEBUG
+	size_t bytes_written = 0;
+
 	if (debug_bmp)
-		return debug_serial_debug_write(ptr, len);
+		bytes_written = debug_serial_debug_write(ptr, len);
 	else
-		SEGGER_RTT_Write(0, ptr, len);
+		bytes_written = SEGGER_RTT_Write(0, ptr, len);
+
+	return (bytes_written == len) ? (int)bytes_written : -1;
 #else
 	(void)ptr;
-#endif
 	return len;
+#endif
 }
 #endif
