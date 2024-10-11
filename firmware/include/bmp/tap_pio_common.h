@@ -23,15 +23,24 @@
 #include "general.h"
 #include "hardware/pio.h"
 
-#define TARGET_SWD_PIO          (pio0)
-#define TARGET_SWD_PIO_SM_SEQ   (0)
-#define TARGET_SWD_PIO_SM_ADIV5 (1)
+typedef enum
+{
+	TARGET_SWD_PIO_SM_SEQ_IN = 0,
+	TARGET_SWD_PIO_SM_SEQ_IN_PARITY,
+	TARGET_SWD_PIO_SM_SEQ_OUT,
+	TARGET_SWD_PIO_SM_ADIV5,
+} target_swd_pio_sm_t;
 
-#define TARGET_JTAG_PIO                (pio0)
-#define TARGET_JTAG_PIO_SM_NEXT_CYCLE  (0)
-#define TARGET_JTAG_PIO_SM_TMS_SEQ     (1)
-#define TARGET_JTAG_PIO_SM_TDI_TDO_SEQ (2)
-#define TARGET_JTAG_PIO_SM_TDI_SEQ     (3)
+typedef enum
+{
+	TARGET_JTAG_PIO_SM_NEXT_CYCLE = 0,
+	TARGET_JTAG_PIO_SM_TMS_SEQ,
+	TARGET_JTAG_PIO_SM_TDI_TDO_SEQ,
+	TARGET_JTAG_PIO_SM_TDI_SEQ,
+} target_jtag_pio_sm_t;
+
+#define TARGET_SWD_PIO     (pio0)
+#define TARGET_JTAG_PIO    (pio0)
 
 static inline bool tap_pio_common_is_not_tx_stalled(PIO pio, uint32_t sm)
 {
@@ -49,6 +58,13 @@ static inline void tap_pio_common_wait_for_tx_stall(PIO pio, uint32_t sm)
 static inline void tap_pio_common_disable_input_sync(PIO pio, uint32_t pin)
 {
 	pio->input_sync_bypass |= (1UL << pin);
+}
+
+static inline void tap_pio_common_disable_all_machines(PIO pio)
+{
+	for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
+		pio_sm_set_enabled(pio, i, false);
+	}
 }
 
 #endif //MIOLINK_TAP_PIO_COMMON_H

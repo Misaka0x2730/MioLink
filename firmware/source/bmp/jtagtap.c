@@ -56,12 +56,8 @@ extern uint32_t target_interface_frequency;
 
 void jtagtap_init(void)
 {
-	pio_sm_set_enabled(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_SEQ, false);
-	pio_sm_set_enabled(TARGET_SWD_PIO, TARGET_SWD_PIO_SM_ADIV5, false);
-	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, false);
-	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, false);
-	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, false);
-	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, false);
+	tap_pio_common_disable_all_machines(TARGET_SWD_PIO);
+	tap_pio_common_disable_all_machines(TARGET_JTAG_PIO);
 
 	const platform_target_pins_t *target_pins = platform_get_target_pins();
 

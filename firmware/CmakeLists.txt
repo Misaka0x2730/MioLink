@@ -148,10 +148,10 @@ target_link_libraries(MioLink PUBLIC FreeRTOS-Kernel
                                      FreeRTOS-Kernel-Heap4)
 
 # Compile PIO programs
-pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/miolink_revA_target_swd.pio)
-pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/miolink_revB_target_swd.pio)
-pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/miolink_pico_target_swd.pio)
-pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/pico_target_swd.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/miolink_rev_a_swd.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/miolink_rev_b_swd.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/miolink_pico_swd.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/pico_swd.pio)
 pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/target_jtag.pio)
 
 # Set linker script and set parameter to print memory usage

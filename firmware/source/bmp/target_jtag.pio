@@ -1,7 +1,8 @@
 .program target_jtag
 .side_set 1 opt
 
-; Actually, this program consists of four subprograms. Each state machine executes its own subprogram and has its own wrap value.
+; Actually, this program consists of four subprograms.
+; Each state machine executes its own subprogram and has its own wrap value.
 
 ; Machine 0 executes the programs jtagtap_next and jtagtap_cycle.
 ; Machine 1 executes the program jtagtap_tms_seq.
@@ -54,9 +55,9 @@ jtag_tdi_seq:         ; TDI sequence program (jtagtap_tdi_seq), machine 3
     jmp !y jtag_tdi_tdo_seq_final_tms_0       ; if the value in the y register is 0 - go to the final TMS=0 step
     jmp jtag_tdi_tdo_seq_final_tms_1          ; if the value in the y register is not 0 - go to the final TMS=1 step
 
-jtag_tdi_tdo_seq: ; TDI and TDO sequence program (jtagtap_tdi_tdo_seq), machine 2
-    set pins, 0  ; set initial TMS state = 0
-    out y, 32    ; save the final TMS value in the y register (0 - final TMS is 0, otherwise - 1)
+jtag_tdi_tdo_seq:  ; TDI and TDO sequence program (jtagtap_tdi_tdo_seq), machine 2
+    set pins, 0    ; set initial TMS state = 0
+    out y, 32      ; save the final TMS value in the y register (0 - final TMS is 0, otherwise - 1)
 
     jtag_tdi_tdo_seq_loop:
         out pins, 1 side 0 [3]          ; output TDI pin state and a falling edge on TCK
@@ -74,10 +75,10 @@ jtag_tdi_tdo_seq_final_tms_0:
     set pins, 0                       ; set final TMS = 1 and go to the last cycle step
 
 jtag_tdi_tdo_seq_final_clock:
-    out pins, 1 side 0  [3] ; output last TDI pin state and a falling edge on TCK
-    in pins, 1 side 1   [3] ; read read TDO pin state into ISR and a rising edge on TCK
-    push side 0             ; push isr content to the RX FIFO and a falling edge on TCK,
-                            ; also this step is a wrap for machines 2 and 3
+    out pins, 1 side 0  [3]  ; output last TDI pin state and a falling edge on TCK
+    in pins, 1 side 1   [3]  ; read read TDO pin state into ISR and a rising edge on TCK
+    push side 0              ; push isr content to the RX FIFO and a falling edge on TCK,
+                             ; also this step is a wrap for machines 2 and 3
 
 jtag_tms_seq:     ; TMS sequence program (jtagtap_tms_seq), machine 1
     set pins, 1   ; set initial TDI value = 1
@@ -90,17 +91,17 @@ jtag_tms_seq:     ; TMS sequence program (jtagtap_tms_seq), machine 1
                                               ; see jtag_program_start
 
 jtag_next_cycle_initial_set_1: ; jtagtap_next and jtagtap_cycle programs (machine 0)
-    set pins, 1          ; set initial TMS value = 1
-    jmp jtag_next_cycle  ; go to the loop
+    set pins, 1                ; set initial TMS value = 1
+    jmp jtag_next_cycle        ; go to the loop
 
 jtag_next_cycle_initial_set_0:
-    set pins, 0          ; set initial TMS value = 0 and go to the loop
+    set pins, 0              ; set initial TMS value = 0 and go to the loop
 
 jtag_next_cycle:
-    out pins, 1 side 0  [3]   ; set initial TDI pin state and a falling edge on TCK
+    out pins, 1 side 0  [3]  ; set initial TDI pin state and a falling edge on TCK
     jtag_cycle_loop:
         in pins, 1 side 1 [3]               ; read TDO pin state into ISR and a rising edge on TCK
         jmp x-- jtag_cycle_loop side 0 [3]  ; decrement the cycle counter
 
-    push ; push isr content to the RX FIFO and a falling edge on TCK,
-         ; also this step is a wrap for machine 0
+    push   ; push isr content to the RX FIFO and a falling edge on TCK,
+           ; also this step is a wrap for machine 0
