@@ -80,7 +80,7 @@ MioLink | rev.A: ~200 mA;  rev.B: ~350 mA (min. 300, max. 400)
 MioLink_Pico | ~200 mA (min. 175, max. 234)
 Pico or Pico W | ~300 mA from 3V3 pin,  see recommendations in  Pico and Pico W datasheets.
 
-### JTAG
+### JTAG pins description
 
 Pin | Description
 :----:|:----------:
@@ -92,7 +92,7 @@ TDO   | Test data output
 TDI   | Test data input
 RESET | Optional reset pin
 
-### SWD
+### SWD pins description
 
 Pin    | Description
 :-----:|:----------:
