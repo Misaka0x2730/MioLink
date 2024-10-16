@@ -29,7 +29,7 @@ rev. A  |  rev. B
 ![image](https://github.com/user-attachments/assets/ca20d195-47d2-4530-8daa-e9d0aed68b91) |  ![image](https://github.com/user-attachments/assets/b5c66c69-2552-469a-bd72-b8bd37ff3a03)
 
 ## Pinout
-### Target connector pinout
+### MioLink and MioLink_Pico target connector pinout
 *MioLink* and *MioLink_Pico* use the standard ARM 10-pin 0.1" connector and has additional 4-pin 0.1" UART connector:  
 ![image](https://github.com/user-attachments/assets/98218707-b79a-4d30-ae67-68f5ac11d38c)
 
@@ -37,16 +37,31 @@ Pin | Name  | Description              | Pin | Name          | Description
 :--:|:-----:|:------------------------:|:---:|:-------------:|:-----------------------------------------------------------------------:
 1   | VTref | Target reference voltage | 2   | SWDIO/TMS     | SWD Data input/output / JTAG Test mode select
 3   | GND   | Ground                   | 4   | SWDCLK/TCK    | SWD Clock / JTAG Test clock
-5   | GND   | Ground                   | 6   | SWO/TDO/RX    | SWD Trace output / JTAG Test data output / UART Probe RX (Target TX)
+5   | GND   | Ground                   | 6   | SWO/TDO/RX    | SWO Trace output / JTAG Test data output / UART Probe RX (Target TX)
 7   | NC    | Not connected            | 8   | NC/TDI/TX     | Not connected for SWD / JTAG Test data input / UART Probe TX (Target RX)
 9   | GND   | Ground                   | 10  | RESET         | Reset pin
 
-### UART connector pinout:
+#### UART connector pinout:
 
 Pin | Name | Description                    | Pin | Name  | Description
 :--:|:----:|:------------------------------:|:---:|:-----:|:------------------------:
 1   | RX   | UART Probe RX (UART Target TX) | 2   | VTref | Target reference voltage
 3   | TX   | UART Probe TX (UART Target RX) | 4   | GND   | Ground
+
+### Pico/Pico W pinout
+![image](https://github.com/user-attachments/assets/6acd1bba-45c8-459c-bf57-7183418560bd)
+
+Pin       | Name       | Description
+:--------:|:----------:|:------------------------------------------------------------------------:
+10 (GP7)  | RESET      | Reset pin
+11 (GP8)  | TX         | UART Probe TX (UART Target RX)
+12 (GP9)  | RX         | UART Probe RX (UART Target TX)
+13        | GND        | Ground
+14 (GP10) | SWDCLK/TCK | SWD Clock / JTAG Test clock
+15 (GP11) | SWDIO/TMS  | SWD Data input/output / JTAG Test mode select
+16 (GP12) | NC/TDI/TX  | Not connected for SWD / JTAG Test data input / UART Probe TX (Target RX)
+17 (GP13) | SWO/TDO/RX | SWO Trace output / JTAG Test data output / UART Probe RX (Target TX)
+36        | 3V3        | 3.3V output from Pico
 
 ## Connecting target to probe
 ### Information about the Vtref pin (pin 1)
