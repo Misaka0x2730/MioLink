@@ -22,6 +22,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Files in current dir
+      run: ls
+
     - name: Create build dir
       run: |
         mkdir build
