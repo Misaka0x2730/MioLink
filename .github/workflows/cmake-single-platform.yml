@@ -25,7 +25,7 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - uses: carlosperate/arm-none-eabi-gcc-action@latest
+    - uses: carlosperate/arm-none-eabi-gcc-action@v1
 
     - name: Configure CMake
       working-directory: ./firmware
