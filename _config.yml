@@ -1,5 +1,8 @@
 name: ""
 title: "MioLink"
+
+header_pages: null
+
 remote_theme: jekyll/minima
 plugins:
   - jekyll-feed
