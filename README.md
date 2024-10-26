@@ -112,7 +112,7 @@ The following tools are required to build this project:
 - gcc
 - arm-none-eabi-gcc
 
-## Build on Windows
+## Install all requirements on Windows
 The simplest way to build the firmware under Windows environment is to use MinGW64.
 
 Build steps:
@@ -122,6 +122,23 @@ Build steps:
 4. Install all requirements:  ```pacman -S git mingw-w64-x86_64-python mingw-w64-x86_64-make mingw-w64-x86_64-cmake mingw-w64-x86_64-arm-none-eabi-gcc mingw-w64-x86_64-gcc```
 5. Clone this project with submodules:  ```git clone --recurse-submodules https://github.com/Misaka0x2730/MioLink.git```
 6. Change current dir:  ```cd MioLink/firmware```
+
+## Install all requirements on Ubuntu
+1. Download and install all requirements:
+```
+cd /opt
+sudo wget "https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz"
+sudo tar -xf arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz
+sudo rm arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz
+echo 'export PATH="$PATH":/opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin' >> ~/.bashrc
+sudo apt-get install git python3 cmake
+```
+2. Clone this project with submodules:
+```
+cd ~
+git clone --recurse-submodules https://github.com/Misaka0x2730/MioLink.git
+```
+3. Change current dir:  ```cd MioLink/firmware```
 
 Build debug image:
 1. Create working directory:  ```mkdir debug```
