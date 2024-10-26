@@ -14,7 +14,7 @@ At this moment, there are two revisions of *MioLink*: rev. A and rev. B. You can
 Standard Pico and Pico W boards are also supported.  
 The device type is determined at runtime, so all boards use the same firmware.  
 [MioLink_adapter](https://github.com/Misaka0x2730/MioLink/blob/main/hardware/MioLink_adapter/revA/MioLink_adapter_revA.pdf) is an adapter that allows you to connect the probe with target boards that have different types of connectors.  
-All hardware CAD files (designed in KiCad) can be found [here](https://github.com/Misaka0x2730/MioLink/tree/main/hardware).  
+You can find all hardware CAD files (designed in KiCad) [here](https://github.com/Misaka0x2730/MioLink/tree/main/hardware).  
 
 ## Pinout
 ### MioLink and MioLink_Pico target connector pinout
