@@ -1,13 +1,9 @@
+title: ""
 remote_theme: jekyll/minima
 plugins:
   - jekyll-feed
   - jekyll-remote-theme
-  - jekyll-readme-index
 
 minima:
   skin: dark # if you want it to switch with your system settings.
 
-readme_index:
-  enabled:          true
-  remove_originals: true
-  with_frontmatter: false
