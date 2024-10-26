@@ -122,7 +122,7 @@ sudo rm arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz
 echo 'export PATH="$PATH":/opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin' >> ~/.bashrc
 sudo apt-get install git python3 cmake
 ```
-2. Clone this project with submodules:
+2. Clone this project with submodules into home directory:
 ```
 cd ~
 git clone --recurse-submodules https://github.com/Misaka0x2730/MioLink.git
