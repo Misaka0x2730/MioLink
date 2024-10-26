@@ -129,14 +129,14 @@ git clone --recurse-submodules https://github.com/Misaka0x2730/MioLink.git
 ```
 3. Change current dir:  ```cd MioLink/firmware```
 
-Build debug image:
+## Build debug image:
 1. Create working directory:  ```mkdir debug```
 2. Go to working directory:  ```cd debug```
 3. Run cmake:  ```cmake -DCMAKE_BUILD_TYPE=Debug -G "MinGW Makefiles" ..```
 4. Build image:  ```cmake --build .```
 5. Use ```MioLink.uf2``` to flash device via factory USB-MSC bootloader.
 
-Build release image:
+## Build release image:
 1. Create working directory:  ```mkdir release```
 2. Go to working directory:  ```cd release```
 3. Run cmake:  ```cmake -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles" ..```
