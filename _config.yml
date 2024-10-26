@@ -1,0 +1,7 @@
+remote_theme: jekyll/minima
+plugins:
+  - jekyll-feed
+  - jekyll-remote-theme
+
+minima:
+  skin: dark # if you want it to switch with your system settings.
