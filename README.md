@@ -9,24 +9,12 @@ Detailed instructions on how to use the debugger, how to configure SWO, RTT and 
 # Hardware
 ## General information
 The main board for this device is *MioLink* ([rev. A](https://github.com/Misaka0x2730/MioLink/blob/main/hardware/revA/MioLink_revA.pdf)/[rev. B](https://github.com/Misaka0x2730/MioLink/blob/main/hardware/revB/MioLink_revB.pdf)): RP2040 + 16Mbit (2MiB) QSPI Flash memory (W25Q16).  
+At this moment, there are two revisions of *MioLink*, rev. A and rev. B. You can find information about their differences [here](https://github.com/Misaka0x2730/MioLink/wiki/MioLink-revisions-comparsion).
 [MioLink_Pico](https://github.com/Misaka0x2730/MioLink/blob/main/hardware/MioLink_Pico/revA/MioLink_Pico_revA.pdf) is a breakout board for Pico and Pico W featuring a power switch and voltage converters.  
 Standard Pico and Pico W boards are also supported.  
 The device type is determined at runtime, so all boards use the same firmware.  
 [MioLink_adapter](https://github.com/Misaka0x2730/MioLink/blob/main/hardware/MioLink_adapter/revA/MioLink_adapter_revA.pdf) is an adapter that allows you to connect the probe with target boards that have different types of connectors.  
 All hardware CAD files (designed in KiCad) can be found [here](https://github.com/Misaka0x2730/MioLink/tree/main/hardware).  
-
-## MioLink revisions comparsion
-There are currently 2 hardware revisions of the MioLink board (rev.A and rev.B), with the following differences:
-
-Power system: In rev.A, there is a hardware bug that causes the current value provided by the device on pin 1 (Vtref) of the debug connector to be unlimited,
-as pin 5 of the TPS2553 is mistakenly connected to ground (pin 2) instead of the input voltage (pin 1).  
-As a result, the current is limited only by the LDO (LP5907MFX-3.3), which means approximately 250mA of total current on the 3.3V line.
-
-Rev.B uses a DC-DC converter to get 3.3V from 5V, and the current supplied to the debug connector is limited to around ~350 mA (min. 300, max. 400).
-
-rev. A  |  rev. B
-:------:|:-------:
-![image](https://github.com/user-attachments/assets/ca20d195-47d2-4530-8daa-e9d0aed68b91) |  ![image](https://github.com/user-attachments/assets/b5c66c69-2552-469a-bd72-b8bd37ff3a03)
 
 ## Pinout
 ### MioLink and MioLink_Pico target connector pinout
