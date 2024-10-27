@@ -131,12 +131,15 @@ The simplest way to build the firmware under Windows environment is to use MinGW
 1. Download and install all requirements:
 ```
 cd /opt
-sudo wget "https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz"
-sudo tar -xf arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz
-sudo rm arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz
-echo 'export PATH="$PATH":/opt/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi/bin' >> ~/.bashrc
+sudo wget "https://developer.arm.com/-/media/Files/downloads/gnu/12.2.rel1/binrel/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi.tar.xz"
+sudo tar -xf arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi.tar.xz
+sudo rm arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi.tar.xz
+export PATH="$PATH":/opt/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin
 sudo apt-get install git python3 cmake
 ```
+Note: export PATH will set the path environment variable only for the current session.  
+If you want to set PATH permanently, you need to add ```export PATH="$PATH":/opt/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin``` to your ```~/.profile``` or ```~/.bashrc```.
+
 2. Clone this project with submodules into home directory:
 ```
 cd ~
