@@ -137,7 +137,7 @@ sudo rm arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi.tar.xz
 export PATH="$PATH":/opt/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin
 sudo apt-get install git python3 cmake
 ```
-Note: export PATH will set the path environment variable only for the current session.  
+Note: ```export PATH``` will set the path environment variable only for the current session.  
 If you want to set PATH permanently, you need to add ```export PATH="$PATH":/opt/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin``` to your ```~/.profile``` or ```~/.bashrc```.
 
 2. Clone this project with submodules into home directory:
