@@ -1,16 +1,12 @@
-#name: ""
-#title: ""
-
-author: Dmitry Rezvanov
-
-header_pages: ['']
+author:
+  name: Misaka0x2730
+  github: "https://github.com/Misaka0x2730"
 
 ignore_theme_config: true
 markdown: kramdown
 
 remote_theme: jekyll/minima
 plugins:
-  - jekyll-feed
   - jekyll-remote-theme
 
 minima:
