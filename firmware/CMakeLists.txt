@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-set(PICOTOOL_FETCH_FROM_GIT_PATH "../firmware/thirdParty/picotool")
+set(PICOTOOL_FETCH_FROM_GIT_PATH ${CMAKE_CURRENT_LIST_DIR}/thirdParty/picotool)
 set(PICO_SDK_FETCH_FROM_GIT ON)
 set(PICO_CYW43_SUPPORTED ON)
 set(PICO_BOARD none)
@@ -19,7 +19,7 @@ endif ()
 include(pico_sdk_import.cmake)
 include(pico_extras_import_optional.cmake)
 
-set(FREERTOS_KERNEL_PATH "../thirdParty/FreeRTOS-Kernel")
+set(FREERTOS_KERNEL_PATH ${CMAKE_CURRENT_LIST_DIR}/thirdParty/FreeRTOS-Kernel)
 include(FreeRTOS_Kernel_import.cmake)
 
 project(MioLink C CXX ASM)
@@ -46,6 +46,13 @@ target_compile_definitions(MioLink PUBLIC PICO_BOOT_STAGE2_CHOOSE_W25Q080=1)
 target_compile_definitions(MioLink PUBLIC PICO_FLASH_SPI_CLKDIV=2)
 target_compile_definitions(MioLink PUBLIC PICO_RP2040_B0_SUPPORTED=0)
 target_compile_definitions(MioLink PUBLIC PICO_STDIO_SHORT_CIRCUIT_CLIB_FUNCS=0)
+
+target_compile_definitions(MioLink PUBLIC CYW43_DEFAULT_PIN_WL_REG_ON=23)
+target_compile_definitions(MioLink PUBLIC CYW43_DEFAULT_PIN_WL_DATA_OUT=24)
+target_compile_definitions(MioLink PUBLIC CYW43_DEFAULT_PIN_WL_DATA_IN=24)
+target_compile_definitions(MioLink PUBLIC CYW43_DEFAULT_PIN_WL_HOST_WAKE=24)
+target_compile_definitions(MioLink PUBLIC CYW43_DEFAULT_PIN_WL_CLOCK=29)
+target_compile_definitions(MioLink PUBLIC CYW43_DEFAULT_PIN_WL_CS=25)
 target_compile_definitions(MioLink PUBLIC CYW43_PIN_WL_HOST_WAKE=24)
 target_compile_definitions(MioLink PUBLIC CYW43_PIN_WL_REG_ON=23)
 target_compile_definitions(MioLink PUBLIC CYW43_WL_GPIO_COUNT=3)
@@ -80,11 +87,11 @@ target_include_directories(MioLink PUBLIC include/bmp)
 target_include_directories(MioLink PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
 # Generate header with BlackMagic and FreeRTOS-Kernel versions
-execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ../thirdParty/blackmagic/.git describe --tags --always
+execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ${CMAKE_CURRENT_SOURCE_DIR}/thirdParty/blackmagic/.git describe --tags --always
         OUTPUT_VARIABLE GIT_BMP_REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ../thirdParty/FreeRTOS-Kernel/.git describe --tags --always
+execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ${CMAKE_CURRENT_SOURCE_DIR}/thirdParty/FreeRTOS-Kernel/.git describe --tags --always
         OUTPUT_VARIABLE GIT_FREERTOS_REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ../../.git describe --tags --always
+execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ${CMAKE_CURRENT_SOURCE_DIR}/../.git describe --tags --always
         OUTPUT_VARIABLE GIT_MIOLINK_REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
 configure_file("git_version.h.in" "git_version.h")
 
