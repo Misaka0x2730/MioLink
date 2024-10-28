@@ -1,0 +1,39 @@
+name: Pre-release
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  pre-release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0
+
+    - uses: carlosperate/arm-none-eabi-gcc-action@v1
+
+    - name: Configure CMake
+      working-directory: ./firmware
+      run: cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      working-directory: ./firmware
+      run: cmake --build ./build --config Release
+
+    - name: Rename binary
+      working-directory: ./firmware/build
+      run: mv MioLink.uf2 MioLink_dev.uf2
+
+    - uses: "marvinpinto/action-automatic-releases@latest"
+      with:
+        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        automatic_release_tag: "dev"
+        prerelease: true
+        title: "Development Build"
+        files: ./firmware/build/*.uf2
