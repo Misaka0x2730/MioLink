@@ -17,6 +17,22 @@ jobs:
 
     - uses: carlosperate/arm-none-eabi-gcc-action@v1
 
+    - name: Update blackmagic
+      working-directory: ./firmware/thirdParty/blackmagic
+      run: |
+        git remote add upstream https://github.com/blackmagic-debug/blackmagic.git
+        git fetch upstream
+        git checkout main
+        git rebase upstream/main
+
+    - name: Update tinyusb
+      working-directory: ./firmware/thirdParty/tinyusb
+      run: |
+        git remote add upstream https://github.com/hathach/tinyusb
+        git fetch upstream
+        git checkout rp2040_auto_zlp
+        git rebase upstream/master
+
     - name: Configure CMake
       working-directory: ./firmware
       run: cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Release
