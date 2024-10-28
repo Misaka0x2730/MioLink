@@ -29,7 +29,7 @@ jobs:
     - name: Update tinyusb
       working-directory: ./firmware/thirdParty/tinyusb
       run: |
-        git remote add upstream https://github.com/Misaka0x2730/tinyusb.git
+        git remote add upstream https://github.com/hathach/tinyusb
         git fetch upstream
         git checkout rp2040_auto_zlp
         git rebase upstream/master
