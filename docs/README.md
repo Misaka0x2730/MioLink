@@ -4,7 +4,7 @@ This project is a port of the [Black Magic Probe project](https://github.com/bla
 The project is a USB debugger that operates via JTAG and SWD interfaces, supporting many ARM Cortex processors ([see supported device list here](https://black-magic.org/supported-targets.html)).  
 It also supports debug output via Serial Wire Output (SWO) and RTT. Additionally, the device has an extra UART serial port that can be accessed through a second Virtual COM port.  
 This README contains only the basic information: information about the hardware, how to build the firmware and flash the probe.  
-Detailed instructions on how to use the debugger, how to configure SWO, RTT and etc. will be posted later in [the project's wiki](https://github.com/Misaka0x2730/MioLink/wiki).
+Detailed instructions on how to use the debugger, how to configure SWO, RTT and etc. you can find on [the project's wiki](https://github.com/Misaka0x2730/MioLink/wiki).
 
 # Hardware
 ## General information
@@ -57,7 +57,7 @@ Pin       | Name       | Description
 PLEASE, note that the Vtref pin (pin 1) on *MioLink* and *MioLink_Pico* MUST always be connected (internally or externally) to the logic level voltage of the target being debugged (from 1.65V to 5.5V) to power the level shifters inside the probe.  
 If the target device operates at a 3.3V logic level, this pin can be powered internally by the probe, also in this case, the target can be powered by the probe if needed, and the maximum current is specified in the table below, but be careful, accidentally connecting anything to this pin that is not rated for 3.3V may lead to irreversible damage to the external device.  
 3.3V power supply on this pin can be enabled with the GDB command ```monitor tpwr enable``` and disabled with the command ```monitor tpwr disable```. By default (after probe reset), it's disabled.  
-Pico and Pico W are also able to provide 3.3V power for target, but it is recommended to keep the load on this pin less than 300mA, for more information see chapter 2.1, page 8 in [Pico datasheet](https://datasheets.raspberrypi.com/pico/pico-datasheet.pdf) and chapter 2.1, page 9 in [Pico W datasheet](https://datasheets.raspberrypi.com/picow/pico-w-datasheet.pdf).  
+Pico and Pico W are also able to provide 3.3V power for target through 3V3(OUT) pin (pin 36), but it is recommended to keep the load on this pin less than 300mA, for more information see chapter 2.1, page 8 in [Pico datasheet](https://datasheets.raspberrypi.com/pico/pico-datasheet.pdf) and chapter 2.1, page 9 in [Pico W datasheet](https://datasheets.raspberrypi.com/picow/pico-w-datasheet.pdf).  
 In all other cases, the Vtref pin (pin 1) functions as an input and must be connected to the logic level voltage of the target device.  
 The allowable voltage range is from 1.65V to 5.5V.  
 
