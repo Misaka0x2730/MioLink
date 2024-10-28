@@ -28,7 +28,7 @@ jobs:
 
     - name: Rename binary
       working-directory: ./firmware/build
-      run: mv MioLink.uf2 MioLink_dev.uf2
+      run: mv MioLink.uf2 MioLink_dev_${{ github.sha }}.uf2
 
     - uses: "marvinpinto/action-automatic-releases@latest"
       with:
