@@ -89,27 +89,6 @@ const swd_board_program_t pico_programs = {
 	.swd_turnaround_float_to_drive = &pico_swd_turnaround_float_to_drive_program,
 };
 
-/*const swd_program_pos_t miolink_rev_b_program_pos = {
-	.swd_in_out_to_in = miolink_rev_b_swd_in_program.origin,
-	.swd_in = miolink_rev_b_swd_in_program.origin + miolink_rev_b_swd_in_wrap_target,
-	.swd_in_parity_out_to_in = miolink_rev_b_swd_in_parity_program.origin,
-	.swd_in_parity = miolink_rev_b_swd_in_parity_program.origin + miolink_rev_b_swd_in_parity_wrap_target,
-	.swd_out_float_to_drive = miolink_rev_b_swd_out_program.origin,
-	.swd_out = miolink_rev_b_swd_out_program.origin + miolink_rev_b_swd_out_wrap_target,
-	.swd_adiv5_req_float_to_drive = miolink_rev_b_swd_adiv5_req_program.origin,
-	.swd_adiv5_req = miolink_rev_b_swd_adiv5_req_program.origin + miolink_rev_b_swd_adiv5_req_wrap_target};
-
-const swd_program_pos_t pico_program_pos = {
-	.swd_in_out_to_in = pico_swd_in_program.origin,
-	.swd_in = pico_swd_in_program.origin + pico_swd_in_wrap_target,
-	.swd_in_parity_out_to_in = pico_swd_in_parity_program.origin,
-	.swd_in_parity = pico_swd_in_parity_program.origin + pico_swd_in_parity_wrap_target,
-	.swd_out_float_to_drive = pico_swd_out_program.origin,
-	.swd_out = pico_swd_out_program.origin + pico_swd_out_wrap_target,
-	.swd_adiv5_req_float_to_drive = pico_swd_adiv5_req_program.origin,
-	.swd_adiv5_req = pico_swd_adiv5_req_program.origin + pico_swd_adiv5_req_wrap_target};
-*/
-
 typedef enum swdio_status_e {
 	SWDIO_STATUS_FLOAT = 0,
 	SWDIO_STATUS_DRIVE
