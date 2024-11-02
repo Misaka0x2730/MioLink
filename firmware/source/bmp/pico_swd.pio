@@ -1,5 +1,8 @@
-; This file contains the programs responsible for the SWD interface functionality for MioLink revB.
-; 4 programs are implemented here:
+; This file contains the programs responsible for the SWD interface functionality
+; for MioLink running on a Pico/Pico W board.
+; The SWD program is divided into sub-programs for more convenient addressing in C code,
+; origin directive allows modifying the PIO program without affecting the C code.
+; 7 sub-programs are implemented here:
 
 ; swd_in - a program that reads bits from the TMS pin;
 ; swd_in_parity - a program that reads bits from the TMS pin and returns the TMS pin to an output state at the end;
@@ -16,122 +19,95 @@
 ; limit the maximum interface frequency. In our case (3 additional delay cycles after each edge),
 ; the limit is set to sys_clk / 8, as 3 + 1 + 3 + 1 = 8.
 
-; swdptap_seq_in program (SM0)
-.program pico_swd_in
+; Autopull should be enabled, with a threshold of 32.
+; Autopush also should be enabled, with a threshold of 32.
+
+
+; Program start
+.program pico_swd_start
 .pio_version 0
 .origin 0
 .side_set 1 opt
 
-; Autopull should be enabled, with a threshold of 32.
-; Autopush also should be enabled, with a threshold of 32.
+out pc, 32                                  ; wait for the next command
 
-swd_in_out_to_in:              ; TMS turnaround from output to input state
-    set pindirs, 0 side 1 [2]  ; set TMS direction to input and a rising edge on TCK
-
-.wrap_target
-
-swd_in:                                 ; TMS sequence in program, swdptap_seq_in program (SM0) start,
-                                        ; TMS direction should be input
-    out x, 32 side 0                    ; load the number of cycles from TX FIFO
-    swd_in_loop:
-        in pins, 1 side 0 [3]           ; read TMS pin state into ISR and a falling edge on TCK
-        jmp x-- swd_in_loop side 1 [3]  ; decrement the cycle counter and a rising edge on TCK
-
-    push side 0 [2]                    ; push ISR content to RX FIFO when cycle counter < 32 (autopush threshold)
-                                       ; and a falling edge on TCK
-
-.wrap
-
-; swdptap_seq_in_parity program (SM1)
-.program pico_swd_in_parity
+; TMS turnaround from input to output state
+.program pico_swd_seq_out_turnaround
 .pio_version 0
-.origin 5
+.origin 1
 .side_set 1 opt
 
-; Autopull should be enabled, with a threshold of 32.
-; Autopush also should be enabled, with a threshold of 32.
+set pindirs, 1 side 1 [2]                   ; set TMS direction to output and a rising edge on TCK
 
-swd_in_parity_out_to_in:       ; TMS turnaround from output to input state
-    set pindirs, 0 side 1 [2]  ; set TMS direction to input and a rising edge on TCK
 
-.wrap_target
-
-swd_in_parity:                                 ; TMS sequence in program, swdptap_seq_in_parity program (SM1) start,
-                                               ; TMS direction should be input
-    out x, 32 side 0                           ; load the number of cycles from TX FIFO
-    swd_in_parity_loop:
-        in pins, 1 side 0 [3]                  ; read TMS pin state into ISR and a falling edge on TCK
-        jmp x-- swd_in_parity_loop side 1 [3]  ; decrement the cycle counter and a rising edge on TCK
-
-    push side 0 [2]                ; push ISR content to RX FIFO when cycle counter < 32 (autopush threshold)
-                                   ; and a falling edge on TCK
-
-    swd_in_parity_in_to_out:       ; TMS turnaround from input to output state
-        set pindirs, 1 side 1 [3]  ; set TMS direction to output and a rising edge on TCK
-        nop side 0 [2]             ; falling edge on TCK
-
-.wrap
-
-; swdptap_seq_out and swdptap_seq_out_parity program (SM2)
-.program pico_swd_out
+; TMS sequence out
+.program pico_swd_seq_out
 .pio_version 0
-.origin 12
+.origin 2
+.side_set 1 opt
+                                            ; TMS direction should be output and TMS_DIR state should be 1
+out x, 32                                   ; load the number of cycles from TX FIFO
+swd_seq_out_loop:
+    out pins, 1 side 0 [3]                  ; output TMS pin state and a falling edge on TCK
+    jmp x-- swd_seq_out_loop side 1 [3]     ; decrement the cycle counter and a rising edge on TCK
+
+pull block side 0 [2]                       ; flush remaining data in osr and set falling edge on TCK
+out pc, 32                                  ; wait for next command
+
+
+; TMS turnaround from output to input state
+.program pico_swd_seq_in_turnaround
+.pio_version 0
+.origin 7
 .side_set 1 opt
 
-; Autopull should be enabled, with a threshold of 32.
-; Autopush also should be enabled, with a threshold of 32.
+set pindirs, 0 side 1 [2]                   ; set TMS direction to input and a rising edge on TCK
 
-swd_out_in_to_out:                  ; TMS turnaround from input to output state
-    set pindirs, 1 side 1 [2]       ; set TMS direction to output and a rising edge on TCK
 
-.wrap_target
-
-swd_out:                            ; TMS sequence out program,
-                                    ; swdptap_seq_out and swdptap_seq_out_parity programs (SM2) start
-                                    ; TMS direction should be output
-    pull                            ; load the cycle counter (no-op when the ISR is full, because autopull is enabled)
-    out x, 32                       ; load the number of cycles from TX FIFO
-    swd_out_loop:
-        out pins, 1 side 0 [3]           ; output TMS pin state and a falling edge on TCK
-        jmp x-- swd_out_loop side 1 [3]  ; decrement the cycle counter and a rising edge on TCK
-
-    nop side 0 [2]                       ; falling edge on TCK
-
-.wrap
-
-; This program sends ADIv5 request and reads ACK (SM3)
-.program pico_swd_adiv5_req
+; TMS sequence input
+.program pico_swd_seq_in
 .pio_version 0
-.origin 18
+.origin 10
+.side_set 1 opt
+                                            ; TMS direction should be input, and TMS_DIR state should be 0
+    out x, 32                               ; load number of cycles from TX FIFO
+    swd_seq_in_loop:
+        in pins, 1 side 0 [3]               ; read TMS pin state into ISR and a falling edge on TCK
+        jmp x-- swd_seq_in_loop side 1 [3]  ; decrement the cycle counter and a rising edge on TCK
+
+    mov x, isr side 0 [1]                   ; save ISR content to X register to check the ACK later
+                                            ; and a falling edge on TCK
+    push                                    ; push isr content to RX FIFO for the case when cycle counter < 32 (autopush threshold)
+    out pc, 32                              ; wait for next command
+
+
+; Check ADIv5 acknowledge
+.program pico_swd_adiv5_check_ack
+.pio_version 0
+.origin 16
 .side_set 1 opt
 
-; Autopull should be enabled, with a threshold of 8 (request length).
-; Autopush also should be enabled, with a threshold of 3 (ACK length).
+out y, 32                                   ; load ack value in Y register
 
-swd_adiv5_req_in_to_out:       ; TMS turnaround from input to output state for the SWD ADIv5 request.
-    set pindirs, 1 side 1 [2]  ; set TMS direction to output and a rising edge on TCK
+jmp x!=y clear_tx_fifo                      ; if the values don't match - go to the clear TX FIFO step
+out null, 32                                ; if the values match - discard the number of data to clear
+out pc, 32                                  ; wait for the next command
 
-.wrap_target
+clear_tx_fifo:
+    out x, 32                               ; load the number of data to discard
 
-swd_adiv5_req:                          ; SWD ADIv5 request program (send request and read ACK).
-                                        ; swd_adiv5_req program (SM3) start.
-                                        ; for this program, the autopull threshold should be 8
-                                        ; and the autopush threshold should be 3.
-    set x, 7                            ; set the cycle counter, should be (number of cycles - 1).
-                                        ; the request length is 8, so set x to 8-1=7.
-    swd_adiv5_req_out_loop:                        ; send 8-bit request.
-        out pins, 1 side 0 [3]                     ; output TMS pin state and a falling edge on TCK
-        jmp x-- swd_adiv5_req_out_loop side 1 [3]  ; decrement the cycle counter and a rising edge on TCK
-    set x, 2 side 0 [3]                            ; set the cycle counter for ACK (ACK length is 3 bits, so set x to 3-1=2)
-                                                   ; and a falling edge on TCK
+    clear_tx_fifo_loop:
+        out null, 32                        ; discard TX FIFO content
+        jmp x-- clear_tx_fifo_loop          ; decrement data counter
+                                            ; Intentional fallthrough to turnaround
 
-                               ; perform a turnaround cycle from output to input
-                               ; to read the ACK after the request
-    set pindirs, 0 side 1 [3]  ; set TMS direction to input and a rising edge on TCK
 
-    swd_adiv5_req_ack_loop:                        ; read the acknowledgement.
-        in pins, 1 side 0 [3]                      ; read TMS pin state into ISR and a falling edge on TCK
-        jmp x-- swd_adiv5_req_ack_loop side 1 [3]  ; decrement the cycle counter and a rising edge on TCK
-        nop side 0 [2]                             ; a final falling edge on TCK.
+; Turnaround from input to output state
+.program pico_swd_turnaround_float_to_drive
+.pio_version 0
+.origin 23
+.side_set 1 opt
 
-.wrap
+set pindirs, 1 side 1 [3]                   ; set TMS direction to output and a rising edge on TCK
+out pc, 32 side 0     [3]                   ; a falling edge on TCK, 1 = 0b01, so TMS_DIR is 1, TCK is 0
+                                            ; wrap to the program start

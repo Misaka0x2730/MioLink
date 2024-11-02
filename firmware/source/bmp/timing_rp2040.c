@@ -163,9 +163,9 @@ uint32_t platform_max_frequency_get(void)
 	const uint32_t interface_freq = platform_get_max_interface_freq();
 
 	uint32_t clkdiv_int =
-		(TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM_SEQ_IN].clkdiv & PIO_SM0_CLKDIV_INT_BITS) >> PIO_SM0_CLKDIV_INT_LSB;
+		(TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].clkdiv & PIO_SM0_CLKDIV_INT_BITS) >> PIO_SM0_CLKDIV_INT_LSB;
 	uint32_t clkdiv_frac =
-		(TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM_SEQ_IN].clkdiv & PIO_SM0_CLKDIV_FRAC_BITS) >> PIO_SM0_CLKDIV_FRAC_LSB;
+		(TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].clkdiv & PIO_SM0_CLKDIV_FRAC_BITS) >> PIO_SM0_CLKDIV_FRAC_LSB;
 
 	if (clkdiv_int == 0) {
 		clkdiv_int = ((uint32_t)UINT16_MAX) + 1;
