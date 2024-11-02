@@ -23,18 +23,16 @@
 #include "general.h"
 #include "hardware/pio.h"
 
-#define PIO_BUFFER_SIZE    (16)
+#define PIO_BUFFER_SIZE (16)
 
-#define TARGET_SWD_PIO     (pio0)
-#define TARGET_JTAG_PIO    (pio0)
+#define TARGET_SWD_PIO  (pio0)
+#define TARGET_JTAG_PIO (pio0)
 
-typedef enum
-{
+typedef enum {
 	TARGET_SWD_PIO_SM = 0,
 } target_swd_pio_sm_t;
 
-typedef enum
-{
+typedef enum {
 	TARGET_JTAG_PIO_SM_NEXT_CYCLE = 0,
 	TARGET_JTAG_PIO_SM_TMS_SEQ,
 	TARGET_JTAG_PIO_SM_TDI_TDO_SEQ,
@@ -56,7 +54,7 @@ static inline void tap_pio_common_wait_for_tx_stall(PIO pio, uint32_t sm)
 	check_sm_param(sm);
 
 	pio->fdebug = (1UL << (PIO_FDEBUG_TXSTALL_LSB + sm));
- 	while ((pio->fdebug & (1UL << (PIO_FDEBUG_TXSTALL_LSB + sm))) == 0)
+	while ((pio->fdebug & (1UL << (PIO_FDEBUG_TXSTALL_LSB + sm))) == 0)
 		;
 }
 
@@ -77,8 +75,10 @@ static inline void tap_pio_common_disable_all_machines(PIO pio)
 }
 
 void tap_pio_common_dma_send_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, const uint32_t data_amount);
-uint32_t tap_pio_common_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, uint32_t *buffer_recv, const uint32_t data_amount, const uint32_t data_amount_to_read);
+uint32_t tap_pio_common_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, uint32_t *buffer_recv,
+	const uint32_t data_amount, const uint32_t data_amount_to_read);
 void tap_pio_common_dma_send_uint8(PIO pio, uint32_t sm, const uint8_t *buffer, uint32_t data_amount);
-uint32_t tap_pio_common_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer, uint8_t *buffer_recv, uint32_t data_amount, uint32_t data_amount_to_read);
+uint32_t tap_pio_common_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer, uint8_t *buffer_recv,
+	uint32_t data_amount, uint32_t data_amount_to_read);
 
 #endif //MIOLINK_TAP_PIO_COMMON_H

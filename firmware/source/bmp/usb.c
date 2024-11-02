@@ -607,8 +607,8 @@ void blackmagic_usb_init(void)
 {
 	TaskHandle_t usb_task;
 #if configUSE_CORE_AFFINITY
-	const BaseType_t result =
-		xTaskCreateAffinitySet(usb_task_thread, "usb_task", USB_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_HIGH, USB_TASK_CORE_AFFINITY, &usb_task);
+	const BaseType_t result = xTaskCreateAffinitySet(usb_task_thread, "usb_task", USB_TASK_STACK_SIZE, NULL,
+		PLATFORM_PRIORITY_HIGH, USB_TASK_CORE_AFFINITY, &usb_task);
 #else
 	const BaseType_t result =
 		xTaskCreate(usb_task_thread, "usb_task", USB_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_HIGH, &usb_task);

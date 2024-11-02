@@ -556,8 +556,8 @@ _Noreturn static void target_serial_thread(void *params);
 void usb_serial_init(void)
 {
 #if configUSE_CORE_AFFINITY
-	const BaseType_t result = xTaskCreateAffinitySet(target_serial_thread, "target_uart", USB_SERIAL_TASK_STACK_SIZE, NULL,
-		PLATFORM_PRIORITY_NORMAL, USB_SERIAL_TASK_CORE_AFFINITY, &usb_uart_task);
+	const BaseType_t result = xTaskCreateAffinitySet(target_serial_thread, "target_uart", USB_SERIAL_TASK_STACK_SIZE,
+		NULL, PLATFORM_PRIORITY_NORMAL, USB_SERIAL_TASK_CORE_AFFINITY, &usb_uart_task);
 #else
 	const BaseType_t result = xTaskCreate(target_serial_thread, "target_uart", USB_SERIAL_TASK_STACK_SIZE, NULL,
 		PLATFORM_PRIORITY_NORMAL, &usb_uart_task);

@@ -388,12 +388,9 @@ uint32_t adiv5_swd_raw_access(adiv5_debug_port_s *dp, const uint8_t rnw, const u
 	platform_timeout_s timeout;
 	platform_timeout_set(&timeout, 250U);
 	do {
-		if (rnw)
-		{
+		if (rnw) {
 			ack = rp2040_pio_adiv5_swd_read_check(request, &response, &parity);
-		}
-		else
-		{
+		} else {
 			ack = rp2040_pio_adiv5_swd_write_check(request, value);
 		}
 		if (ack == SWD_ACK_FAULT) {

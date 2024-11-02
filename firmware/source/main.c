@@ -128,8 +128,8 @@ void main(void)
 	multicore_reset_core1();
 
 #if configUSE_CORE_AFFINITY
-	const BaseType_t result =
-		xTaskCreateAffinitySet(gdb_thread, "target_gdb", GDB_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_LOW, GDB_TASK_CORE_AFFINITY, &gdb_task);
+	const BaseType_t result = xTaskCreateAffinitySet(
+		gdb_thread, "target_gdb", GDB_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_LOW, GDB_TASK_CORE_AFFINITY, &gdb_task);
 #else
 	const BaseType_t result =
 		xTaskCreate(gdb_thread, "target_gdb", GDB_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_LOW, &gdb_task);

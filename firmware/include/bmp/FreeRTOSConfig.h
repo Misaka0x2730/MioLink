@@ -51,7 +51,7 @@
 #define configCPU_CLOCK_HZ       (250000000UL)
 #define configUSE_16_BIT_TICKS   0
 
-#define configIDLE_SHOULD_YIELD   0
+#define configIDLE_SHOULD_YIELD 0
 
 /* Synchronization Related */
 #define configUSE_MUTEXES                       1
@@ -93,11 +93,11 @@
 #define configMAX_CO_ROUTINE_PRIORITIES 1
 
 /* Software timer related definitions. */
-#define configUSE_TIMERS             1
-#define configTIMER_TASK_PRIORITY    (configMAX_PRIORITIES - 1)
-#define configTIMER_QUEUE_LENGTH     10
-#define configTIMER_TASK_STACK_DEPTH 256
-#define configTIMER_SERVICE_TASK_CORE_AFFINITY  (0x01)
+#define configUSE_TIMERS                       1
+#define configTIMER_TASK_PRIORITY              (configMAX_PRIORITIES - 1)
+#define configTIMER_QUEUE_LENGTH               10
+#define configTIMER_TASK_STACK_DEPTH           256
+#define configTIMER_SERVICE_TASK_CORE_AFFINITY (0x01)
 
 /* SMP port only */
 #define configNUMBER_OF_CORES         2

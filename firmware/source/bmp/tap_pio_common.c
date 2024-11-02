@@ -47,13 +47,13 @@ void tap_pio_common_dma_send_uint32(PIO pio, uint32_t sm, const uint32_t *buffer
 
 	channel_config_set_dreq(&tx_config, pio_get_dreq(pio, sm, true));
 
-	dma_channel_configure(pio_dma_channel, &tx_config, &(pio->txf[sm]), buffer_send,
-		data_amount, true);
+	dma_channel_configure(pio_dma_channel, &tx_config, &(pio->txf[sm]), buffer_send, data_amount, true);
 
 	dma_channel_wait_for_finish_blocking(pio_dma_channel);
 }
 
-uint32_t tap_pio_common_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, uint32_t *buffer_recv, const uint32_t data_amount, const uint32_t data_amount_to_read)
+uint32_t tap_pio_common_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, uint32_t *buffer_recv,
+	const uint32_t data_amount, const uint32_t data_amount_to_read)
 {
 	assert(buffer_send != NULL);
 	assert((data_amount > 0) && (data_amount <= PIO_BUFFER_SIZE));
@@ -72,14 +72,11 @@ uint32_t tap_pio_common_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_
 
 	channel_config_set_dreq(&tx_config, pio_get_dreq(pio, sm, true));
 
-	dma_channel_configure(pio_dma_channel, &tx_config, &(pio->txf[sm]), buffer_send,
-		data_amount, true);
+	dma_channel_configure(pio_dma_channel, &tx_config, &(pio->txf[sm]), buffer_send, data_amount, true);
 
 	uint32_t recv_data_amount = 0;
-	while ((dma_channel_is_busy(pio_dma_channel)) || (recv_data_amount < data_amount_to_read))
-	{
-		if (pio_sm_is_rx_fifo_empty(pio, sm) == false)
-		{
+	while ((dma_channel_is_busy(pio_dma_channel)) || (recv_data_amount < data_amount_to_read)) {
+		if (pio_sm_is_rx_fifo_empty(pio, sm) == false) {
 			volatile const uint32_t read_value = pio_sm_get_blocking(pio, sm);
 			if ((buffer_recv != NULL) && (recv_data_amount < data_amount_to_read)) {
 				buffer_recv[recv_data_amount++] = read_value;
@@ -111,8 +108,7 @@ void tap_pio_common_dma_send_uint8(PIO pio, uint32_t sm, const uint8_t *buffer_s
 
 	channel_config_set_dreq(&tx_config, pio_get_dreq(pio, sm, true));
 
-	dma_channel_configure(pio_dma_channel, &tx_config, &(pio->txf[sm]), buffer_send,
-		data_amount, true);
+	dma_channel_configure(pio_dma_channel, &tx_config, &(pio->txf[sm]), buffer_send, data_amount, true);
 
 	dma_channel_wait_for_finish_blocking(pio_dma_channel);
 
@@ -129,7 +125,8 @@ void tap_pio_common_dma_send_uint8(PIO pio, uint32_t sm, const uint8_t *buffer_s
 	tap_pio_common_dma_send_uint32(pio, sm, pio_buffer, data_amount);*/
 }
 
-uint32_t tap_pio_common_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer_send, uint8_t *buffer_recv, const uint32_t data_amount, const uint32_t data_amount_to_read)
+uint32_t tap_pio_common_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer_send, uint8_t *buffer_recv,
+	const uint32_t data_amount, const uint32_t data_amount_to_read)
 {
 	assert(buffer_send != NULL);
 	assert((data_amount > 0) && (data_amount <= PIO_BUFFER_SIZE));
@@ -148,14 +145,11 @@ uint32_t tap_pio_common_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t 
 
 	channel_config_set_dreq(&tx_config, pio_get_dreq(pio, sm, true));
 
-	dma_channel_configure(pio_dma_channel, &tx_config, &(pio->txf[sm]), buffer_send,
-		data_amount, true);
+	dma_channel_configure(pio_dma_channel, &tx_config, &(pio->txf[sm]), buffer_send, data_amount, true);
 
 	uint32_t recv_data_amount = 0;
-	while ((dma_channel_is_busy(pio_dma_channel)) || (recv_data_amount < data_amount_to_read))
-	{
-		if (pio_sm_is_rx_fifo_empty(pio, sm) == false)
-		{
+	while ((dma_channel_is_busy(pio_dma_channel)) || (recv_data_amount < data_amount_to_read)) {
+		if (pio_sm_is_rx_fifo_empty(pio, sm) == false) {
 			volatile const uint8_t read_value = (uint8_t)((pio_sm_get_blocking(pio, sm) >> 24) & 0xFF);
 			if ((buffer_recv != NULL) && (recv_data_amount < data_amount_to_read)) {
 				buffer_recv[recv_data_amount++] = read_value;

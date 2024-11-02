@@ -168,7 +168,7 @@ static void jtagtap_reset(void)
 
 static bool jtagtap_next(const bool tms, const bool tdi)
 {
-	uint8_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
+	uint8_t pio_buffer[PIO_BUFFER_SIZE] = {0};
 	uint8_t data_amount = 0;
 
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, true);
@@ -189,7 +189,7 @@ static bool jtagtap_next(const bool tms, const bool tdi)
 
 static void jtagtap_tms_seq(const uint32_t tms_states, const size_t ticks)
 {
-	uint8_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
+	uint8_t pio_buffer[PIO_BUFFER_SIZE] = {0};
 	uint8_t data_amount = 0;
 
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, true);
@@ -197,8 +197,7 @@ static void jtagtap_tms_seq(const uint32_t tms_states, const size_t ticks)
 	pio_buffer[data_amount++] = (ticks - 1);
 	pio_buffer[data_amount++] = JTAG_TMS_SEQ_POS;
 
-	for (uint8_t i = 0, ticks_sent = 0; ((i < sizeof(tms_states)) && (ticks_sent < ticks)); i++, ticks_sent += 8)
-	{
+	for (uint8_t i = 0, ticks_sent = 0; ((i < sizeof(tms_states)) && (ticks_sent < ticks)); i++, ticks_sent += 8) {
 		pio_buffer[data_amount++] = ((tms_states >> (8 * i)) & 0xFF);
 	}
 
@@ -212,7 +211,7 @@ static void jtagtap_tms_seq(const uint32_t tms_states, const size_t ticks)
 static void jtagtap_tdi_tdo_seq(
 	uint8_t *const data_out, const bool final_tms, const uint8_t *const data_in, size_t clock_cycles)
 {
-	uint8_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
+	uint8_t pio_buffer[PIO_BUFFER_SIZE] = {0};
 	uint8_t data_amount = 0;
 
 	if (clock_cycles == 0) {
@@ -249,7 +248,8 @@ static void jtagtap_tdi_tdo_seq(
 
 		data_amount += data_bytes;
 
-		size_t data_out_cnt = tap_pio_common_dma_send_recv_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pio_buffer, data_out, data_amount, data_bytes);
+		size_t data_out_cnt = tap_pio_common_dma_send_recv_uint8(
+			TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pio_buffer, data_out, data_amount, data_bytes);
 
 		if ((clock_cycles % 8) != 0) {
 			data_out[data_out_cnt - 1] >>= (8 - (clock_cycles % 8));
@@ -265,7 +265,7 @@ static void jtagtap_tdi_tdo_seq(
 
 static void jtagtap_tdi_seq(const bool final_tms, const uint8_t *const data_in, const size_t clock_cycles)
 {
-	uint8_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
+	uint8_t pio_buffer[PIO_BUFFER_SIZE] = {0};
 	uint8_t data_amount = 0;
 
 	if (clock_cycles == 0) {
@@ -310,7 +310,7 @@ static void jtagtap_tdi_seq(const bool final_tms, const uint8_t *const data_in, 
 
 static void jtagtap_cycle(const bool tms, const bool tdi, const size_t clock_cycles)
 {
-	uint8_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
+	uint8_t pio_buffer[PIO_BUFFER_SIZE] = {0};
 	uint8_t data_amount = 0;
 
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, true);
@@ -329,7 +329,8 @@ static void jtagtap_cycle(const bool tms, const bool tdi, const size_t clock_cyc
 
 	pio_buffer[data_amount++] = (tdi ? 1 : 0);
 
-	tap_pio_common_dma_send_recv_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, pio_buffer, NULL, data_amount, data_amount);
+	tap_pio_common_dma_send_recv_uint8(
+		TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, pio_buffer, NULL, data_amount, data_amount);
 
 	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
 

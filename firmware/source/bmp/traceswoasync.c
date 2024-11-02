@@ -454,8 +454,8 @@ _Noreturn static void traceswo_thread(void *params);
 void traceswo_task_init(void)
 {
 #if configUSE_CORE_AFFINITY
-	const BaseType_t result = xTaskCreateAffinitySet(
-		traceswo_thread, "target_trace", TRACESWO_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_NORMAL, TRACESWO_TASK_CORE_AFFINITY, &traceswo_task);
+	const BaseType_t result = xTaskCreateAffinitySet(traceswo_thread, "target_trace", TRACESWO_TASK_STACK_SIZE, NULL,
+		PLATFORM_PRIORITY_NORMAL, TRACESWO_TASK_CORE_AFFINITY, &traceswo_task);
 #else
 	const BaseType_t result = xTaskCreate(
 		traceswo_thread, "target_trace", TRACESWO_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_NORMAL, &traceswo_task);
