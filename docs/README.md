@@ -168,7 +168,6 @@ git clone --recurse-submodules https://github.com/Misaka0x2730/MioLink.git
 4. Release BOOT (BOOTSEL on Pico and Pico W) button;
 5. Drag-and-Drop ```MioLink.uf2``` file to mass storage device;
 6. The device will be flashed and rebooted automatically, after which it is ready for use.
-7. 
 
 # Known issues
 1. [Issue with STM32F103](https://github.com/Misaka0x2730/MioLink/issues/2): When target is STM32F103, if MioLink is flashed with a debug firmware and interface frequency higher than 1MHz, firmware verification (compare-sections) almost always fails (one or more sections - MIS-MATCHED).
