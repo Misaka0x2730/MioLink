@@ -29,8 +29,11 @@
 static int pio_dma_channel = -1;
 static dma_channel_config tx_config;
 
-void tap_pio_common_dma_send(PIO pio, uint32_t sm, uint32_t *buffer, uint8_t data_amount)
+void tap_pio_common_dma_send(PIO pio, uint32_t sm, uint32_t *buffer, const uint8_t data_amount)
 {
+	assert(buffer != NULL);
+	assert((data_amount > 0) && (data_amount <= PIO_BUFFER_SIZE));
+
 	check_pio_param(pio);
 	check_sm_param(sm);
 
