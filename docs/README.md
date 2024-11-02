@@ -170,8 +170,8 @@ git clone --recurse-submodules https://github.com/Misaka0x2730/MioLink.git
 6. The device will be flashed and rebooted automatically, after which it is ready for use.
 
 # Known issues
-1. [Issue with STM32F103](https://github.com/Misaka0x2730/MioLink/issues/2): When target is STM32F103, if MioLink is flashed with a debug firmware and interface frequency higher than 1MHz, firmware verification (compare-sections) almost always fails (one or more sections - MIS-MATCHED).
-This occurs when working over both SWD and JTAG, but it most often occurs on JTAG, much less frequently on SWD.
-Release firmware works fine, even at a frequency of 10MHz.
-It seems to be somehow related to context switching, as after moving the GDB task to a core 1, the issue on SWD started occurring much less frequently.
+1. [Issue with STM32F103](https://github.com/Misaka0x2730/MioLink/issues/2): When target is STM32F103, if MioLink is flashed with a debug firmware and interface frequency higher than 1MHz, firmware verification (compare-sections) almost always fails (one or more sections - MIS-MATCHED).  
+This occurs when working over both SWD and JTAG, but it most often occurs on JTAG, much less frequently on SWD.  
+Release firmware works fine, even at a frequency of 10MHz.  
+It seems to be somehow related to context switching, as after moving the GDB task to a core 1, the issue on SWD started occurring much less frequently.  
 Workaround: to work with STM32F103 (and probably with all STM32F1xx) use interface frequency 1MHz or lower (monitor frequency 1M).
