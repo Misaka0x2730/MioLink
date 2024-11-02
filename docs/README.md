@@ -174,3 +174,5 @@ git clone --recurse-submodules https://github.com/Misaka0x2730/MioLink.git
 This occurs when working over both SWD and JTAG, but it most often occurs on JTAG, much less frequently on SWD.
 Release firmware works fine, even at a frequency of 10MHz.
 It seems to be somehow related to context switching, as after moving the GDB task to a core 1, the issue on SWD started occurring much less frequently.
+
+Workaround: to work with STM32F103 (and probably with all STM32F1xx) use interface frequency 1MHz or lower (monitor frequency 1M).
