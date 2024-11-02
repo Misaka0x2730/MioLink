@@ -134,7 +134,7 @@ static void jtag_to_swd_sequence(void)
 bool adiv5_swd_write_no_check(const uint16_t addr, const uint32_t data)
 {
 	const uint8_t request = make_packet_request(ADIV5_LOW_WRITE, addr);
-	return rp2040_pio_adiv5_swd_write_no_check(request, data) != SWDP_ACK_OK;
+	return rp2040_pio_adiv5_swd_write_no_check(request, data) != SWD_ACK_OK;
 }
 
 uint32_t adiv5_swd_read_no_check(const uint16_t addr)
@@ -142,7 +142,7 @@ uint32_t adiv5_swd_read_no_check(const uint16_t addr)
 	const uint8_t request = make_packet_request(ADIV5_LOW_READ, addr);
 	uint32_t data = 0;
 	const uint8_t res = rp2040_pio_adiv5_swd_read_no_check(request, &data);
-	return res == SWDP_ACK_OK ? data : 0;
+	return res == SWD_ACK_OK ? data : 0;
 }
 
 bool adiv5_swd_scan(const uint32_t targetid)
@@ -381,12 +381,12 @@ uint32_t adiv5_swd_raw_access(adiv5_debug_port_s *dp, const uint8_t rnw, const u
 
 	const uint8_t request = make_packet_request(rnw, addr);
 	uint32_t response = 0;
-	uint8_t ack = SWDP_ACK_WAIT;
+	uint8_t ack = SWD_ACK_WAIT;
 	platform_timeout_s timeout;
 	platform_timeout_set(&timeout, 250U);
 	do {
 		ack = rp2040_pio_adiv5_swd_raw_access_req(request);
-		if (ack == SWDP_ACK_FAULT) {
+		if (ack == SWD_ACK_FAULT) {
 			DEBUG_ERROR("SWD access resulted in fault, retrying\n");
 			/* On fault, abort the request and repeat */
 			/* Yes, this is self-recursive.. no, we can't think of a better option */
@@ -394,28 +394,28 @@ uint32_t adiv5_swd_raw_access(adiv5_debug_port_s *dp, const uint8_t rnw, const u
 				ADIV5_DP_ABORT_ORUNERRCLR | ADIV5_DP_ABORT_WDERRCLR | ADIV5_DP_ABORT_STKERRCLR |
 					ADIV5_DP_ABORT_STKCMPCLR);
 		}
-	} while ((ack == SWDP_ACK_WAIT || ack == SWDP_ACK_FAULT) && !platform_timeout_is_expired(&timeout));
+	} while ((ack == SWD_ACK_WAIT || ack == SWD_ACK_FAULT) && !platform_timeout_is_expired(&timeout));
 
-	if (ack == SWDP_ACK_WAIT) {
+	if (ack == SWD_ACK_WAIT) {
 		DEBUG_ERROR("SWD access resulted in wait, aborting\n");
 		dp->abort(dp, ADIV5_DP_ABORT_DAPABORT);
 		dp->fault = ack;
 		return 0;
 	}
 
-	if (ack == SWDP_ACK_FAULT) {
+	if (ack == SWD_ACK_FAULT) {
 		DEBUG_ERROR("SWD access resulted in fault\n");
 		dp->fault = ack;
 		return 0;
 	}
 
-	if (ack == SWDP_ACK_NO_RESPONSE) {
+	if (ack == SWD_ACK_NO_RESPONSE) {
 		DEBUG_ERROR("SWD access resulted in no response\n");
 		dp->fault = ack;
 		return 0;
 	}
 
-	if (ack != SWDP_ACK_OK) {
+	if (ack != SWD_ACK_OK) {
 		DEBUG_ERROR("SWD access has invalid ack %x\n", ack);
 		raise_exception(EXCEPTION_ERROR, "SWD invalid ACK");
 	}
