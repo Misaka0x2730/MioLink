@@ -27,30 +27,164 @@
 #include "tap_pio_common.h"
 
 static int pio_dma_channel = -1;
-static dma_channel_config tx_config;
 
-void tap_pio_common_dma_send(PIO pio, uint32_t sm, uint32_t *buffer, const uint8_t data_amount)
+void tap_pio_common_dma_send_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, const uint32_t data_amount)
 {
-	assert(buffer != NULL);
+	assert(buffer_send != NULL);
 	assert((data_amount > 0) && (data_amount <= PIO_BUFFER_SIZE));
 
 	check_pio_param(pio);
 	check_sm_param(sm);
 
-	if (pio_dma_channel == -1)
-	{
+	if (pio_dma_channel == -1) {
 		pio_dma_channel = dma_claim_unused_channel(true);
-
-		tx_config = dma_channel_get_default_config(pio_dma_channel);
-		channel_config_set_transfer_data_size(&tx_config, DMA_SIZE_32);
-		channel_config_set_read_increment(&tx_config, true);
-		channel_config_set_write_increment(&tx_config, false);
-
-		channel_config_set_dreq(&tx_config, pio_get_dreq(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, true));
 	}
 
-	dma_channel_configure(pio_dma_channel, &tx_config, &(pio->txf[sm]), buffer,
+	dma_channel_config tx_config = dma_channel_get_default_config(pio_dma_channel);
+	channel_config_set_transfer_data_size(&tx_config, DMA_SIZE_32);
+	channel_config_set_read_increment(&tx_config, true);
+	channel_config_set_write_increment(&tx_config, false);
+
+	channel_config_set_dreq(&tx_config, pio_get_dreq(pio, sm, true));
+
+	dma_channel_configure(pio_dma_channel, &tx_config, &(pio->txf[sm]), buffer_send,
 		data_amount, true);
 
 	dma_channel_wait_for_finish_blocking(pio_dma_channel);
+}
+
+uint32_t tap_pio_common_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, uint32_t *buffer_recv, const uint32_t data_amount, const uint32_t data_amount_to_read)
+{
+	assert(buffer_send != NULL);
+	assert((data_amount > 0) && (data_amount <= PIO_BUFFER_SIZE));
+
+	check_pio_param(pio);
+	check_sm_param(sm);
+
+	if (pio_dma_channel == -1) {
+		pio_dma_channel = dma_claim_unused_channel(true);
+	}
+
+	dma_channel_config tx_config = dma_channel_get_default_config(pio_dma_channel);
+	channel_config_set_transfer_data_size(&tx_config, DMA_SIZE_32);
+	channel_config_set_read_increment(&tx_config, true);
+	channel_config_set_write_increment(&tx_config, false);
+
+	channel_config_set_dreq(&tx_config, pio_get_dreq(pio, sm, true));
+
+	dma_channel_configure(pio_dma_channel, &tx_config, &(pio->txf[sm]), buffer_send,
+		data_amount, true);
+
+	uint32_t recv_data_amount = 0;
+	while ((dma_channel_is_busy(pio_dma_channel)) || (recv_data_amount < data_amount_to_read))
+	{
+		if (pio_sm_is_rx_fifo_empty(pio, sm) == false)
+		{
+			volatile const uint32_t read_value = pio_sm_get_blocking(pio, sm);
+			if ((buffer_recv != NULL) && (recv_data_amount < data_amount_to_read)) {
+				buffer_recv[recv_data_amount++] = read_value;
+			}
+		}
+	}
+
+	__compiler_memory_barrier();
+
+	return recv_data_amount;
+}
+
+void tap_pio_common_dma_send_uint8(PIO pio, uint32_t sm, const uint8_t *buffer_send, const uint32_t data_amount)
+{
+	assert(buffer_send != NULL);
+	assert((data_amount > 0) && (data_amount <= PIO_BUFFER_SIZE));
+
+	check_pio_param(pio);
+	check_sm_param(sm);
+
+	if (pio_dma_channel == -1) {
+		pio_dma_channel = dma_claim_unused_channel(true);
+	}
+
+	dma_channel_config tx_config = dma_channel_get_default_config(pio_dma_channel);
+	channel_config_set_transfer_data_size(&tx_config, DMA_SIZE_8);
+	channel_config_set_read_increment(&tx_config, true);
+	channel_config_set_write_increment(&tx_config, false);
+
+	channel_config_set_dreq(&tx_config, pio_get_dreq(pio, sm, true));
+
+	dma_channel_configure(pio_dma_channel, &tx_config, &(pio->txf[sm]), buffer_send,
+		data_amount, true);
+
+	dma_channel_wait_for_finish_blocking(pio_dma_channel);
+
+	/*assert(buffer_send != NULL);
+	assert((data_amount > 0) && (data_amount <= PIO_BUFFER_SIZE));
+
+	uint32_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
+
+	for (uint32_t i = 0; i < data_amount; i++)
+	{
+		pio_buffer[i] = buffer_send[i];
+	}
+
+	tap_pio_common_dma_send_uint32(pio, sm, pio_buffer, data_amount);*/
+}
+
+uint32_t tap_pio_common_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer_send, uint8_t *buffer_recv, const uint32_t data_amount, const uint32_t data_amount_to_read)
+{
+	assert(buffer_send != NULL);
+	assert((data_amount > 0) && (data_amount <= PIO_BUFFER_SIZE));
+
+	check_pio_param(pio);
+	check_sm_param(sm);
+
+	if (pio_dma_channel == -1) {
+		pio_dma_channel = dma_claim_unused_channel(true);
+	}
+
+	dma_channel_config tx_config = dma_channel_get_default_config(pio_dma_channel);
+	channel_config_set_transfer_data_size(&tx_config, DMA_SIZE_8);
+	channel_config_set_read_increment(&tx_config, true);
+	channel_config_set_write_increment(&tx_config, false);
+
+	channel_config_set_dreq(&tx_config, pio_get_dreq(pio, sm, true));
+
+	dma_channel_configure(pio_dma_channel, &tx_config, &(pio->txf[sm]), buffer_send,
+		data_amount, true);
+
+	uint32_t recv_data_amount = 0;
+	while ((dma_channel_is_busy(pio_dma_channel)) || (recv_data_amount < data_amount_to_read))
+	{
+		if (pio_sm_is_rx_fifo_empty(pio, sm) == false)
+		{
+			volatile const uint8_t read_value = (uint8_t)((pio_sm_get_blocking(pio, sm) >> 24) & 0xFF);
+			if ((buffer_recv != NULL) && (recv_data_amount < data_amount_to_read)) {
+				buffer_recv[recv_data_amount++] = read_value;
+			}
+		}
+	}
+
+	__compiler_memory_barrier();
+
+	return recv_data_amount;
+
+	/*assert(buffer_send != NULL);
+	assert((data_amount > 0) && (data_amount <= PIO_BUFFER_SIZE));
+
+	uint32_t pio_send_buffer[PIO_BUFFER_SIZE] = { 0 };
+	uint32_t pio_recv_buffer[PIO_BUFFER_SIZE] = { 0 };
+
+	for (uint32_t i = 0; i < data_amount; i++)
+	{
+		pio_send_buffer[i] = buffer_send[i];
+	}
+
+	const uint32_t recv_data_amount = tap_pio_common_dma_send_recv_uint32(pio, sm, pio_send_buffer, pio_recv_buffer, data_amount, data_amount_to_read);
+	assert(recv_data_amount <= data_amount_to_read);
+
+	for (uint32_t i = 0; i < recv_data_amount; i++)
+	{
+		buffer_recv[i] = (uint8_t)((pio_recv_buffer[i] >> 24) & 0xFF);
+	}
+
+	return recv_data_amount;*/
 }

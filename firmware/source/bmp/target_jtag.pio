@@ -33,20 +33,19 @@
 ; Side-set - TCK
 ; Set - TMS
 
-; Autopush and autopull should be enabled, and both thresholds should be set to 8,
-; except for machine 1 (the jtagtap_tms_seq program); for this machine, both thresholds should be set to 32.
+; Autopush and autopull should be enabled, and both thresholds should be set to 8 for all machines.
 ; Additional 3 delay cycles reduce the time spent on non-data instructions, but at the same time
 ; limit the maximum interface frequency, in our case (3 additional delay cycles after each edge),
 ; to the level of sys_clk / 8, since 3 + 1 + 3 + 1 = 8.
 
 jtag_program_start:   ; the initial stage for all programs
     pull block side 0 ; pull new data (and clear the current data in osr)
-    out x, 32         ; save the cycle counter (x register contains the cycle counter for all programs)
-    out pc, 32  [1]   ; go to the program
+    out x, 8         ; save the cycle counter (x register contains the cycle counter for all programs)
+    out pc, 8  [1]   ; go to the program
 
 jtag_tdi_seq:         ; TDI sequence program (jtagtap_tdi_seq), machine 3
     set pins, 0       ; set initial TMS state = 0
-    out y, 32  [3]    ; save the final TMS value in the y register (0 - final TMS is 0, otherwise - 1)
+    out y, 8  [3]    ; save the final TMS value in the y register (0 - final TMS is 0, otherwise - 1)
 
     jtag_tdi_seq_loop:
         out pins, 1 side 0 [3]                ; output TDI pin state and a falling edge on TCK
@@ -57,7 +56,7 @@ jtag_tdi_seq:         ; TDI sequence program (jtagtap_tdi_seq), machine 3
 
 jtag_tdi_tdo_seq:  ; TDI and TDO sequence program (jtagtap_tdi_tdo_seq), machine 2
     set pins, 0    ; set initial TMS state = 0
-    out y, 32      ; save the final TMS value in the y register (0 - final TMS is 0, otherwise - 1)
+    out y, 8      ; save the final TMS value in the y register (0 - final TMS is 0, otherwise - 1)
 
     jtag_tdi_tdo_seq_loop:
         out pins, 1 side 0 [3]          ; output TDI pin state and a falling edge on TCK

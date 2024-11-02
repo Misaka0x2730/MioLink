@@ -115,8 +115,8 @@ void jtagtap_init(void)
 	sm_config_set_out_pins(&prog_config, target_pins->tms, 1);
 	sm_config_set_sideset_pins(&prog_config, target_pins->tck);
 	sm_config_set_set_pins(&prog_config, target_pins->tdi, 1);
-	sm_config_set_out_shift(&prog_config, true, true, 32);
-	sm_config_set_in_shift(&prog_config, true, true, 32);
+	sm_config_set_out_shift(&prog_config, true, true, 8);
+	sm_config_set_in_shift(&prog_config, true, true, 8);
 
 	pio_sm_init(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, 0, &prog_config);
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, false);
@@ -168,28 +168,41 @@ static void jtagtap_reset(void)
 
 static bool jtagtap_next(const bool tms, const bool tdi)
 {
+	uint8_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
+	uint8_t data_amount = 0;
+
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, true);
 
-	pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, 0); /* Number of cycles - 1 */
-	pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE,
-		tms ? JTAG_NEXT_CYCLE_INITIAL_SET_1_POS : JTAG_NEXT_CYCLE_INITIAL_SET_0_POS);
+	pio_buffer[data_amount++] = 0;
+	pio_buffer[data_amount++] = tms ? JTAG_NEXT_CYCLE_INITIAL_SET_1_POS : JTAG_NEXT_CYCLE_INITIAL_SET_0_POS;
+	pio_buffer[data_amount++] = (tdi ? 1 : 0);
 
-	pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (tdi ? 1 : 0));
-	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
-
+	tap_pio_common_dma_send_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, pio_buffer, data_amount);
 	const bool result = (pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE) != 0);
 
+	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
+
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, false);
+
 	return result;
 }
 
 static void jtagtap_tms_seq(const uint32_t tms_states, const size_t ticks)
 {
+	uint8_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
+	uint8_t data_amount = 0;
+
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, true);
 
-	pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, (ticks - 1));
-	pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, JTAG_TMS_SEQ_POS);
-	pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, tms_states);
+	pio_buffer[data_amount++] = (ticks - 1);
+	pio_buffer[data_amount++] = JTAG_TMS_SEQ_POS;
+
+	for (uint8_t i = 0, ticks_sent = 0; ((i < sizeof(tms_states)) && (ticks_sent < ticks)); i++, ticks_sent += 8)
+	{
+		pio_buffer[data_amount++] = ((tms_states >> (8 * i)) & 0xFF);
+	}
+
+	tap_pio_common_dma_send_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, pio_buffer, data_amount);
 
 	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ);
 
@@ -199,6 +212,9 @@ static void jtagtap_tms_seq(const uint32_t tms_states, const size_t ticks)
 static void jtagtap_tdi_tdo_seq(
 	uint8_t *const data_out, const bool final_tms, const uint8_t *const data_in, size_t clock_cycles)
 {
+	uint8_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
+	uint8_t data_amount = 0;
+
 	if (clock_cycles == 0) {
 		return;
 	}
@@ -206,39 +222,34 @@ static void jtagtap_tdi_tdo_seq(
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, true);
 
 	if (clock_cycles == 1) {
-		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, 0);
+		pio_buffer[data_amount++] = 0;
+
 		if (final_tms) {
-			pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS);
+			pio_buffer[data_amount++] = JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS;
 		} else {
-			pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS);
+			pio_buffer[data_amount++] = JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS;
 		}
-		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, data_in[0]);
+		pio_buffer[data_amount++] = data_in[0];
+
+		tap_pio_common_dma_send_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pio_buffer, data_amount);
 
 		data_out[0] = (pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) != 0) ? 1 : 0;
 	} else {
-		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, (clock_cycles - 2));
-		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, JTAG_TDI_TDO_SEQ_POS);
-		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, (final_tms ? 1 : 0));
+		pio_buffer[data_amount++] = (clock_cycles - 2);
+		pio_buffer[data_amount++] = JTAG_TDI_TDO_SEQ_POS;
+		pio_buffer[data_amount++] = (final_tms ? 1 : 0);
 
 		size_t data_bytes = clock_cycles / 8;
 		if (clock_cycles % 8) {
 			data_bytes++;
 		}
 
-		size_t data_out_cnt = 0;
-		for (size_t i = 0; i < data_bytes; i++) {
-			pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, data_in[i]);
+		assert((data_amount + data_bytes) <= PIO_BUFFER_SIZE);
+		memcpy(&(pio_buffer[data_amount]), data_in, data_bytes);
 
-			if (pio_sm_is_rx_fifo_empty(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) == false) {
-				data_out[data_out_cnt++] =
-					(uint8_t)((pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) >> 24) & 0xFF);
-			}
-		}
+		data_amount += data_bytes;
 
-		while (data_out_cnt < data_bytes) {
-			data_out[data_out_cnt++] =
-				(uint8_t)((pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) >> 24) & 0xFF);
-		}
+		size_t data_out_cnt = tap_pio_common_dma_send_recv_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pio_buffer, data_out, data_amount, data_bytes);
 
 		if ((clock_cycles % 8) != 0) {
 			data_out[data_out_cnt - 1] >>= (8 - (clock_cycles % 8));
@@ -254,6 +265,9 @@ static void jtagtap_tdi_tdo_seq(
 
 static void jtagtap_tdi_seq(const bool final_tms, const uint8_t *const data_in, const size_t clock_cycles)
 {
+	uint8_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
+	uint8_t data_amount = 0;
+
 	if (clock_cycles == 0) {
 		return;
 	}
@@ -261,27 +275,32 @@ static void jtagtap_tdi_seq(const bool final_tms, const uint8_t *const data_in, 
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, true);
 
 	if (clock_cycles == 1) {
-		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, 0);
+		pio_buffer[data_amount++] = 0;
+
 		if (final_tms) {
-			pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS);
+			pio_buffer[data_amount++] = JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS;
 		} else {
-			pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS);
+			pio_buffer[data_amount++] = JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS;
 		}
-		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, data_in[0]);
+		pio_buffer[data_amount++] = data_in[0];
+
 	} else {
-		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, (clock_cycles - 2));
-		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, JTAG_TDI_SEQ_POS);
-		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, (final_tms ? 1 : 0));
+		pio_buffer[data_amount++] = (clock_cycles - 2);
+		pio_buffer[data_amount++] = JTAG_TDI_SEQ_POS;
+		pio_buffer[data_amount++] = (final_tms ? 1 : 0);
 
 		size_t data_bytes = (clock_cycles) / 8;
 		if (clock_cycles % 8) {
 			data_bytes++;
 		}
 
-		for (size_t i = 0; i < data_bytes; i++) {
-			pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, data_in[i]);
-		}
+		assert((data_amount + data_bytes) <= PIO_BUFFER_SIZE);
+		memcpy(&(pio_buffer[data_amount]), data_in, data_bytes);
+
+		data_amount += data_bytes;
 	}
+
+	tap_pio_common_dma_send_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, pio_buffer, data_amount);
 
 	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ);
 
@@ -291,27 +310,28 @@ static void jtagtap_tdi_seq(const bool final_tms, const uint8_t *const data_in, 
 
 static void jtagtap_cycle(const bool tms, const bool tdi, const size_t clock_cycles)
 {
+	uint8_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
+	uint8_t data_amount = 0;
+
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, true);
 
 	if (clock_cycles == 0) {
 		return;
 	}
 
-	pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (clock_cycles - 1)); /* Number of cycles */
+	pio_buffer[data_amount++] = (clock_cycles - 1);
 
 	if (tms) {
-		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_1_POS);
+		pio_buffer[data_amount++] = JTAG_NEXT_CYCLE_INITIAL_SET_1_POS;
 	} else {
-		pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, JTAG_NEXT_CYCLE_INITIAL_SET_0_POS);
+		pio_buffer[data_amount++] = JTAG_NEXT_CYCLE_INITIAL_SET_0_POS;
 	}
 
-	pio_sm_put_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, (tdi ? 1 : 0));
+	pio_buffer[data_amount++] = (tdi ? 1 : 0);
 
-	while (tap_pio_common_is_not_tx_stalled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE)) {
-		if (pio_sm_is_rx_fifo_empty(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE) == false) {
-			pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
-		}
-	}
+	tap_pio_common_dma_send_recv_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, pio_buffer, NULL, data_amount, data_amount);
+
+	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
 
 	pio_sm_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, false);

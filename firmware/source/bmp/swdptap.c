@@ -338,7 +338,7 @@ static uint32_t swdptap_seq_in(const size_t clock_cycles)
 	uint32_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
 	const uint8_t data_amount = swdtap_prepare_raw_pio_sequence(pio_buffer, clock_cycles, 0, true, false);
 
-	tap_pio_common_dma_send(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
+	tap_pio_common_dma_send_uint32(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
 
 	const uint32_t value = (pio_sm_get_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM) >> (32U - clock_cycles));
 
@@ -355,7 +355,7 @@ static bool swdptap_seq_in_parity(uint32_t *ret, const size_t clock_cycles)
 	uint32_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
 	const uint8_t data_amount = swdtap_prepare_raw_pio_sequence(pio_buffer, clock_cycles, 0, true, true);
 
-	tap_pio_common_dma_send(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
+	tap_pio_common_dma_send_uint32(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
 
 	const uint32_t value = (pio_sm_get_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM) >> (32U - clock_cycles));
 
@@ -380,7 +380,7 @@ static void swdptap_seq_out(const uint32_t tms_states, const size_t clock_cycles
 	uint32_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
 	const uint8_t data_amount = swdtap_prepare_raw_pio_sequence(pio_buffer, clock_cycles, tms_states, false, false);
 
-	tap_pio_common_dma_send(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
+	tap_pio_common_dma_send_uint32(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
 
 	tap_pio_common_wait_for_tx_stall(TARGET_SWD_PIO, TARGET_SWD_PIO_SM);
 }
@@ -392,7 +392,43 @@ static void swdptap_seq_out_parity(const uint32_t tms_states, const size_t clock
 	uint32_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
 	const uint8_t data_amount = swdtap_prepare_raw_pio_sequence(pio_buffer, clock_cycles, tms_states, false, true);
 
-	tap_pio_common_dma_send(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
+	tap_pio_common_dma_send_uint32(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
+
+	tap_pio_common_wait_for_tx_stall(TARGET_SWD_PIO, TARGET_SWD_PIO_SM);
+}
+
+void swdptap_seq_out_buffer(const uint32_t *tms_states, const size_t clock_cycles)
+{
+	assert(tms_states != NULL);
+
+	uint32_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
+	uint8_t data_amount = 0;
+
+	uint32_t data_count = clock_cycles / 32;
+	if ((clock_cycles % 32) != 0) {
+		data_count++;
+	}
+
+	const swd_board_program_t *p_board_programs = swdtap_get_board_programs();
+	assert(p_board_programs != NULL);
+
+	if (tms_dir == SWDIO_STATUS_FLOAT) {
+		pio_buffer[data_amount++] = (uint32_t)(p_board_programs->swd_seq_out_turnaround->origin);
+		tms_dir = SWDIO_STATUS_DRIVE;
+	}
+	else
+	{
+		pio_buffer[data_amount++] = (uint32_t)(p_board_programs->swd_seq_out->origin);
+	}
+
+	pio_buffer[data_amount++] = clock_cycles - 1;
+
+	assert((data_amount + data_count) <= PIO_BUFFER_SIZE);
+	memcpy(&(pio_buffer[data_amount]), tms_states, data_count * sizeof(pio_buffer[0]));
+
+	data_amount += data_count;
+
+	tap_pio_common_dma_send_uint32(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
 
 	tap_pio_common_wait_for_tx_stall(TARGET_SWD_PIO, TARGET_SWD_PIO_SM);
 }
@@ -458,7 +494,7 @@ uint8_t rp2040_pio_adiv5_swd_write_no_check(const uint8_t request, const uint32_
 	uint32_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
 	const uint8_t data_amount = rp2040_pio_swd_adiv5_prepare_pio_sequence(pio_buffer, request, data, false, false);
 
-	tap_pio_common_dma_send(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
+	tap_pio_common_dma_send_uint32(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
 
 	const uint8_t ack = (uint8_t)((pio_sm_get_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM) >> 29) & 0x7);
 
@@ -474,7 +510,7 @@ uint8_t rp2040_pio_adiv5_swd_read_no_check(const uint8_t request, uint32_t *data
 	uint32_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
 	const uint8_t data_amount = rp2040_pio_swd_adiv5_prepare_pio_sequence(pio_buffer, request, 0, true, false);
 
-	tap_pio_common_dma_send(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
+	tap_pio_common_dma_send_uint32(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
 
 	const uint8_t ack = (uint8_t)((pio_sm_get_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM) >> 29) & 0x7);
 	*data = pio_sm_get_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM);
@@ -490,7 +526,7 @@ uint8_t rp2040_pio_adiv5_swd_write_check(const uint8_t request, const uint32_t d
 	uint32_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
 	const uint8_t data_amount = rp2040_pio_swd_adiv5_prepare_pio_sequence(pio_buffer, request, data, false, true);
 
-	tap_pio_common_dma_send(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
+	tap_pio_common_dma_send_uint32(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
 
 	const uint8_t ack = (uint8_t)((pio_sm_get_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM) >> 29) & 0x7);
 
@@ -506,7 +542,7 @@ uint8_t rp2040_pio_adiv5_swd_read_check(const uint8_t request, uint32_t *data, b
 	uint32_t pio_buffer[PIO_BUFFER_SIZE] = { 0 };
 	const uint8_t data_amount = rp2040_pio_swd_adiv5_prepare_pio_sequence(pio_buffer, request, 0, true, true);
 
-	tap_pio_common_dma_send(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
+	tap_pio_common_dma_send_uint32(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
 	const uint8_t ack = (uint8_t)((pio_sm_get_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM) >> 29) & 0x7);
 
 	if (ack == 0x01U) {
@@ -521,20 +557,4 @@ uint8_t rp2040_pio_adiv5_swd_read_check(const uint8_t request, uint32_t *data, b
 	tap_pio_common_wait_for_tx_stall(TARGET_SWD_PIO, TARGET_SWD_PIO_SM);
 
 	return ack;
-}
-
-void swdptap_seq_out_buffer(const uint32_t *tms_states, const size_t clock_cycles)
-{
-	assert(tms_states != NULL);
-
-	uint32_t data_count = clock_cycles / 32;
-	if ((clock_cycles % 32) != 0) {
-		data_count++;
-	}
-
-	for (size_t i = 0; i < data_count; i++) {
-		swdptap_seq_out(tms_states[i], 32);
-	}
-
-	tap_pio_common_wait_for_tx_stall(TARGET_SWD_PIO, TARGET_SWD_PIO_SM);
 }
