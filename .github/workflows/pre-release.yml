@@ -21,6 +21,8 @@ jobs:
     - name: Sync blackmagic
       working-directory: ./firmware/thirdParty/blackmagic
       run: |
+        git config user.email "26044988+Misaka0x2730@users.noreply.github.com"
+        git config user.name "Dmitry Rezvanov"
         git remote add upstream https://github.com/blackmagic-debug/blackmagic.git
         git fetch upstream
         git checkout main
@@ -29,6 +31,8 @@ jobs:
     - name: Sync tinyusb
       working-directory: ./firmware/thirdParty/tinyusb
       run: |
+        git config user.email "26044988+Misaka0x2730@users.noreply.github.com"
+        git config user.name "Dmitry Rezvanov"
         git remote add upstream https://github.com/hathach/tinyusb
         git fetch upstream
         git checkout rp2040_auto_zlp
