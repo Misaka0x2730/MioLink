@@ -34,6 +34,8 @@
 
 #include "tap_pio_common.h"
 
+#define SWDP_ACK_OK   (0x01U)
+
 static uint32_t swdptap_seq_in(size_t clock_cycles);
 static bool swdptap_seq_in_parity(uint32_t *ret, size_t clock_cycles);
 static void swdptap_seq_out(uint32_t tms_states, size_t clock_cycles);
@@ -426,7 +428,7 @@ static uint8_t rp2040_pio_swd_adiv5_prepare_pio_sequence(
 
 	if (check_ack) {
 		buffer[pos++] = (uint32_t)(p_board_programs->swd_adiv5_check_ack->origin);
-		buffer[pos++] = (0x01U << 29);
+		buffer[pos++] = (SWDP_ACK_OK << 29);
 
 		if (rnw) {
 			buffer[pos++] = 5 - 1;
@@ -507,7 +509,7 @@ uint8_t rp2040_pio_adiv5_swd_read_check(const uint8_t request, uint32_t *data, b
 	tap_pio_common_dma_send_uint32(TARGET_SWD_PIO, TARGET_SWD_PIO_SM, pio_buffer, data_amount);
 	const uint8_t ack = (uint8_t)((pio_sm_get_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM) >> 29) & 0x7);
 
-	if (ack == 0x01U) {
+	if (ack == SWDP_ACK_OK) {
 		*data = pio_sm_get_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM);
 		const bool parity_value =
 			(pio_sm_get_blocking(TARGET_SWD_PIO, TARGET_SWD_PIO_SM) != 0) == (calculate_odd_parity(*data) != 0);
