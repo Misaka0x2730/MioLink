@@ -44,12 +44,12 @@
 jtag_program_start:                             ; the initial stage for all programs
     pull block side 0                           ; pull new data (and clear the current data in osr)
     out x, 8                                    ; save the cycle counter (x register contains the cycle counter for all programs)
-    out pc, 8  [1]                              ; go to the program
+    out pc, 8                                   ; go to the program
 
 
 jtag_tdi_seq:                                   ; TDI sequence program (jtagtap_tdi_seq), machine 3
     set pins, 0                                 ; set initial TMS state = 0
-    out y, 8  [3]                               ; save the final TMS value in the y register (0 - final TMS is 0, otherwise - 1)
+    out y, 8                                    ; save the final TMS value in the y register (0 - final TMS is 0, otherwise - 1)
 
     jtag_tdi_seq_loop:
         out pins, 1 side 0 [3]                  ; output TDI pin state and a falling edge on TCK
