@@ -36,20 +36,21 @@ static void jtagtap_tdi_seq(bool final_tms, const uint8_t *data_in, size_t clock
 static bool jtagtap_next(bool tms, bool tdi);
 static void jtagtap_cycle(bool tms, bool tdi, size_t clock_cycles);
 
-#define JTAG_PROGRAM_START_POS            (target_jtag_wrap_target)
-#define JTAG_TDI_SEQ_POS                  (3)
-#define JTAG_TDI_TDO_SEQ_POS              (9)
-#define JTAG_TDI_TDO_SEQ_POS              (9)
-#define JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS  (15)
-#define JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS  (17)
-#define JTAG_TMS_SEQ_POS                  (21)
-#define JTAG_NEXT_CYCLE_INITIAL_SET_1_POS (24)
-#define JTAG_NEXT_CYCLE_INITIAL_SET_0_POS (26)
+#define TARGET_JTAG_TICKS_NO_FINAL(ticks)   (ticks - 1)
+#define TARGET_JTAG_TICKS_FINAL(ticks)      (ticks - 2)
 
-#define JTAG_SM_NEXT_CYCLE_WRAP  (target_jtag_wrap)
-#define JTAG_SM_TMS_SEQ_WRAP     (JTAG_NEXT_CYCLE_INITIAL_SET_1_POS - 1)
-#define JTAG_SM_TDI_TDO_SEQ_WRAP (JTAG_TMS_SEQ_POS - 1)
-#define JTAG_SM_TDI_SEQ_WRAP     (JTAG_TMS_SEQ_POS - 1)
+typedef enum
+{
+	TARGET_JTAG_SET_INITIAL_0 = 0,
+	TARGET_JTAG_SET_INITIAL_1 = 1,
+} target_jtag_set_initial_t;
+
+typedef enum
+{
+	TARGET_JTAG_SET_FINAL_NO = 0,
+	TARGET_JTAG_SET_FINAL_0 = 1,
+	TARGET_JTAG_SET_FINAL_1 = 2,
+} target_jtag_set_final_t;
 
 jtag_proc_s jtag_proc;
 extern uint32_t target_interface_frequency;
@@ -88,17 +89,16 @@ void jtagtap_init(void)
 	const uint32_t pins_value = 0;
 	const uint32_t pins_mask = (1 << target_pins->tck) | (1 << target_pins->tdi) | (1 << target_pins->tms);
 
-	pio_sm_set_pindirs_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, pindirs_value, pindirs_mask);
-	pio_sm_set_pins_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, pins_value, pins_mask);
+	pio_sm_set_pindirs_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pindirs_value, pindirs_mask);
+	pio_sm_set_pins_with_mask(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pins_value, pins_mask);
 
 	tap_pio_common_disable_input_sync(TARGET_JTAG_PIO, target_pins->tdo);
 
-	pio_add_program_at_offset(TARGET_JTAG_PIO, &target_jtag_program, JTAG_PROGRAM_START_POS);
+	pio_add_program_at_offset(TARGET_JTAG_PIO, &target_jtag_program, target_jtag_program.origin);
 
 	pio_sm_config prog_config = target_jtag_program_get_default_config(0);
 
-	/* JTAG next and cycle SM */
-	sm_config_set_wrap(&prog_config, JTAG_PROGRAM_START_POS, JTAG_SM_NEXT_CYCLE_WRAP);
+	/* JTAG TDI/TDO sequence SM */
 	sm_config_set_in_pins(&prog_config, target_pins->tdo);
 	sm_config_set_out_pins(&prog_config, target_pins->tdi, 1);
 	sm_config_set_sideset_pins(&prog_config, target_pins->tck);
@@ -106,11 +106,10 @@ void jtagtap_init(void)
 	sm_config_set_out_shift(&prog_config, true, true, 8);
 	sm_config_set_in_shift(&prog_config, true, true, 8);
 
-	pio_sm_init(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, 0, &prog_config);
-	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, false);
+	pio_sm_init(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, target_jtag_program.origin, &prog_config);
+	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, false);
 
 	/* JTAG TMS sequence SM */
-	sm_config_set_wrap(&prog_config, JTAG_PROGRAM_START_POS, JTAG_SM_TMS_SEQ_WRAP);
 	sm_config_set_in_pins(&prog_config, target_pins->tdo);
 	sm_config_set_out_pins(&prog_config, target_pins->tms, 1);
 	sm_config_set_sideset_pins(&prog_config, target_pins->tck);
@@ -118,32 +117,8 @@ void jtagtap_init(void)
 	sm_config_set_out_shift(&prog_config, true, true, 8);
 	sm_config_set_in_shift(&prog_config, true, true, 8);
 
-	pio_sm_init(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, 0, &prog_config);
+	pio_sm_init(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, target_jtag_program.origin, &prog_config);
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, false);
-
-	/* JTAG TDI/TDO sequence SM */
-	sm_config_set_wrap(&prog_config, JTAG_PROGRAM_START_POS, JTAG_SM_TDI_TDO_SEQ_WRAP);
-	sm_config_set_in_pins(&prog_config, target_pins->tdo);
-	sm_config_set_out_pins(&prog_config, target_pins->tdi, 1);
-	sm_config_set_sideset_pins(&prog_config, target_pins->tck);
-	sm_config_set_set_pins(&prog_config, target_pins->tms, 1);
-	sm_config_set_out_shift(&prog_config, true, true, 8);
-	sm_config_set_in_shift(&prog_config, true, true, 8);
-
-	pio_sm_init(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, 0, &prog_config);
-	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, false);
-
-	/* JTAG TDI sequence SM */
-	sm_config_set_wrap(&prog_config, JTAG_PROGRAM_START_POS, JTAG_SM_TDI_SEQ_WRAP);
-	sm_config_set_in_pins(&prog_config, target_pins->tdo);
-	sm_config_set_out_pins(&prog_config, target_pins->tdi, 1);
-	sm_config_set_sideset_pins(&prog_config, target_pins->tck);
-	sm_config_set_set_pins(&prog_config, target_pins->tms, 1);
-	sm_config_set_out_shift(&prog_config, true, true, 8);
-	sm_config_set_in_shift(&prog_config, true, true, 8);
-
-	pio_sm_init(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, 0, &prog_config);
-	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, false);
 
 	platform_max_frequency_set(target_interface_frequency);
 
@@ -171,18 +146,17 @@ static bool jtagtap_next(const bool tms, const bool tdi)
 	uint8_t pio_buffer[PIO_BUFFER_SIZE] = {0};
 	uint8_t data_amount = 0;
 
-	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, true);
+	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, true);
 
-	pio_buffer[data_amount++] = 0;
-	pio_buffer[data_amount++] = tms ? JTAG_NEXT_CYCLE_INITIAL_SET_1_POS : JTAG_NEXT_CYCLE_INITIAL_SET_0_POS;
+	pio_buffer[data_amount++] = TARGET_JTAG_TICKS_NO_FINAL(1);
+	pio_buffer[data_amount++] = (tms ? TARGET_JTAG_SET_INITIAL_1 : TARGET_JTAG_SET_INITIAL_0);
+	pio_buffer[data_amount++] = TARGET_JTAG_SET_FINAL_NO;
 	pio_buffer[data_amount++] = (tdi ? 1 : 0);
 
-	tap_pio_common_dma_send_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, pio_buffer, data_amount);
-	const bool result = (pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE) != 0);
+	tap_pio_common_dma_send_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pio_buffer, data_amount);
+	const bool result = (pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) != 0);
 
-	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
-
-	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, false);
+	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, false);
 
 	return result;
 }
@@ -194,16 +168,24 @@ static void jtagtap_tms_seq(const uint32_t tms_states, const size_t ticks)
 
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, true);
 
-	pio_buffer[data_amount++] = (ticks - 1);
-	pio_buffer[data_amount++] = JTAG_TMS_SEQ_POS;
+	pio_buffer[data_amount++] = TARGET_JTAG_TICKS_NO_FINAL(ticks);
+	pio_buffer[data_amount++] = TARGET_JTAG_SET_INITIAL_1;
+	pio_buffer[data_amount++] = TARGET_JTAG_SET_FINAL_NO;
 
-	for (uint8_t i = 0, ticks_sent = 0; ((i < sizeof(tms_states)) && (ticks_sent < ticks)); i++, ticks_sent += 8) {
+	size_t data_bytes = ticks / 8;
+	if (ticks % 8) {
+		data_bytes++;
+	}
+
+	for (uint8_t i = 0; (i < data_bytes); i++) {
 		pio_buffer[data_amount++] = ((tms_states >> (8 * i)) & 0xFF);
 	}
 
-	tap_pio_common_dma_send_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, pio_buffer, data_amount);
+	tap_pio_common_dma_send_recv_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, pio_buffer, NULL, data_amount, data_bytes);
 
 	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ);
+
+	pio_sm_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ);
 
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, false);
 }
@@ -221,22 +203,19 @@ static void jtagtap_tdi_tdo_seq(
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, true);
 
 	if (clock_cycles == 1) {
-		pio_buffer[data_amount++] = 0;
-
-		if (final_tms) {
-			pio_buffer[data_amount++] = JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS;
-		} else {
-			pio_buffer[data_amount++] = JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS;
-		}
+		pio_buffer[data_amount++] = TARGET_JTAG_TICKS_NO_FINAL(1);
+		pio_buffer[data_amount++] = (final_tms ? TARGET_JTAG_SET_INITIAL_1 : TARGET_JTAG_SET_INITIAL_0);
+		pio_buffer[data_amount++] = TARGET_JTAG_SET_FINAL_NO;
 		pio_buffer[data_amount++] = data_in[0];
 
-		tap_pio_common_dma_send_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pio_buffer, data_amount);
-
-		data_out[0] = (pio_sm_get_blocking(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ) != 0) ? 1 : 0;
-	} else {
-		pio_buffer[data_amount++] = (clock_cycles - 2);
-		pio_buffer[data_amount++] = JTAG_TDI_TDO_SEQ_POS;
-		pio_buffer[data_amount++] = (final_tms ? 1 : 0);
+		tap_pio_common_dma_send_recv_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pio_buffer, data_out, data_amount, 1);
+		data_out[0] >>= 7;
+	}
+	else
+	{
+		pio_buffer[data_amount++] = TARGET_JTAG_TICKS_FINAL(clock_cycles);
+		pio_buffer[data_amount++] = TARGET_JTAG_SET_INITIAL_0;
+		pio_buffer[data_amount++] = (final_tms ? TARGET_JTAG_SET_FINAL_1 : TARGET_JTAG_SET_FINAL_0);
 
 		size_t data_bytes = clock_cycles / 8;
 		if (clock_cycles % 8) {
@@ -272,24 +251,23 @@ static void jtagtap_tdi_seq(const bool final_tms, const uint8_t *const data_in, 
 		return;
 	}
 
-	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, true);
+	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, true);
 
 	if (clock_cycles == 1) {
-		pio_buffer[data_amount++] = 0;
-
-		if (final_tms) {
-			pio_buffer[data_amount++] = JTAG_TDI_TDO_SEQ_FINAL_TMS_1_POS;
-		} else {
-			pio_buffer[data_amount++] = JTAG_TDI_TDO_SEQ_FINAL_TMS_0_POS;
-		}
+		pio_buffer[data_amount++] = TARGET_JTAG_TICKS_NO_FINAL(1);
+		pio_buffer[data_amount++] = (final_tms ? TARGET_JTAG_SET_INITIAL_1 : TARGET_JTAG_SET_INITIAL_0);
+		pio_buffer[data_amount++] = TARGET_JTAG_SET_FINAL_NO;
 		pio_buffer[data_amount++] = data_in[0];
 
-	} else {
-		pio_buffer[data_amount++] = (clock_cycles - 2);
-		pio_buffer[data_amount++] = JTAG_TDI_SEQ_POS;
-		pio_buffer[data_amount++] = (final_tms ? 1 : 0);
+		tap_pio_common_dma_send_recv_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pio_buffer, NULL, data_amount, 1);
+	}
+	else
+	{
+		pio_buffer[data_amount++] = TARGET_JTAG_TICKS_FINAL(clock_cycles);
+		pio_buffer[data_amount++] = TARGET_JTAG_SET_INITIAL_0;
+		pio_buffer[data_amount++] = (final_tms ? TARGET_JTAG_SET_FINAL_1 : TARGET_JTAG_SET_FINAL_0);
 
-		size_t data_bytes = (clock_cycles) / 8;
+		size_t data_bytes = clock_cycles / 8;
 		if (clock_cycles % 8) {
 			data_bytes++;
 		}
@@ -298,14 +276,15 @@ static void jtagtap_tdi_seq(const bool final_tms, const uint8_t *const data_in, 
 		memcpy(&(pio_buffer[data_amount]), data_in, data_bytes);
 
 		data_amount += data_bytes;
+
+		tap_pio_common_dma_send_recv_uint8(
+			TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pio_buffer, NULL, data_amount, data_bytes);
 	}
 
-	tap_pio_common_dma_send_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, pio_buffer, data_amount);
+	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
 
-	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ);
-
-	pio_sm_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ);
-	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_SEQ, false);
+	pio_sm_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
+	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, false);
 }
 
 static void jtagtap_cycle(const bool tms, const bool tdi, const size_t clock_cycles)
@@ -313,27 +292,26 @@ static void jtagtap_cycle(const bool tms, const bool tdi, const size_t clock_cyc
 	uint8_t pio_buffer[PIO_BUFFER_SIZE] = {0};
 	uint8_t data_amount = 0;
 
-	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, true);
+	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, true);
 
-	if (clock_cycles == 0) {
-		return;
+	pio_buffer[data_amount++] = TARGET_JTAG_TICKS_NO_FINAL(clock_cycles);
+	pio_buffer[data_amount++] = (tms ? TARGET_JTAG_SET_INITIAL_1 : TARGET_JTAG_SET_INITIAL_0);
+	pio_buffer[data_amount++] = TARGET_JTAG_SET_FINAL_NO;
+
+	size_t data_bytes = clock_cycles / 8;
+	if (clock_cycles % 8) {
+		data_bytes++;
 	}
 
-	pio_buffer[data_amount++] = (clock_cycles - 1);
+	memset(&(pio_buffer[data_amount]), (tdi ? 0xFF : 0), data_bytes);
 
-	if (tms) {
-		pio_buffer[data_amount++] = JTAG_NEXT_CYCLE_INITIAL_SET_1_POS;
-	} else {
-		pio_buffer[data_amount++] = JTAG_NEXT_CYCLE_INITIAL_SET_0_POS;
-	}
-
-	pio_buffer[data_amount++] = (tdi ? 1 : 0);
+	data_amount += data_bytes;
 
 	tap_pio_common_dma_send_recv_uint8(
-		TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, pio_buffer, NULL, data_amount, data_amount);
+		TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pio_buffer, NULL, data_amount, data_bytes);
 
-	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
+	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
 
-	pio_sm_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE);
-	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_NEXT_CYCLE, false);
+	pio_sm_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
+	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, false);
 }

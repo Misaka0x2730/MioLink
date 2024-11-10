@@ -33,10 +33,8 @@ typedef enum {
 } target_swd_pio_sm_t;
 
 typedef enum {
-	TARGET_JTAG_PIO_SM_NEXT_CYCLE = 0,
+	TARGET_JTAG_PIO_SM_TDI_TDO_SEQ = 0,
 	TARGET_JTAG_PIO_SM_TMS_SEQ,
-	TARGET_JTAG_PIO_SM_TDI_TDO_SEQ,
-	TARGET_JTAG_PIO_SM_TDI_SEQ,
 } target_jtag_pio_sm_t;
 
 static inline bool tap_pio_common_is_not_tx_stalled(PIO pio, uint32_t sm)
