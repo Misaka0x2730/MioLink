@@ -1,38 +1,75 @@
+; This file contains the program responsible for the JTAG interface functionality for MioLink_Pico.
+
+; This program initializes the set pin with a starting value,
+; executes the number of cycles loaded from the TX FIFO into the X register,
+; and then either performs one final cycle with the required set pin value or skips the final cycle altogether.
+; The behavior depends on the value loaded from the TX FIFO after the number of cycles:
+; 0 - no final cycle;
+; 1 - the SET pin value is 0;
+; 2 - the SET pin value is 1.
+
+; Thus, this program is universal for JTAG and is applicable to both TDI/TDO and TMS sequences.
+; For TDI/TDO sequences, the OUT pin will be TDI and the SET pin will be TMS.
+; For TMS sequences, it is the opposite: OUT is TMS, and SET is TDI.
+
+; As a result, the implementation of all JTAG subprograms uses two PIO state machines,
+; each with its own pin configuration:
+; TDI/TDO sequence - state machine 0;
+; TMS sequence - state machine 1.
+
+; Pin mapping for the state machine 0 (TDI/TDO sequence):
+; IN - TDO
+; OUT - TDI
+; Side-set - TCK
+; Set - TMS.
+
+; Pin mapping for the state machine 1 (TMS sequence):
+; IN - TDO
+; OUT - TMS
+; Side-set - TCK
+; Set - TDI.
+
+; Additional 3 delay cycles reduce the time spent on non-data instructions, but at the same time
+; limit the maximum interface frequency. In our case (3 additional delay cycles after each edge),
+; the limit is set to sys_clk / 8, as 3 + 1 + 3 + 1 = 8.
+
 .program target_jtag
 .pio_version 0
 .origin 0
 .side_set 1 opt
 
 jtag_start:
-    out x, 8
-    out y, 8
+    out x, 8                       ; load the number of cycles from TX FIFO
+    out y, 8                       ; load the initial SET state from TX FIFO,
+                                   ; 0 - initial SET is 0, otherwise initial SET pin state is 1
 
 jtag_set_initial:
-    set pins, 0
-    jmp !y jtag_seq_start
+    set pins, 0                    ; set initial SET pin state to 0
+    jmp !y jtag_seq_start          ; if Y register value is 0 - then go to the sequence start
 
-    set pins, 1
+    set pins, 1                    ; otherwise (when Y register value is not 0) - set initial SET pin state to 1
 
 jtag_seq_start:
-    out y, 8
+    out y, 8                       ; load the final clock state from TX FIFO
 
 jtag_seq_loop:
-    out pins, 1 side 0 [3]                  ; output TDI pin state and a falling edge on TCK
-    in pins, 1 side 1 [2]                   ; read TDO pin state into ISR and a rising edge on TCK
-    jmp x-- jtag_seq_loop                   ; decrement the cycle counter
+    out pins, 1 side 0 [3]         ; output TDI pin state and a falling edge on TCK
+    in pins, 1 side 1 [2]          ; read TDO pin state into ISR and a rising edge on TCK
+    jmp x-- jtag_seq_loop          ; decrement the cycle counter
 
-    jmp !y jtag_seq_end
+    jmp !y jtag_seq_end            ; if Y register value is 0 (no final clock) go to the program end
 
-    set x, 2
-    set pins, 0
-    jmp x!=y jtag_seq_final_clock
+    set x, 2                       ; set X register value to 2 to compare with Y register value
+    set pins, 0                    ; set final SET pin value to 0
+    jmp x!=y jtag_seq_final_clock  ; if Y register value is not 2 - then the final SET value is 0 and
+                                   ; go to the final clock
 
-    set pins, 1
+    set pins, 1                    ; if Y register value is 2 - then set the final SET value to 1
 
 jtag_seq_final_clock:
-    out pins, 1 side 0  [3]                     ; output last TDI pin state and a falling edge on TCK
-    in pins, 1 side 1   [3]                     ; read read TDO pin state into ISR and a rising edge on TCK
+    out pins, 1 side 0  [3]        ; output last TDI pin state and a falling edge on TCK
+    in pins, 1 side 1   [3]        ; read TDO pin state into ISR and a rising edge on TCK
 
 jtag_seq_end:
-    push side 0
-    pull
+    push side 0                    ; push isr data to RX fifo and a falling edge on TCK
+    pull                           ; explicit pull to clear the OSR
