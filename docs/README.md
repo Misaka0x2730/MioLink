@@ -6,6 +6,15 @@ It also supports debug output via Serial Wire Output (SWO) and RTT. Additionally
 This README contains only the basic information: information about the hardware, how to build the firmware and flash the probe.  
 Detailed instructions on how to use the debugger, how to configure SWO, RTT and etc. you can find on [the project's wiki](https://github.com/Misaka0x2730/MioLink/wiki).
 
+# Table of Content
+- [Hardware](#hardware)
+  - [General information](#general-information)
+  - [Pinout](#pinout)
+    - [MioLink and MioLink_Pico target connector pinout](#miolink-and-miolink_pico-target-connector-pinout)
+      - [UART connector pinout](#uart-connector-pinout)
+    - [Pico/Pico W pinout](#picopico-w-pinout)
+  - [Connecting target to probe](#connecting-target-to-probe)
+
 # Hardware
 ## General information
 The main board for this device is *MioLink* ([rev. A](https://github.com/Misaka0x2730/MioLink/blob/main/hardware/revA/MioLink_revA.pdf)/[rev. B](https://github.com/Misaka0x2730/MioLink/blob/main/hardware/revB/MioLink_revB.pdf)): RP2040 + 16Mbit (2MiB) QSPI Flash memory (W25Q16).  
