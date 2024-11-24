@@ -36,17 +36,15 @@ static void jtagtap_tdi_seq(bool final_tms, const uint8_t *data_in, size_t clock
 static bool jtagtap_next(bool tms, bool tdi);
 static void jtagtap_cycle(bool tms, bool tdi, size_t clock_cycles);
 
-#define TARGET_JTAG_TICKS_NO_FINAL(ticks)   (ticks - 1)
-#define TARGET_JTAG_TICKS_FINAL(ticks)      (ticks - 2)
+#define TARGET_JTAG_TICKS_NO_FINAL(ticks) (ticks - 1)
+#define TARGET_JTAG_TICKS_FINAL(ticks)    (ticks - 2)
 
-typedef enum
-{
+typedef enum {
 	TARGET_JTAG_SET_INITIAL_0 = 0,
 	TARGET_JTAG_SET_INITIAL_1 = 1,
 } target_jtag_set_initial_t;
 
-typedef enum
-{
+typedef enum {
 	TARGET_JTAG_SET_FINAL_NO = 0,
 	TARGET_JTAG_SET_FINAL_0 = 1,
 	TARGET_JTAG_SET_FINAL_1 = 2,
@@ -181,7 +179,8 @@ static void jtagtap_tms_seq(const uint32_t tms_states, const size_t ticks)
 		pio_buffer[data_amount++] = ((tms_states >> (8 * i)) & 0xFF);
 	}
 
-	tap_pio_common_dma_send_recv_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, pio_buffer, NULL, data_amount, data_bytes);
+	tap_pio_common_dma_send_recv_uint8(
+		TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, pio_buffer, NULL, data_amount, data_bytes);
 
 	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ);
 
@@ -208,11 +207,10 @@ static void jtagtap_tdi_tdo_seq(
 		pio_buffer[data_amount++] = TARGET_JTAG_SET_FINAL_NO;
 		pio_buffer[data_amount++] = data_in[0];
 
-		tap_pio_common_dma_send_recv_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pio_buffer, data_out, data_amount, 1);
+		tap_pio_common_dma_send_recv_uint8(
+			TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pio_buffer, data_out, data_amount, 1);
 		data_out[0] >>= 7;
-	}
-	else
-	{
+	} else {
 		pio_buffer[data_amount++] = TARGET_JTAG_TICKS_FINAL(clock_cycles);
 		pio_buffer[data_amount++] = TARGET_JTAG_SET_INITIAL_0;
 		pio_buffer[data_amount++] = (final_tms ? TARGET_JTAG_SET_FINAL_1 : TARGET_JTAG_SET_FINAL_0);
@@ -259,10 +257,9 @@ static void jtagtap_tdi_seq(const bool final_tms, const uint8_t *const data_in, 
 		pio_buffer[data_amount++] = TARGET_JTAG_SET_FINAL_NO;
 		pio_buffer[data_amount++] = data_in[0];
 
-		tap_pio_common_dma_send_recv_uint8(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pio_buffer, NULL, data_amount, 1);
-	}
-	else
-	{
+		tap_pio_common_dma_send_recv_uint8(
+			TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, pio_buffer, NULL, data_amount, 1);
+	} else {
 		pio_buffer[data_amount++] = TARGET_JTAG_TICKS_FINAL(clock_cycles);
 		pio_buffer[data_amount++] = TARGET_JTAG_SET_INITIAL_0;
 		pio_buffer[data_amount++] = (final_tms ? TARGET_JTAG_SET_FINAL_1 : TARGET_JTAG_SET_FINAL_0);

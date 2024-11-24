@@ -34,7 +34,7 @@
 
 #include "tap_pio_common.h"
 
-#define SWDP_ACK_OK   (0x01U)
+#define SWDP_ACK_OK (0x01U)
 
 static uint32_t swdptap_seq_in(size_t clock_cycles);
 static bool swdptap_seq_in_parity(uint32_t *ret, size_t clock_cycles);
