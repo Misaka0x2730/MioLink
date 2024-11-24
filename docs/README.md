@@ -161,6 +161,32 @@ git clone --recurse-submodules https://github.com/Misaka0x2730/MioLink.git
 4. Build image:  ```cmake --build .```
 5. Use ```MioLink.uf2``` to flash device via factory USB-MSC bootloader.
 
+## Build on Mac OS
+### Install all requirements and clone the repository
+1. Open the terminal and run `xcode-select --install` to install Xcode Command Line Tools (includes `gcc` and `make`);
+2. Download and install [CMake](https://cmake.org/download/) for your system;
+3. Download and install [Arm GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) for your system;
+4. Download and install [Python 3](https://www.python.org/downloads/macos/);
+5. Clone this project with submodules:
+```
+git clone --recurse-submodules https://github.com/Misaka0x2730/MioLink.git
+```
+6. Change current dir:  ```cd MioLink/firmware```
+
+### Build debug image:
+1. Create working directory:  ```mkdir debug```
+2. Go to working directory:  ```cd debug```
+3. Run cmake:  ```cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" ..```
+4. Build image:  ```cmake --build .```
+5. Use ```MioLink.uf2``` to flash device via factory USB-MSC bootloader.
+
+### Build release image:
+1. Create working directory:  ```mkdir release```
+2. Go to working directory:  ```cd release```
+3. Run cmake:  ```cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..```
+4. Build image:  ```cmake --build .```
+5. Use ```MioLink.uf2``` to flash device via factory USB-MSC bootloader.
+
 ## How to flash the probe
 1. Disconnect USB cable;
 2. Press BOOT (BOOTSEL on Pico and Pico W) button;
