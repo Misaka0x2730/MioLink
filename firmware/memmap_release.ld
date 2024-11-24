@@ -68,19 +68,19 @@ SECTIONS
          * FLASH ... we will include any thing excluded here in .data below by default */
         *(.init)
         *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:
-                       *tinyusb/src/*.c.obj
-                       *FreeRTOS-Kernel/*.c.obj
-                       *pico_sdk-src/*.c.obj
-                       *pico_sdk-src/*.S.obj
-                       *blackmagic/src/gdb*.c.obj
-                       *blackmagic/src/rtt.c.obj
-                       *blackmagic/src/hex_utils.c.obj
-                       *blackmagic/src/maths_utils.c.obj
-                       *blackmagic/src/target/adi*.c.obj
-                       *blackmagic/src/target/cortex*.c.obj
-                       *blackmagic/src/target/jtag*.c.obj
-                       *blackmagic/src/target/target_flash.c.obj
-                       *bmp/*c.obj) .text*)
+                       *tinyusb/src/*.c.o*
+                       *FreeRTOS-Kernel/*.c.o*
+                       *pico_sdk-src/*.c.o*
+                       *pico_sdk-src/*.S.o*
+                       *blackmagic/src/gdb*.c.o*
+                       *blackmagic/src/rtt.c.o*
+                       *blackmagic/src/hex_utils.c.o*
+                       *blackmagic/src/maths_utils.c.o*
+                       *blackmagic/src/target/adi*.c.o*
+                       *blackmagic/src/target/cortex*.c.o*
+                       *blackmagic/src/target/jtag*.c.o*
+                       *blackmagic/src/target/target_flash.c.o*
+                       *bmp/*c.o*) .text*)
         *(.fini)
         /* Pull all c'tors into .text */
         *crtbegin.o(.ctors)
@@ -100,21 +100,21 @@ SECTIONS
     } > FLASH
 
     .rodata : {
-        *cyw43-driver/*.c.obj(.rodata*)
+        *cyw43-driver/*.c.o*(.rodata*)
         *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:
-                       *tinyusb/src/*.c.obj
-                       *FreeRTOS-Kernel/*.c.obj
-                       *pico_sdk-src/*.c.obj
-                       *pico_sdk-src/*.S.obj
-                       *blackmagic/src/gdb*.c.obj
-                       *blackmagic/src/rtt.c.obj
-                       *blackmagic/src/hex_utils.c.obj
-                       *blackmagic/src/maths_utils.c.obj
-                       *blackmagic/src/target/adi*.c.obj
-                       *blackmagic/src/target/cortex*.c.obj
-                       *blackmagic/src/target/jtag*.c.obj
-                       *blackmagic/src/target/target_flash.c.obj
-                       *bmp/*c.obj) .rodata*)
+                       *tinyusb/src/*.c.o*
+                       *FreeRTOS-Kernel/*.c.o*
+                       *pico_sdk-src/*.c.o*
+                       *pico_sdk-src/*.S.o*
+                       *blackmagic/src/gdb*.c.o*
+                       *blackmagic/src/rtt.c.o*
+                       *blackmagic/src/hex_utils.c.o*
+                       *blackmagic/src/maths_utils.c.o*
+                       *blackmagic/src/target/adi*.c.o*
+                       *blackmagic/src/target/cortex*.c.o*
+                       *blackmagic/src/target/jtag*.c.o*
+                       *blackmagic/src/target/target_flash.c.o*
+                       *bmp/*c.o*) .rodata*)
         . = ALIGN(4);
         *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.flashdata*)))
         . = ALIGN(4);
