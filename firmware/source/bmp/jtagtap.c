@@ -181,11 +181,9 @@ static void jtagtap_tms_seq(const uint32_t tms_states, const size_t ticks)
 
 	tap_pio_common_dma_send_recv_uint8(
 		TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, pio_buffer, NULL, data_amount, data_bytes);
-
 	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ);
 
 	pio_sm_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ);
-
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TMS_SEQ, false);
 }
 
@@ -236,7 +234,6 @@ static void jtagtap_tdi_tdo_seq(
 	tap_pio_common_wait_for_tx_stall(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
 
 	pio_sm_clear_fifos(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ);
-
 	pio_sm_set_enabled(TARGET_JTAG_PIO, TARGET_JTAG_PIO_SM_TDI_TDO_SEQ, false);
 }
 
