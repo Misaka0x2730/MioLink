@@ -10,7 +10,8 @@ Detailed instructions on how to use the debugger, how to configure SWO, RTT and 
 - [Hardware](#hardware)
   - [General information](#general-information)
   - [Pinout](#pinout)
-    - [MioLink and MioLink_Pico target connector pinout](#miolink-and-miolink_pico-target-connector-pinout)
+    - [MioLink and MioLink_Pico pinout](#miolink-and-miolink_pico-pinout)
+      - [Target connector pinout](#target-connector-pinout)
       - [UART connector pinout](#uart-connector-pinout)
     - [Pico/Pico W pinout](#picopico-w-pinout)
   - [Connecting target to probe](#connecting-target-to-probe)
@@ -47,7 +48,8 @@ The device type is determined at runtime, so all boards use the same firmware.
 You can find all hardware CAD files (designed in KiCad) [here](https://github.com/Misaka0x2730/MioLink/tree/main/hardware).  
 
 ## Pinout
-### MioLink and MioLink_Pico target connector pinout
+### MioLink and MioLink_Pico pinout
+#### Target connector pinout
 *MioLink* and *MioLink_Pico* use the standard ARM 10-pin 0.1" connector and has additional 4-pin 0.1" UART connector:  
 ![image](https://github.com/user-attachments/assets/98218707-b79a-4d30-ae67-68f5ac11d38c)
 
