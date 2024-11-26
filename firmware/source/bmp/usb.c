@@ -574,24 +574,21 @@ void tud_cdc_line_coding_cb(uint8_t interface, cdc_line_coding_t const *p_line_c
 	}
 }
 
-static bool usb_config = false;
 static bool usb_config_updated = false;
 
 void tud_mount_cb(void)
 {
-	usb_config = true;
 	usb_config_updated = true;
 }
 
 void tud_umount_cb(void)
 {
-	usb_config = false;
 	usb_config_updated = true;
 }
 
 uint16_t usb_get_config(void)
 {
-	return usb_config ? 1 : 0;
+	return tud_mounted() ? 1 : 0;
 }
 
 bool usb_config_is_updated(void)
@@ -609,13 +606,15 @@ _Noreturn static void usb_task_thread(void *param);
 void blackmagic_usb_init(void)
 {
 	TaskHandle_t usb_task;
+#if configUSE_CORE_AFFINITY
+	const BaseType_t result = xTaskCreateAffinitySet(usb_task_thread, "usb_task", USB_TASK_STACK_SIZE, NULL,
+		PLATFORM_PRIORITY_HIGH, USB_TASK_CORE_AFFINITY, &usb_task);
+#else
 	const BaseType_t result =
 		xTaskCreate(usb_task_thread, "usb_task", USB_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_HIGH, &usb_task);
-	assert(result == pdPASS);
-
-#if configUSE_CORE_AFFINITY
-	vTaskCoreAffinitySet(usb_task, USB_TASK_CORE_AFFINITY);
 #endif
+
+	assert(result == pdPASS);
 }
 
 _Noreturn static void usb_task_thread(void *param)

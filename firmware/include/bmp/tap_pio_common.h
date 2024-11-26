@@ -23,33 +23,34 @@
 #include "general.h"
 #include "hardware/pio.h"
 
-typedef enum
-{
-	TARGET_SWD_PIO_SM_SEQ_IN = 0,
-	TARGET_SWD_PIO_SM_SEQ_IN_PARITY,
-	TARGET_SWD_PIO_SM_SEQ_OUT,
-	TARGET_SWD_PIO_SM_ADIV5,
+#define PIO_BUFFER_SIZE (16)
+
+#define TARGET_SWD_PIO  (pio0)
+#define TARGET_JTAG_PIO (pio0)
+
+typedef enum {
+	TARGET_SWD_PIO_SM = 0,
 } target_swd_pio_sm_t;
 
-typedef enum
-{
-	TARGET_JTAG_PIO_SM_NEXT_CYCLE = 0,
+typedef enum {
+	TARGET_JTAG_PIO_SM_TDI_TDO_SEQ = 0,
 	TARGET_JTAG_PIO_SM_TMS_SEQ,
-	TARGET_JTAG_PIO_SM_TDI_TDO_SEQ,
-	TARGET_JTAG_PIO_SM_TDI_SEQ,
 } target_jtag_pio_sm_t;
-
-#define TARGET_SWD_PIO     (pio0)
-#define TARGET_JTAG_PIO    (pio0)
 
 static inline bool tap_pio_common_is_not_tx_stalled(PIO pio, uint32_t sm)
 {
+	check_pio_param(pio);
+	check_sm_param(sm);
+
 	pio->fdebug = (1UL << (PIO_FDEBUG_TXSTALL_LSB + sm));
 	return ((pio->fdebug & (1UL << (PIO_FDEBUG_TXSTALL_LSB + sm))) == 0);
 }
 
 static inline void tap_pio_common_wait_for_tx_stall(PIO pio, uint32_t sm)
 {
+	check_pio_param(pio);
+	check_sm_param(sm);
+
 	pio->fdebug = (1UL << (PIO_FDEBUG_TXSTALL_LSB + sm));
 	while ((pio->fdebug & (1UL << (PIO_FDEBUG_TXSTALL_LSB + sm))) == 0)
 		;
@@ -57,14 +58,25 @@ static inline void tap_pio_common_wait_for_tx_stall(PIO pio, uint32_t sm)
 
 static inline void tap_pio_common_disable_input_sync(PIO pio, uint32_t pin)
 {
+	check_pio_param(pio);
+
 	pio->input_sync_bypass |= (1UL << pin);
 }
 
 static inline void tap_pio_common_disable_all_machines(PIO pio)
 {
+	check_pio_param(pio);
+
 	for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
 		pio_sm_set_enabled(pio, i, false);
 	}
 }
+
+void tap_pio_common_dma_send_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, const uint32_t data_amount);
+uint32_t tap_pio_common_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, uint32_t *buffer_recv,
+	const uint32_t data_amount, const uint32_t data_amount_to_read);
+void tap_pio_common_dma_send_uint8(PIO pio, uint32_t sm, const uint8_t *buffer, uint32_t data_amount);
+uint32_t tap_pio_common_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer, uint8_t *buffer_recv,
+	uint32_t data_amount, uint32_t data_amount_to_read);
 
 #endif //MIOLINK_TAP_PIO_COMMON_H

@@ -31,6 +31,6 @@
 extern bool running_status;
 
 void platform_timing_init(void);
-uint32_t platform_timeout_time_left(const platform_timeout_s * target);
+uint32_t platform_timeout_time_left(const platform_timeout_s *target);
 
 #endif /* PLATFORMS_TIMING_RP2040_H */

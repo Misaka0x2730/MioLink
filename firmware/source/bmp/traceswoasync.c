@@ -64,7 +64,7 @@
 
 #define TRACESWO_DECODE_THRESHOLD (64)
 
-#define TRACESWO_TASK_CORE_AFFINITY (0x02) /* Core 1 only */
+#define TRACESWO_TASK_CORE_AFFINITY (0x01) /* Core 0 only */
 #define TRACESWO_TASK_STACK_SIZE    (512)
 
 static uint8_t uart_rx_buf[TRACESWO_UART_DMA_RX_NUMBER_OF_BUFFERS][TRACESWO_UART_DMA_RX_BUFFER_SIZE] = {0};
@@ -453,13 +453,14 @@ _Noreturn static void traceswo_thread(void *params);
 
 void traceswo_task_init(void)
 {
+#if configUSE_CORE_AFFINITY
+	const BaseType_t result = xTaskCreateAffinitySet(traceswo_thread, "target_trace", TRACESWO_TASK_STACK_SIZE, NULL,
+		PLATFORM_PRIORITY_NORMAL, TRACESWO_TASK_CORE_AFFINITY, &traceswo_task);
+#else
 	const BaseType_t result = xTaskCreate(
 		traceswo_thread, "target_trace", TRACESWO_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_NORMAL, &traceswo_task);
-	assert(result == pdPASS);
-
-#if configUSE_CORE_AFFINITY
-	vTaskCoreAffinitySet(traceswo_task, TRACESWO_TASK_CORE_AFFINITY);
 #endif
+	assert(result == pdPASS);
 }
 
 _Noreturn static void traceswo_thread(void *params)

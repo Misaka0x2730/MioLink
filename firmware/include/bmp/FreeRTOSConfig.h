@@ -72,7 +72,7 @@
 /* Memory allocation related definitions. */
 #define configSUPPORT_STATIC_ALLOCATION  0
 #define configSUPPORT_DYNAMIC_ALLOCATION 1
-#define configTOTAL_HEAP_SIZE            (18 * 1024)
+#define configTOTAL_HEAP_SIZE            (20 * 1024)
 #define configAPPLICATION_ALLOCATED_HEAP 0
 
 #define configMAX_TASK_NAME_LEN 32
@@ -93,13 +93,14 @@
 #define configMAX_CO_ROUTINE_PRIORITIES 1
 
 /* Software timer related definitions. */
-#define configUSE_TIMERS             1
-#define configTIMER_TASK_PRIORITY    (configMAX_PRIORITIES - 1)
-#define configTIMER_QUEUE_LENGTH     10
-#define configTIMER_TASK_STACK_DEPTH 256
+#define configUSE_TIMERS                       1
+#define configTIMER_TASK_PRIORITY              (configMAX_PRIORITIES - 1)
+#define configTIMER_QUEUE_LENGTH               10
+#define configTIMER_TASK_STACK_DEPTH           256
+#define configTIMER_SERVICE_TASK_CORE_AFFINITY (0x01)
 
 /* SMP port only */
-#define configNUMBER_OF_CORES         1
+#define configNUMBER_OF_CORES         2
 #define configTICK_CORE               0
 #define configRUN_MULTIPLE_PRIORITIES 1
 #define configUSE_PASSIVE_IDLE_HOOK   0

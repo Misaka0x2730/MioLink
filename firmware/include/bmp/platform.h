@@ -78,8 +78,8 @@ extern bool debug_bmp;
 /* Common pins */
 #define HWTYPE_PIN_0 (16) /* If 1 - MioLink or Pico/Pico W, if 0 - MioLink_Pico */
 
-#define HWVERSION_PIN_0 (14)
-#define HWVERSION_PIN_1 (15)
+#define HWVERSION_PIN_0 (15)
+#define HWVERSION_PIN_1 (14)
 
 #define HWVERSION_PICO (0x03 + 1) /* All bits are 1 + 1 */
 

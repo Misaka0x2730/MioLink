@@ -35,6 +35,8 @@
 extern void swdptap_seq_out_buffer(const uint32_t *tms_states, size_t clock_cycles);
 extern uint8_t rp2040_pio_adiv5_swd_write_no_check(uint8_t request, uint32_t data);
 extern uint8_t rp2040_pio_adiv5_swd_read_no_check(uint8_t request, uint32_t *data);
+extern uint8_t rp2040_pio_adiv5_swd_write_check(uint8_t request, uint32_t data);
+extern uint8_t rp2040_pio_adiv5_swd_read_check(uint8_t request, uint32_t *data, bool *parity);
 
 extern uint8_t rp2040_pio_adiv5_swd_raw_access_req(uint8_t request);
 extern uint8_t rp2040_pio_adiv5_swd_raw_access_data(uint32_t data_out, uint32_t *data_in, uint8_t rnw);
@@ -382,10 +384,15 @@ uint32_t adiv5_swd_raw_access(adiv5_debug_port_s *dp, const uint8_t rnw, const u
 	const uint8_t request = make_packet_request(rnw, addr);
 	uint32_t response = 0;
 	uint8_t ack = SWD_ACK_WAIT;
+	bool parity = false;
 	platform_timeout_s timeout;
 	platform_timeout_set(&timeout, 250U);
 	do {
-		ack = rp2040_pio_adiv5_swd_raw_access_req(request);
+		if (rnw) {
+			ack = rp2040_pio_adiv5_swd_read_check(request, &response, &parity);
+		} else {
+			ack = rp2040_pio_adiv5_swd_write_check(request, value);
+		}
 		if (ack == SWD_ACK_FAULT) {
 			DEBUG_ERROR("SWD access resulted in fault, retrying\n");
 			/* On fault, abort the request and repeat */
@@ -420,14 +427,11 @@ uint32_t adiv5_swd_raw_access(adiv5_debug_port_s *dp, const uint8_t rnw, const u
 		raise_exception(EXCEPTION_ERROR, "SWD invalid ACK");
 	}
 
-	if (rnw) {
-		if (!rp2040_pio_adiv5_swd_raw_access_data(0, &response, rnw)) { /* Give up on parity error */
-			dp->fault = 1U;
-			DEBUG_ERROR("SWD access resulted in parity error\n");
-			raise_exception(EXCEPTION_ERROR, "SWD parity error");
-		}
-	} else
-		rp2040_pio_adiv5_swd_raw_access_data(value, NULL, rnw);
+	if ((rnw) && (!parity)) {
+		dp->fault = 1U;
+		DEBUG_ERROR("SWD access resulted in parity error\n");
+		raise_exception(EXCEPTION_ERROR, "SWD parity error");
+	}
 
 	return response;
 }

@@ -73,7 +73,7 @@
 #define USB_SERIAL_UART_DMA_TX_BUFFER_SIZE           (256)
 #define USB_SERIAL_UART_DMA_TX_CHECK_FINISHED_PERIOD (2)
 
-#define USB_SERIAL_TASK_CORE_AFFINITY (0x02) /* Core 0 only */
+#define USB_SERIAL_TASK_CORE_AFFINITY (0x01) /* Core 0 only */
 #define USB_SERIAL_TASK_STACK_SIZE    (512)
 
 static uint8_t uart_rx_buf[USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS][USB_SERIAL_UART_DMA_RX_BUFFER_SIZE] = {0};
@@ -555,14 +555,15 @@ _Noreturn static void target_serial_thread(void *params);
 
 void usb_serial_init(void)
 {
+#if configUSE_CORE_AFFINITY
+	const BaseType_t result = xTaskCreateAffinitySet(target_serial_thread, "target_uart", USB_SERIAL_TASK_STACK_SIZE,
+		NULL, PLATFORM_PRIORITY_NORMAL, USB_SERIAL_TASK_CORE_AFFINITY, &usb_uart_task);
+#else
 	const BaseType_t result = xTaskCreate(target_serial_thread, "target_uart", USB_SERIAL_TASK_STACK_SIZE, NULL,
 		PLATFORM_PRIORITY_NORMAL, &usb_uart_task);
+#endif
 
 	assert(result == pdPASS);
-
-#if configUSE_CORE_AFFINITY
-	vTaskCoreAffinitySet(usb_uart_task, USB_SERIAL_TASK_CORE_AFFINITY);
-#endif
 }
 
 #ifdef ENABLE_RTT

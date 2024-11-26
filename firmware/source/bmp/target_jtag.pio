@@ -1,107 +1,75 @@
-.program target_jtag
-.side_set 1 opt
+; This file contains the program responsible for the JTAG interface functionality for all MioLink platforms.
 
-; Actually, this program consists of four subprograms.
-; Each state machine executes its own subprogram and has its own wrap value.
+; This program initializes the set pin with a starting value,
+; executes the number of cycles loaded from the TX FIFO into the X register,
+; and then either performs one final cycle with the required set pin value or skips the final cycle altogether.
+; The behavior depends on the value loaded from the TX FIFO after the number of cycles:
+; 0 - no final cycle;
+; 1 - the SET pin value is 0;
+; 2 - the SET pin value is 1.
 
-; Machine 0 executes the programs jtagtap_next and jtagtap_cycle.
-; Machine 1 executes the program jtagtap_tms_seq.
-; Machine 2 executes the program jtagtap_tdi_tdo_seq.
-; Machine 3 executes the program jtagtap_tdi_seq.
+; Thus, this program is universal for JTAG and is applicable to both TDI/TDO and TMS sequences.
+; For TDI/TDO sequences, the OUT pin will be TDI and the SET pin will be TMS.
+; For TMS sequences, it is the opposite: OUT is TMS, and SET is TDI.
 
-; Pin assignments for the jtagtap_next and jtagtap_cycle programs (machine 0):
+; As a result, the implementation of all JTAG subprograms uses two PIO state machines,
+; each with its own pin configuration:
+; TDI/TDO sequence - state machine 0;
+; TMS sequence - state machine 1.
+
+; Pin mapping for the state machine 0 (TDI/TDO sequence):
 ; IN - TDO
 ; OUT - TDI
 ; Side-set - TCK
-; Set - TMS
+; Set - TMS.
 
-; Pin assignments for the jtagtap_tms_seq program (machine 1):
+; Pin mapping for the state machine 1 (TMS sequence):
 ; IN - TDO
 ; OUT - TMS
 ; Side-set - TCK
-; Set - TDI
+; Set - TDI.
 
-; Pin assignments for the jtagtap_tdi_tdo_seq program (machine 2):
-; IN - TDO
-; OUT - TDI
-; Side-set - TCK
-; Set - TMS
-
-; Pin assignments for the jtagtap_tdi_seq program (machine 3):
-; IN - TDO
-; OUT - TDI
-; Side-set - TCK
-; Set - TMS
-
-; Autopush and autopull should be enabled, and both thresholds should be set to 8,
-; except for machine 1 (the jtagtap_tms_seq program); for this machine, both thresholds should be set to 32.
 ; Additional 3 delay cycles reduce the time spent on non-data instructions, but at the same time
-; limit the maximum interface frequency, in our case (3 additional delay cycles after each edge),
-; to the level of sys_clk / 8, since 3 + 1 + 3 + 1 = 8.
+; limit the maximum interface frequency. In our case (3 additional delay cycles after each edge),
+; the limit is set to sys_clk / 8, as 3 + 1 + 3 + 1 = 8.
 
-jtag_program_start:   ; the initial stage for all programs
-    pull block side 0 ; pull new data (and clear the current data in osr)
-    out x, 32         ; save the cycle counter (x register contains the cycle counter for all programs)
-    out pc, 32  [1]   ; go to the program
+.program target_jtag
+.pio_version 0
+.origin 0
+.side_set 1 opt
 
-jtag_tdi_seq:         ; TDI sequence program (jtagtap_tdi_seq), machine 3
-    set pins, 0       ; set initial TMS state = 0
-    out y, 32  [3]    ; save the final TMS value in the y register (0 - final TMS is 0, otherwise - 1)
+jtag_start:
+    out x, 8                       ; load the number of cycles from TX FIFO
+    out y, 8                       ; load the initial SET state from TX FIFO,
+                                   ; 0 - initial SET is 0, otherwise initial SET pin state is 1
 
-    jtag_tdi_seq_loop:
-        out pins, 1 side 0 [3]                ; output TDI pin state and a falling edge on TCK
-        jmp x-- jtag_tdi_seq_loop side 1 [3]  ; decrement the cycle counter and a rising edge on TCK
+jtag_set_initial:
+    set pins, 0                    ; set initial SET pin state to 0
+    jmp !y jtag_seq_start          ; if Y register value is 0 - then go to the sequence start
 
-    jmp !y jtag_tdi_tdo_seq_final_tms_0       ; if the value in the y register is 0 - go to the final TMS=0 step
-    jmp jtag_tdi_tdo_seq_final_tms_1          ; if the value in the y register is not 0 - go to the final TMS=1 step
+    set pins, 1                    ; otherwise (when Y register value is not 0) - set initial SET pin state to 1
 
-jtag_tdi_tdo_seq:  ; TDI and TDO sequence program (jtagtap_tdi_tdo_seq), machine 2
-    set pins, 0    ; set initial TMS state = 0
-    out y, 32      ; save the final TMS value in the y register (0 - final TMS is 0, otherwise - 1)
+jtag_seq_start:
+    out y, 8                       ; load the final clock state from TX FIFO
 
-    jtag_tdi_tdo_seq_loop:
-        out pins, 1 side 0 [3]          ; output TDI pin state and a falling edge on TCK
-        in pins, 1 side 1 [2]           ; read TDO pin state into ISR and a rising edge on TCK
-        jmp x-- jtag_tdi_tdo_seq_loop   ; decrement the cycle counter
+jtag_seq_loop:
+    out pins, 1 side 0 [3]         ; output TDI pin state and a falling edge on TCK
+    in pins, 1 side 1 [2]          ; read TDO pin state into ISR and a rising edge on TCK
+    jmp x-- jtag_seq_loop          ; decrement the cycle counter
 
-jtag_tdi_tdo_seq_final:
-    jmp !y jtag_tdi_tdo_seq_final_tms_0 ; if the value in the y register is 0 - go to the final TMS=0 step
+    jmp !y jtag_seq_end            ; if Y register value is 0 (no final clock) go to the program end
 
-jtag_tdi_tdo_seq_final_tms_1:
-    set pins, 1                       ; set final TMS = 1
-    jmp jtag_tdi_tdo_seq_final_clock  ; go to the last cycle step
+    set x, 2                       ; set X register value to 2 to compare with Y register value
+    set pins, 0                    ; set final SET pin value to 0
+    jmp x!=y jtag_seq_final_clock  ; if Y register value is not 2 - then the final SET value is 0 and
+                                   ; go to the final clock
 
-jtag_tdi_tdo_seq_final_tms_0:
-    set pins, 0                       ; set final TMS = 1 and go to the last cycle step
+    set pins, 1                    ; if Y register value is 2 - then set the final SET value to 1
 
-jtag_tdi_tdo_seq_final_clock:
-    out pins, 1 side 0  [3]  ; output last TDI pin state and a falling edge on TCK
-    in pins, 1 side 1   [3]  ; read read TDO pin state into ISR and a rising edge on TCK
-    push side 0              ; push isr content to the RX FIFO and a falling edge on TCK,
-                             ; also this step is a wrap for machines 2 and 3
+jtag_seq_final_clock:
+    out pins, 1 side 0  [3]        ; output last TDI pin state and a falling edge on TCK
+    in pins, 1 side 1   [3]        ; read TDO pin state into ISR and a rising edge on TCK
 
-jtag_tms_seq:     ; TMS sequence program (jtagtap_tms_seq), machine 1
-    set pins, 1   ; set initial TDI value = 1
-
-    jtag_tms_seq_loop:
-        out pins, 1 side 0 [3]                ; output TMS pin state and a falling edge on TCK
-        jmp x-- jtag_tms_seq_loop side 1 [3]  ; decrement the cycle counter and a rising edge on TCK
-                                              ; also this step is a wrap for machine 1,
-                                              ; a falling edge on TCK will be performed at the initial stage,
-                                              ; see jtag_program_start
-
-jtag_next_cycle_initial_set_1: ; jtagtap_next and jtagtap_cycle programs (machine 0)
-    set pins, 1                ; set initial TMS value = 1
-    jmp jtag_next_cycle        ; go to the loop
-
-jtag_next_cycle_initial_set_0:
-    set pins, 0              ; set initial TMS value = 0 and go to the loop
-
-jtag_next_cycle:
-    out pins, 1 side 0  [3]  ; set initial TDI pin state and a falling edge on TCK
-    jtag_cycle_loop:
-        in pins, 1 side 1 [3]               ; read TDO pin state into ISR and a rising edge on TCK
-        jmp x-- jtag_cycle_loop side 0 [3]  ; decrement the cycle counter
-
-    push   ; push isr content to the RX FIFO and a falling edge on TCK,
-           ; also this step is a wrap for machine 0
+jtag_seq_end:
+    push side 0                    ; push isr data to RX fifo and a falling edge on TCK
+    pull                           ; explicit pull to clear the OSR

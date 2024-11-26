@@ -53,8 +53,8 @@
 
 static char BMD_ALIGN_DEF(8) gdb_buffer[GDB_PACKET_BUFFER_SIZE + 1U];
 
-#define GDB_TASK_CORE_AFFINITY (0x01) /* Core 0 only */
-#define GDB_TASK_STACK_SIZE    (1536)
+#define GDB_TASK_CORE_AFFINITY (0x02) /* Core 1 only */
+#define GDB_TASK_STACK_SIZE    (2048)
 
 TaskHandle_t gdb_task;
 
@@ -94,11 +94,6 @@ _Noreturn static void gdb_thread(void *params)
 {
 	(void)params;
 
-	platform_init();
-	blackmagic_usb_init();
-	usb_serial_init();
-	traceswo_task_init();
-
 	while (1) {
 		TRY (EXCEPTION_ALL) {
 			bmp_poll_loop();
@@ -123,18 +118,25 @@ void main(void)
 	traceSTART();
 #endif
 
+	platform_init();
+	blackmagic_usb_init();
+	usb_serial_init();
+	traceswo_task_init();
+
 	platform_update_sys_freq();
 
 	multicore_reset_core1();
 
+#if configUSE_CORE_AFFINITY
+	const BaseType_t result = xTaskCreateAffinitySet(
+		gdb_thread, "target_gdb", GDB_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_LOW, GDB_TASK_CORE_AFFINITY, &gdb_task);
+#else
 	const BaseType_t result =
 		xTaskCreate(gdb_thread, "target_gdb", GDB_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_LOW, &gdb_task);
+#endif
 
 	assert(result == pdPASS);
 
-#if configUSE_CORE_AFFINITY
-	vTaskCoreAffinitySet(gdb_task, GDB_TASK_CORE_AFFINITY);
-#endif
 	vTaskStartScheduler();
 
 	assert(false);
