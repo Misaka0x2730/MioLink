@@ -1,4 +1,4 @@
-; This file contains the program responsible for the JTAG interface functionality for MioLink_Pico.
+; This file contains the program responsible for the JTAG interface functionality for all MioLink platforms.
 
 ; This program initializes the set pin with a starting value,
 ; executes the number of cycles loaded from the TX FIFO into the X register,
