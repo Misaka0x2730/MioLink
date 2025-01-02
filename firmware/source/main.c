@@ -51,17 +51,10 @@
 #include "morse.h"
 #include "usb.h"
 
-static char BMD_ALIGN_DEF(8) gdb_buffer[GDB_PACKET_BUFFER_SIZE + 1U];
-
 #define GDB_TASK_CORE_AFFINITY (0x02) /* Core 1 only */
 #define GDB_TASK_STACK_SIZE    (2048)
 
 TaskHandle_t gdb_task;
-
-char *gdb_packet_buffer()
-{
-	return gdb_buffer;
-}
 
 static void bmp_poll_loop(void)
 {
@@ -73,8 +66,8 @@ static void bmp_poll_loop(void)
 		// alter these variables.
 		if (!gdb_target_running || !cur_target)
 			break;
-		const char data = gdb_if_getchar_to(0);
-		if (data == '\x03' || data == '\x04')
+		char c = gdb_if_getchar_to(0);
+		if (c == '\x03' || c == '\x04')
 			target_halt_request(cur_target);
 #ifdef ENABLE_RTT
 		if (rtt_enabled)
@@ -83,11 +76,11 @@ static void bmp_poll_loop(void)
 	}
 
 	SET_IDLE_STATE(true);
-	size_t size = gdb_getpacket(gdb_buffer, GDB_PACKET_BUFFER_SIZE);
+	const gdb_packet_s *const packet = gdb_packet_receive();
 	// If port closed and target detached, stay idle
-	if (gdb_buffer[0] != '\x04' || cur_target)
+	if (packet->data[0] != '\x04' || cur_target)
 		SET_IDLE_STATE(false);
-	gdb_main(gdb_buffer, GDB_PACKET_BUFFER_SIZE, size);
+	gdb_main(packet);
 }
 
 _Noreturn static void gdb_thread(void *params)
@@ -100,7 +93,7 @@ _Noreturn static void gdb_thread(void *params)
 		}
 		CATCH () {
 		default:
-			gdb_putpacketz("EFF");
+			gdb_put_packet_error(0xffU);
 			target_list_free();
 			gdb_outf("Uncaught exception: %s\n", exception_frame.msg);
 			morse("TARGET LOST.", true);

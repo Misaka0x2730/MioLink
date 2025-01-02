@@ -42,7 +42,7 @@ bool gdb_serial_get_dtr(void)
 	return (tud_cdc_n_get_line_state(USB_SERIAL_GDB) & 0x01) != 0;
 }
 
-void gdb_if_putchar(const char character, const int flush)
+void gdb_if_putchar(const char character, const bool flush)
 {
 	gdb_to_usb_buf[gdb_to_usb_count++] = character;
 	if (flush || gdb_to_usb_count == sizeof(gdb_to_usb_buf)) {

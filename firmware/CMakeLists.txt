@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
 
-set(PICOTOOL_FETCH_FROM_GIT_PATH ${CMAKE_CURRENT_LIST_DIR}/thirdParty/picotool)
 set(PICO_SDK_FETCH_FROM_GIT ON)
 set(PICO_CYW43_SUPPORTED ON)
 set(PICO_BOARD none)
