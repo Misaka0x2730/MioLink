@@ -45,8 +45,7 @@ static void adc_target_voltage_dma_handler(void)
      * By simplification (since 250 measurements are stored in the buffer),
      * we obtain the following formula:
      * V(100mv) = ((sum * 33) / 32000), where is sum - sum of 250 measurements  */
-	temp *= 33;
-	temp /= 32000;
+	temp = (temp * 33) / 32000;
 
 	target_voltage = (uint16_t)(temp);
 

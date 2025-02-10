@@ -65,7 +65,7 @@ void rtt_serial_receive_callback(void)
 	}
 
 	/* copy data to recv_buf */
-	for (int i = 0; i < len; i++) {
+	for (uint32_t i = 0; i < len; i++) {
 		uint32_t next_recv_head = (recv_head + 1U) % sizeof(recv_buf);
 		if (next_recv_head == recv_tail)
 			break; /* overflow */
