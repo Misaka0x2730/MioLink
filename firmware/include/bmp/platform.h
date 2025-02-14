@@ -70,7 +70,7 @@ extern bool debug_bmp;
 #define SERIAL_ENDPOINT       (0x02)
 
 #ifdef PLATFORM_HAS_TRACESWO
-#define SWO_ENCODING (2)
+#define SWO_ENCODING (3)
 #define SWO_ENDPOINT (0x83)
 #endif
 
@@ -166,12 +166,9 @@ extern bool debug_bmp;
 
 #define USB_SERIAL_UART_MAIN    (uart1)
 #define USB_SERIAL_UART_TDI_TDO (uart0)
-#define TRACESWO_UART           (uart0)
 
 #define USB_SERIAL_UART_MAIN_IRQ    (UART_IRQ_NUM(USB_SERIAL_UART_MAIN))
 #define USB_SERIAL_UART_TDI_TDO_IRQ (UART_IRQ_NUM(USB_SERIAL_UART_TDI_TDO))
-#define TRACESWO_UART_IRQ           (UART_IRQ_NUM(TRACESWO_UART))
-
 #define USB_SERIAL_TRACESWO_DMA_IRQ (DMA_IRQ_0)
 
 #define PLATFORM_PRIORITY_LOW    (tskIDLE_PRIORITY + 1)
