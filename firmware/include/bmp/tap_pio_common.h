@@ -72,11 +72,19 @@ static inline void tap_pio_common_disable_all_machines(PIO pio)
 	}
 }
 
+static inline uint32_t tap_pio_common_get_irq0_status(PIO pio)
+{
+	check_pio_param(pio);
+
+	return pio->ints0;
+}
+
 void tap_pio_common_dma_send_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, const uint32_t data_amount);
 uint32_t tap_pio_common_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, uint32_t *buffer_recv,
 	const uint32_t data_amount, const uint32_t data_amount_to_read);
 void tap_pio_common_dma_send_uint8(PIO pio, uint32_t sm, const uint8_t *buffer, uint32_t data_amount);
 uint32_t tap_pio_common_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer, uint8_t *buffer_recv,
 	uint32_t data_amount, uint32_t data_amount_to_read);
+uint32_t tap_pio_common_set_sm_freq(PIO pio, uint32_t sm, uint32_t freq, uint32_t max_interface_freq);
 
 #endif //MIOLINK_TAP_PIO_COMMON_H

@@ -126,36 +126,13 @@ static uint32_t platform_get_max_interface_freq(void)
 
 void platform_max_frequency_set(uint32_t freq)
 {
-	const uint32_t interface_freq = platform_get_max_interface_freq();
-
-	const uint32_t min_freq = (interface_freq >> 16); /* Max divider = 65536 */
-	const uint32_t max_freq = interface_freq;
-
-	if (freq < min_freq) {
-		freq = min_freq;
-	} else if (freq > max_freq) {
-		freq = max_freq;
-	}
-
-	uint32_t clkdiv_int = (interface_freq / freq);
-	uint32_t clkdiv_fraq = ((((uint64_t)interface_freq) << 8) / freq) & 0xFF;
-
-	if (clkdiv_int >= (((uint32_t)UINT16_MAX) + 1)) {
-		clkdiv_int = 0;
-		clkdiv_fraq = 0;
+	for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
+		tap_pio_common_set_sm_freq(TARGET_SWD_PIO, i, freq, platform_get_max_interface_freq());
 	}
 
 	for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
-		pio_sm_set_clkdiv_int_frac(TARGET_SWD_PIO, i, clkdiv_int, clkdiv_fraq);
-		pio_sm_clkdiv_restart(TARGET_SWD_PIO, i);
+		target_interface_frequency = tap_pio_common_set_sm_freq(TARGET_JTAG_PIO, i, freq, platform_get_max_interface_freq());
 	}
-
-	for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
-		pio_sm_set_clkdiv_int_frac(TARGET_JTAG_PIO, i, clkdiv_int, clkdiv_fraq);
-		pio_sm_clkdiv_restart(TARGET_JTAG_PIO, i);
-	}
-
-	target_interface_frequency = freq;
 }
 
 uint32_t platform_max_frequency_get(void)
