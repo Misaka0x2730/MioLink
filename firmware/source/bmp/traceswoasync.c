@@ -63,7 +63,7 @@
 #define TRACESWO_RX_DMA_MAX_TIMEOUT        (200)
 #define TRACESWO_RX_INT_PIO_TIMEOUT        (100)
 
-#define TRACESWO_PIO_CLOCKS_IN_ONE_BIT (8)
+#define TRACESWO_PIO_CLOCKS_IN_ONE_BIT (12)
 
 #define TRACESWO_TASK_NOTIFY_WAIT_PERIOD (portMAX_DELAY)
 
@@ -510,6 +510,8 @@ void swo_init(swo_coding_e swo_mode, uint32_t baudrate, uint32_t itm_stream_bitm
 		sm_config_set_jmp_pin(&traceswo_program_config, target_pins->tdo);
 		sm_config_set_in_shift(&traceswo_program_config, true, true, 8);
 
+		tap_pio_common_disable_input_sync(TARGET_SWD_PIO, target_pins->tdo);
+
 		irq_handler_t current_handler = irq_get_exclusive_handler(TRACESWO_PIO_IRQ);
 		assert(current_handler == NULL);
 
@@ -518,7 +520,7 @@ void swo_init(swo_coding_e swo_mode, uint32_t baudrate, uint32_t itm_stream_bitm
 		pio_sm_init(TRACESWO_PIO, TRACESWO_PIO_SM, traceswo_manchester_program.origin, &traceswo_program_config);
 		pio_sm_set_enabled(TRACESWO_PIO, TRACESWO_PIO_SM, true);
 
-		traceswo_pio_baudrate = (tap_pio_common_set_sm_freq(TRACESWO_PIO, TRACESWO_PIO_SM, baudrate * TRACESWO_PIO_CLOCKS_IN_ONE_BIT / 2, clock_get_hz(clk_sys))) / TRACESWO_PIO_CLOCKS_IN_ONE_BIT / 2;
+		traceswo_pio_baudrate = (tap_pio_common_set_sm_freq(TRACESWO_PIO, TRACESWO_PIO_SM, (baudrate / 2) * TRACESWO_PIO_CLOCKS_IN_ONE_BIT, clock_get_hz(clk_sys))) * 2 / TRACESWO_PIO_CLOCKS_IN_ONE_BIT;
 	}
 
 	if (baudrate >= TRACESWO_RX_DMA_BAUDRATE_THRESHOLD) {
