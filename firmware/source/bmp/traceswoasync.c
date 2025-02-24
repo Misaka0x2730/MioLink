@@ -509,6 +509,7 @@ void swo_init(swo_coding_e swo_mode, uint32_t baudrate, uint32_t itm_stream_bitm
 		sm_config_set_in_pins(&traceswo_program_config, target_pins->tdo);
 		sm_config_set_jmp_pin(&traceswo_program_config, target_pins->tdo);
 		sm_config_set_in_shift(&traceswo_program_config, true, true, 8);
+		sm_config_set_fifo_join(&traceswo_program_config, PIO_FIFO_JOIN_RX);
 
 		tap_pio_common_disable_input_sync(TARGET_SWD_PIO, target_pins->tdo);
 
