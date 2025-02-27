@@ -22,14 +22,15 @@
 /* Provides main entry point. Initialise subsystems and enter GDB protocol loop. */
 
 #include "general.h"
+#include "platform.h"
 
 #include "pico/multicore.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "platform.h"
 #include "usb_serial.h"
+#include "usb.h"
 
 #ifdef ENABLE_RTT
 #include "rtt.h"
@@ -49,7 +50,6 @@
 #include "exception.h"
 #include "gdb_packet.h"
 #include "morse.h"
-#include "usb.h"
 
 #define GDB_TASK_CORE_AFFINITY (0x02) /* Core 1 only */
 #define GDB_TASK_STACK_SIZE    (2048)

@@ -25,8 +25,8 @@
  * 1 tab == 4 spaces!
  */
 
-#ifndef FREERTOS_CONFIG_H
-#define FREERTOS_CONFIG_H
+#ifndef MIOLINK_FREERTOS_CONFIG_H
+#define MIOLINK_FREERTOS_CONFIG_H
 
 /*-----------------------------------------------------------
  * Application specific definitions.
@@ -141,4 +141,4 @@ to exclude the API function. */
 #include "SEGGER_SYSVIEW_FreeRTOS.h"
 #endif
 
-#endif /* FREERTOS_CONFIG_H */
+#endif /* MIOLINK_FREERTOS_CONFIG_H */

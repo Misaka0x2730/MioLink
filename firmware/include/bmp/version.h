@@ -17,6 +17,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef MIOLINK_VERSION_H
+#define MIOLINK_VERSION_H
+
 #include "git_version.h"
 
 #define FIRMWARE_VERSION GIT_MIOLINK_VERSION ", BMP " GIT_BMP_VERSION ", FreeRTOS " GIT_FREERTOS_VERSION
+
+#endif /* MIOLINK_VERSION_H */
