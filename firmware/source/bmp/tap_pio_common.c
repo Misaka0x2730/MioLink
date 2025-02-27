@@ -151,3 +151,28 @@ uint32_t tap_pio_common_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t 
 
 	return recv_data_amount;
 }
+
+uint32_t tap_pio_common_set_sm_freq(PIO pio, uint32_t sm, uint32_t freq, uint32_t max_interface_freq)
+{
+	const uint32_t min_freq = (max_interface_freq >> 16); /* Max divider = 65536 */
+	const uint32_t max_freq = max_interface_freq;
+
+	if (freq < min_freq) {
+		freq = min_freq;
+	} else if (freq > max_freq) {
+		freq = max_freq;
+	}
+
+	uint32_t clkdiv_int = (max_interface_freq / freq);
+	uint32_t clkdiv_fraq = ((((uint64_t)max_interface_freq) << 8) / freq) & 0xFF;
+
+	if (clkdiv_int >= (((uint32_t)UINT16_MAX) + 1)) {
+		clkdiv_int = 0;
+		clkdiv_fraq = 0;
+	}
+
+	pio_sm_set_clkdiv_int_frac(pio, sm, clkdiv_int, clkdiv_fraq);
+	pio_sm_clkdiv_restart(pio, sm);
+
+	return freq;
+}
