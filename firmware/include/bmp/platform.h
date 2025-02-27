@@ -21,8 +21,8 @@
 
 /* This file provides the platform specific declarations for the native implementation. */
 
-#ifndef PLATFORMS_MIOLINK_PLATFORM_H
-#define PLATFORMS_MIOLINK_PLATFORM_H
+#ifndef MIOLINK_PLATFORM_H
+#define MIOLINK_PLATFORM_H
 
 #include "hardware/gpio.h"
 #include "hardware/uart.h"
@@ -36,15 +36,17 @@
 #endif
 
 extern bool running_status;
+#define MACRO_VALUE_STR_WRAP(macro) #macro
+#define MACRO_VALUE_STR(macro)      MACRO_VALUE_STR_WRAP(macro)
 
 #if ENABLE_DEBUG == 1
 #define PLATFORM_HAS_DEBUG
 extern bool debug_bmp;
-#define PLATFORM_IDENT              "(Unknown MioLink, ENABLE_DEBUG=1) "
-#define PLATFORM_IDENT_MIOLINK      "MioLink, ENABLE_DEBUG=1"
-#define PLATFORM_IDENT_MIOLINK_PICO "MioLink_Pico, ENABLE_DEBUG=1"
-#define PLATFORM_IDENT_PICO         "Pico, ENABLE_DEBUG=1"
-#define PLATFORM_IDENT_PICO_W       "Pico W, ENABLE_DEBUG=1"
+#define PLATFORM_IDENT              "(Unknown MioLink, " MACRO_VALUE_STR(ENABLE_DEBUG) "=1) "
+#define PLATFORM_IDENT_MIOLINK      "MioLink, " MACRO_VALUE_STR(ENABLE_DEBUG) "=1"
+#define PLATFORM_IDENT_MIOLINK_PICO "MioLink_Pico, " MACRO_VALUE_STR(ENABLE_DEBUG) "=1"
+#define PLATFORM_IDENT_PICO         "Pico, " MACRO_VALUE_STR(ENABLE_DEBUG) "=1"
+#define PLATFORM_IDENT_PICO_W       "Pico W, " MACRO_VALUE_STR(ENABLE_DEBUG) "=1"
 #else
 #define PLATFORM_IDENT              "(Unknown MioLink) "
 #define PLATFORM_IDENT_MIOLINK      "MioLink"
@@ -194,7 +196,7 @@ typedef struct {
 	uint8_t uart_tx;
 	uint8_t uart_rx;
 	uint8_t reset;
-	bool reset_inverted;
+	bool reset_state;
 } platform_target_pins_t;
 
 typedef struct {
@@ -224,4 +226,4 @@ void platform_toggle_idle_state(void);
 void platform_set_error_state(bool state);
 void platform_set_serial_state(bool state);
 
-#endif /* PLATFORMS_MIOLINK_PLATFORM_H */
+#endif /* MIOLINK_PLATFORM_H */

@@ -21,17 +21,19 @@
  */
 #include "general.h"
 #include "platform.h"
-#include "morse.h"
-#include "timing_rp2040.h"
-#include "usb.h"
 
 #include "hardware/pio.h"
 #include "hardware/clocks.h"
 
+#include "tap_pio.h"
+
 #include "FreeRTOS.h"
 #include "timers.h"
 
-#include "tap_pio_common.h"
+#include "timing_rp2040.h"
+#include "morse.h"
+
+#include "usb.h"
 
 bool running_status = false;
 static volatile uint32_t time_ms = 0;
@@ -127,11 +129,11 @@ static uint32_t platform_get_max_interface_freq(void)
 void platform_max_frequency_set(uint32_t freq)
 {
 	for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
-		tap_pio_common_set_sm_freq(TARGET_SWD_PIO, i, freq, platform_get_max_interface_freq());
+		tap_pio_set_sm_freq(TAP_PIO_SWD, i, freq, platform_get_max_interface_freq());
 	}
 
 	for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
-		target_interface_frequency = tap_pio_common_set_sm_freq(TARGET_JTAG_PIO, i, freq, platform_get_max_interface_freq());
+		target_interface_frequency = tap_pio_set_sm_freq(TAP_PIO_JTAG, i, freq, platform_get_max_interface_freq());
 	}
 }
 
@@ -139,10 +141,9 @@ uint32_t platform_max_frequency_get(void)
 {
 	const uint32_t interface_freq = platform_get_max_interface_freq();
 
-	uint32_t clkdiv_int =
-		(TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].clkdiv & PIO_SM0_CLKDIV_INT_BITS) >> PIO_SM0_CLKDIV_INT_LSB;
+	uint32_t clkdiv_int = (TAP_PIO_SWD->sm[TAP_PIO_SM_SWD].clkdiv & PIO_SM0_CLKDIV_INT_BITS) >> PIO_SM0_CLKDIV_INT_LSB;
 	uint32_t clkdiv_frac =
-		(TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].clkdiv & PIO_SM0_CLKDIV_FRAC_BITS) >> PIO_SM0_CLKDIV_FRAC_LSB;
+		(TAP_PIO_SWD->sm[TAP_PIO_SM_SWD].clkdiv & PIO_SM0_CLKDIV_FRAC_BITS) >> PIO_SM0_CLKDIV_FRAC_LSB;
 
 	if (clkdiv_int == 0) {
 		clkdiv_int = ((uint32_t)UINT16_MAX) + 1;

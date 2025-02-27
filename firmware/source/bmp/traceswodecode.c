@@ -20,8 +20,9 @@
 /* Print decoded swo stream on the usb serial */
 
 #include "general.h"
-#include "usb_serial.h"
+
 #include "swo.h"
+#include "usb_serial.h"
 
 /* SWO decoding */
 /* data is static in case swo packet is astride two buffers */

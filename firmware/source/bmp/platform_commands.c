@@ -19,17 +19,18 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "general.h"
+#include "platform.h"
+
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "general.h"
-#include "platform.h"
+#include "usb_serial.h"
+#include "swo.h"
+
 #include "command.h"
 #include "target_internal.h"
 #include "gdb_packet.h"
-
-#include "usb_serial.h"
-#include "swo.h"
 
 static bool cmd_uart_on_tdi_tdo(target_s *target, int argc, const char **argv);
 static bool cmd_rtos_heapinfo(target_s *target, int argc, const char **argv);
@@ -45,6 +46,7 @@ bool cmd_uart_on_tdi_tdo(target_s *target, int argc, const char **argv)
 	(void)target;
 
 	bool print_status = false;
+	bool uart_on_tdi_tdo = false;
 
 	if (argc == 1) {
 		print_status = true;
@@ -52,13 +54,16 @@ bool cmd_uart_on_tdi_tdo(target_s *target, int argc, const char **argv)
 		if (traceswo_uart_is_used(TRACESWO_UART)) {
 			print_status = true;
 			gdb_out("You should disable TRACESWO before activating UART on TDI and TDO!\n");
-		} else if (parse_enable_or_disable(argv[1], &use_uart_on_tdi_tdo))
+		} else if (parse_enable_or_disable(argv[1], &uart_on_tdi_tdo)) {
 			print_status = true;
+			usb_serial_use_uart_on_tdi_tdo(uart_on_tdi_tdo);
+		}
 	} else
 		gdb_out("Unrecognized command format\n");
 
 	if (print_status) {
-		gdb_outf("UART pins on TDI and TDO (only in SWD mode): %s\n", use_uart_on_tdi_tdo ? "enabled" : "disabled");
+		gdb_outf("UART pins on TDI and TDO (only in SWD mode): %s\n",
+			usb_serial_uart_on_tdi_tdo_is_used() ? "enabled" : "disabled");
 	}
 
 	return true;
@@ -75,9 +80,6 @@ bool cmd_rtos_heapinfo(target_s *target, int argc, const char **argv)
 
 	return true;
 }
-
-#define MACRO_VALUE_STR_WRAP(macro) #macro
-#define MACRO_VALUE_STR(macro)      MACRO_VALUE_STR_WRAP(macro)
 
 bool cmd_rtos_tasksinfo(target_s *target, int argc, const char **argv)
 {

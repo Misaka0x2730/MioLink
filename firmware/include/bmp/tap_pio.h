@@ -17,27 +17,25 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef MIOLINK_TAP_PIO_COMMON_H
-#define MIOLINK_TAP_PIO_COMMON_H
+#ifndef MIOLINK_TAP_PIO_H
+#define MIOLINK_TAP_PIO_H
 
 #include "general.h"
+
 #include "hardware/pio.h"
 
-#define PIO_BUFFER_SIZE (16)
-
-#define TARGET_SWD_PIO  (pio0)
-#define TARGET_JTAG_PIO (pio0)
+#define TAP_PIO_SWD  (pio0)
+#define TAP_PIO_JTAG (pio0)
 
 typedef enum {
-	TARGET_SWD_PIO_SM = 0,
-} target_swd_pio_sm_t;
+	TAP_PIO_SM_SWD = 0,
+	TAP_PIO_SM_JTAG_TDI_TDO_SEQ = 0,
+	TAP_PIO_SM_JTAG_TMS_SEQ = 1,
+} tap_pio_sm_t;
 
-typedef enum {
-	TARGET_JTAG_PIO_SM_TDI_TDO_SEQ = 0,
-	TARGET_JTAG_PIO_SM_TMS_SEQ,
-} target_jtag_pio_sm_t;
+#define TAP_PIO_DMA_BUF_SIZE (16)
 
-static inline bool tap_pio_common_is_not_tx_stalled(PIO pio, uint32_t sm)
+static inline bool tap_pio_is_not_tx_stalled(PIO pio, uint32_t sm)
 {
 	check_pio_param(pio);
 	check_sm_param(sm);
@@ -46,7 +44,7 @@ static inline bool tap_pio_common_is_not_tx_stalled(PIO pio, uint32_t sm)
 	return ((pio->fdebug & (1UL << (PIO_FDEBUG_TXSTALL_LSB + sm))) == 0);
 }
 
-static inline void tap_pio_common_wait_for_tx_stall(PIO pio, uint32_t sm)
+static inline void tap_pio_wait_for_tx_stall(PIO pio, uint32_t sm)
 {
 	check_pio_param(pio);
 	check_sm_param(sm);
@@ -56,14 +54,14 @@ static inline void tap_pio_common_wait_for_tx_stall(PIO pio, uint32_t sm)
 		;
 }
 
-static inline void tap_pio_common_disable_input_sync(PIO pio, uint32_t pin)
+static inline void tap_pio_disable_input_sync(PIO pio, uint32_t pin)
 {
 	check_pio_param(pio);
 
 	pio->input_sync_bypass |= (1UL << pin);
 }
 
-static inline void tap_pio_common_disable_all_machines(PIO pio)
+static inline void tap_pio_disable_all_machines(PIO pio)
 {
 	check_pio_param(pio);
 
@@ -72,19 +70,19 @@ static inline void tap_pio_common_disable_all_machines(PIO pio)
 	}
 }
 
-static inline uint32_t tap_pio_common_get_irq0_status(PIO pio)
+static inline uint32_t tap_pio_get_irq0_status(PIO pio)
 {
 	check_pio_param(pio);
 
 	return pio->ints0;
 }
 
-void tap_pio_common_dma_send_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, const uint32_t data_amount);
-uint32_t tap_pio_common_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, uint32_t *buffer_recv,
+void tap_pio_dma_send_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, const uint32_t data_amount);
+uint32_t tap_pio_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, uint32_t *buffer_recv,
 	const uint32_t data_amount, const uint32_t data_amount_to_read);
-void tap_pio_common_dma_send_uint8(PIO pio, uint32_t sm, const uint8_t *buffer, uint32_t data_amount);
-uint32_t tap_pio_common_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer, uint8_t *buffer_recv,
+void tap_pio_dma_send_uint8(PIO pio, uint32_t sm, const uint8_t *buffer, uint32_t data_amount);
+uint32_t tap_pio_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer, uint8_t *buffer_recv,
 	uint32_t data_amount, uint32_t data_amount_to_read);
-uint32_t tap_pio_common_set_sm_freq(PIO pio, uint32_t sm, uint32_t freq, uint32_t max_interface_freq);
+uint32_t tap_pio_set_sm_freq(PIO pio, uint32_t sm, uint32_t freq, uint32_t max_interface_freq);
 
-#endif //MIOLINK_TAP_PIO_COMMON_H
+#endif /* MIOLINK_TAP_PIO_H */

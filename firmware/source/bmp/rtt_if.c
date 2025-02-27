@@ -26,6 +26,7 @@
  */
 
 #include "general.h"
+
 #include "usb_serial.h"
 #include "rtt.h"
 #include "rtt_if.h"

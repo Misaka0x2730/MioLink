@@ -1,8 +1,8 @@
 /*
  * This file is part of the Black Magic Debug project.
  *
- * Copyright (C) 2015 Gareth McMullin <gareth@blacksphere.co.nz>
- * Modified by Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
+ * Copyright (C) 2022 1BitSquared <info@1bitsquared.com>
+ * Written by Dmitry Rezvanov <git@dragonmux.network>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,17 +18,27 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef MIOLINK_TIMING_RP2040_H
-#define MIOLINK_TIMING_RP2040_H
+#ifndef MIOLINK_USB_CDC_H
+#define MIOLINK_USB_CDC_H
 
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "general.h"
+#include "tusb.h"
 
-#define PLATFORM_DEFAULT_FREQUENCY (4000000UL)
+typedef enum  {
+	USB_CDC_GDB = 0,
+	USB_CDC_TARGET_SERIAL,
+	USB_CDC_NUM = CFG_TUD_CDC,
+} usb_cdc_t;
 
-void platform_timing_init(void);
-uint32_t platform_timeout_time_left(const platform_timeout_s *target);
+#define USB_CDC_NOTIF_USB_RX_AVAILABLE       (0x01)
+#define USB_CDC_NOTIF_LINE_STATE_UPDATE      (0x02)
+#define USB_CDC_NOTIF_LINE_CODING_UPDATE     (0x04)
+#define USB_CDC_NOTIF_UART_RX_AVAILABLE      (0x08)
+#define USB_CDC_NOTIF_UART_RX_FLUSH          (0x10)
+#define USB_CDC_NOTIF_UART_RX_TIMEOUT        (0x20)
+#define USB_CDC_NOTIF_UART_TX_COMPLETE       (0x40)
+#define USB_CDC_NOTIF_DUMMY       			 (0x80)
 
-#endif /* MIOLINK_TIMING_RP2040_H */
+#endif /* MIOLINK_USB_CDC_H */
