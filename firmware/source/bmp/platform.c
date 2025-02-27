@@ -20,6 +20,7 @@
  */
 
 #include "general.h"
+#include "platform.h"
 
 #include "hardware/gpio.h"
 #include "pico/bootrom.h"
@@ -28,7 +29,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "platform.h"
 #include "timing_rp2040.h"
 #include "serialno.h"
 
@@ -129,7 +129,7 @@ void platform_init(void)
 	if (target_pins->reset != PIN_NOT_CONNECTED) {
 		gpio_init(target_pins->reset);
 		gpio_set_dir(target_pins->reset, GPIO_OUT);
-		gpio_put(target_pins->reset, !target_pins->reset_inverted);
+		gpio_put(target_pins->reset, !target_pins->reset_state);
 	}
 
 	platform_vtref_init();
@@ -143,10 +143,10 @@ void platform_nrst_set_val(bool assert)
 
 	if (target_pins->reset != PIN_NOT_CONNECTED) {
 		if (assert) {
-			gpio_put(target_pins->reset, target_pins->reset_inverted);
+			gpio_put(target_pins->reset, target_pins->reset_state);
 			platform_delay(10);
 		} else {
-			gpio_put(target_pins->reset, !target_pins->reset_inverted);
+			gpio_put(target_pins->reset, !target_pins->reset_state);
 		}
 	}
 }
@@ -157,7 +157,7 @@ bool platform_nrst_get_val(void)
 	assert(target_pins != NULL);
 
 	if (target_pins->reset != PIN_NOT_CONNECTED) {
-		return gpio_get(target_pins->reset) == target_pins->reset_inverted;
+		return gpio_get(target_pins->reset) == target_pins->reset_state;
 	}
 
 	return false;

@@ -21,6 +21,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "general.h"
+#include "platform.h"
 
 #include "hardware/clocks.h"
 #include "hardware/uart.h"
@@ -35,7 +36,7 @@
 
 #include "tusb.h"
 
-#include "platform.h"
+#include "usb_cdc.h"
 #include "usb_serial.h"
 
 #include "swo.h"
@@ -234,7 +235,7 @@ static void uart_rx_dma_process_buffers(void)
 static void uart_rx_dma_timeout_callback(TimerHandle_t xTimer)
 {
 	(void)(xTimer);
-	xTaskNotify(traceswo_task, USB_SERIAL_DATA_UART_RX_TIMEOUT, eSetBits);
+	xTaskNotify(traceswo_task, USB_CDC_NOTIF_UART_RX_TIMEOUT, eSetBits);
 }
 
 static bool uart_rx_dma_finish_receiving(void)
@@ -482,13 +483,13 @@ _Noreturn static void traceswo_thread(void *params)
 
 	while (1) {
 		if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(wait_time)) == pdPASS) {
-			if (notificationValue & (USB_SERIAL_DATA_UART_RX_AVAILABLE | USB_SERIAL_DATA_UART_RX_FLUSH)) {
-				if (notificationValue & USB_SERIAL_DATA_UART_RX_AVAILABLE) {
+			if (notificationValue & (USB_CDC_NOTIF_UART_RX_AVAILABLE | USB_CDC_NOTIF_UART_RX_FLUSH)) {
+				if (notificationValue & USB_CDC_NOTIF_UART_RX_AVAILABLE) {
 					assert(uart_rx_use_dma == false);
 					uart_rx_int_process();
 				}
 
-				if (notificationValue & USB_SERIAL_DATA_UART_RX_FLUSH) {
+				if (notificationValue & USB_CDC_NOTIF_UART_RX_FLUSH) {
 					if (uart_rx_use_dma == false) {
 						uart_rx_int_finish();
 					} else {
@@ -497,7 +498,7 @@ _Noreturn static void traceswo_thread(void *params)
 				}
 			}
 
-			if ((notificationValue & USB_SERIAL_DATA_UART_RX_TIMEOUT) && (uart_rx_ongoing != false)) {
+			if ((notificationValue & USB_CDC_NOTIF_UART_RX_TIMEOUT) && (uart_rx_ongoing != false)) {
 				uart_rx_dma_finish_receiving();
 			}
 		}
@@ -532,13 +533,13 @@ static void uart_rx_isr(void)
 
 			rp_uart_clear_rx_irq_flag(TRACESWO_UART);
 			rp_uart_set_rx_irq_enabled(TRACESWO_UART, false);
-			notify_bits |= USB_SERIAL_DATA_UART_RX_AVAILABLE;
+			notify_bits |= USB_CDC_NOTIF_UART_RX_AVAILABLE;
 		}
 
 		if (uart_int_status & RP_UART_INT_RX_TIMEOUT_BITS) {
 			rp_uart_clear_rx_timeout_irq_flag(TRACESWO_UART);
 			rp_uart_set_rx_timeout_irq_enabled(TRACESWO_UART, false);
-			notify_bits |= USB_SERIAL_DATA_UART_RX_FLUSH;
+			notify_bits |= USB_CDC_NOTIF_UART_RX_FLUSH;
 		}
 	} else {
 		higher_priority_task_woken = uart_rx_dma_start_receiving();
@@ -570,7 +571,7 @@ BaseType_t traceswo_uart_dma_handler(void)
 			uart_rx_dma_current_buffer = 0;
 		}
 
-		xTaskNotifyFromISR(traceswo_task, USB_SERIAL_DATA_UART_RX_FLUSH, eSetBits, &higher_priority_task_woken);
+		xTaskNotifyFromISR(traceswo_task, USB_CDC_NOTIF_UART_RX_FLUSH, eSetBits, &higher_priority_task_woken);
 	}
 
 	return higher_priority_task_woken;
