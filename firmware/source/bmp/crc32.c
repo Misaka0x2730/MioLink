@@ -20,9 +20,11 @@
  */
 
 #include "general.h"
+
+#include "hardware/dma.h"
+
 #include "target.h"
 #include "gdb_if.h"
-#include "hardware/dma.h"
 
 static int crc_dma_channel = -1;
 

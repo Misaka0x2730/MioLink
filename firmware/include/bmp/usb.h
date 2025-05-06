@@ -19,10 +19,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef BMP_USB_H
-#define BMP_USB_H
+#ifndef MIOLINK_USB_H
+#define MIOLINK_USB_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 void blackmagic_usb_init(void);
 
@@ -30,4 +31,4 @@ uint16_t usb_get_config(void);
 bool usb_config_is_updated(void);
 void usb_config_clear_updated(void);
 
-#endif /* BMP_USB_H */
+#endif /* MIOLINK_USB_H */
