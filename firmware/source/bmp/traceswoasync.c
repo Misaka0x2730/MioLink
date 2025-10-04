@@ -228,8 +228,7 @@ static BaseType_t rx_dma_start_receiving(void)
 		rp_uart_set_dma_req_enabled(TRACESWO_UART, true, false);
 
 		rp_dma_set_channel_enabled(rx_dma_channel, true, false);
-	} else if (swo_current_mode == swo_manchester)
-	{
+	} else if (swo_current_mode == swo_manchester) {
 		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
 		rp_dma_set_channel_enabled(rx_dma_channel, true, true);
 	}

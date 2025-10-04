@@ -121,7 +121,7 @@ void platform_update_sys_freq(void)
 	set_sys_clock_hz(configCPU_CLOCK_HZ, true);
 }
 
-static uint32_t platform_get_max_interface_freq(void)
+static uint32_t platform_get_interface_periph_clk(void)
 {
 	return clock_get_hz(clk_sys) / 8;
 }
@@ -129,17 +129,17 @@ static uint32_t platform_get_max_interface_freq(void)
 void platform_max_frequency_set(uint32_t freq)
 {
 	for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
-		tap_pio_set_sm_freq(TAP_PIO_SWD, i, freq, platform_get_max_interface_freq());
+		tap_pio_set_sm_freq(TAP_PIO_SWD, i, freq, platform_get_interface_periph_clk());
 	}
 
 	for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
-		target_interface_frequency = tap_pio_set_sm_freq(TAP_PIO_JTAG, i, freq, platform_get_max_interface_freq());
+		target_interface_frequency = tap_pio_set_sm_freq(TAP_PIO_JTAG, i, freq, platform_get_interface_periph_clk());
 	}
 }
 
 uint32_t platform_max_frequency_get(void)
 {
-	const uint32_t interface_freq = platform_get_max_interface_freq();
+	const uint32_t interface_freq = platform_get_interface_periph_clk();
 
 	uint32_t clkdiv_int = (TAP_PIO_SWD->sm[TAP_PIO_SM_SWD].clkdiv & PIO_SM0_CLKDIV_INT_BITS) >> PIO_SM0_CLKDIV_INT_LSB;
 	uint32_t clkdiv_frac =
