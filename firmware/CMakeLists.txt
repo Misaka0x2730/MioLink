@@ -157,6 +157,7 @@ pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/miolink_re
 pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/miolink_pico_swd.pio)
 pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/pico_swd.pio)
 pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/target_jtag.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/traceswo_manchester.pio)
 
 # Set linker script and set parameter to print memory usage
 if (build_type STREQUAL debug)

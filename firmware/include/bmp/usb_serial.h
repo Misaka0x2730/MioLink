@@ -37,10 +37,10 @@ typedef enum usb_serial_interface_e {
 #define USB_SERIAL_DATA_RX                (0x01)
 #define USB_SERIAL_LINE_STATE_UPDATE      (0x02)
 #define USB_SERIAL_LINE_CODING_UPDATE     (0x04)
-#define USB_SERIAL_DATA_UART_RX_AVAILABLE (0x08)
-#define USB_SERIAL_DATA_UART_RX_FLUSH     (0x10)
-#define USB_SERIAL_DATA_UART_RX_TIMEOUT   (0x20)
-#define USB_SERIAL_DATA_UART_TX_COMPLETE  (0x40)
+#define USB_SERIAL_DATA_RX_AVAILABLE      (0x08)
+#define USB_SERIAL_DATA_RX_FLUSH          (0x10)
+#define USB_SERIAL_DATA_RX_TIMEOUT        (0x20)
+#define USB_SERIAL_DATA_TX_COMPLETE       (0x40)
 
 extern bool use_uart_on_tdi_tdo;
 

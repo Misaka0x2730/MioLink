@@ -25,6 +25,12 @@
 #include <stdlib.h>
 #include "FreeRTOS.h"
 
+#define TRACESWO_UART      (uart0)
+#define TRACESWO_UART_IRQ  (UART_IRQ_NUM(TRACESWO_UART))
+
+#define TRACESWO_PIO       (pio1)
+#define TRACESWO_PIO_IRQ   (PIO_IRQ_NUM(TRACESWO_PIO, 0))
+
 #define TRACESWO_BUF_SIZE (1024)
 
 /* Default line rate, used as default for a request without baudrate */
@@ -41,7 +47,7 @@ extern swo_coding_e swo_current_mode;
 /* Initialisation and deinitialisation functions (ties into command.c) */
 void swo_init(swo_coding_e swo_mode, uint32_t baudrate, uint32_t itm_stream_bitmask);
 void swo_deinit(bool deallocate);
-uint32_t swo_uart_get_baudrate(void);
+uint32_t swo_get_baudrate(void);
 
 /* Set bitmask of SWO channels to be decoded */
 void traceswo_setmask(uint32_t mask);
@@ -51,7 +57,7 @@ bool traceswo_decode(const void *buf, uint16_t len, bool flush, bool drop_if_no_
 
 void traceswo_task_init(void);
 
-BaseType_t traceswo_uart_dma_handler(void);
+BaseType_t traceswo_rx_dma_handler(void);
 
 bool traceswo_uart_is_used(uart_inst_t *uart_instance);
 
