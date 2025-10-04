@@ -281,10 +281,10 @@ static void rx_timeout_callback(TimerHandle_t xTimer)
 {
 	(void)(xTimer);
 	if (rx_use_dma) {
-		xTaskNotify(traceswo_task, USB_CDC_NOTIF_UART_RX_TIMEOUT, eSetBits);
+		xTaskNotify(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_TIMEOUT, eSetBits);
 	} else if (swo_current_mode == swo_manchester) {
 		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
-		xTaskNotify(traceswo_task, USB_CDC_NOTIF_UART_RX_FLUSH, eSetBits);
+		xTaskNotify(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_FLUSH, eSetBits);
 	}
 }
 
@@ -640,13 +640,13 @@ _Noreturn static void traceswo_thread(void *params)
 
 	while (1) {
 		if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(wait_time)) == pdPASS) {
-			if (notificationValue & (USB_CDC_NOTIF_UART_RX_AVAILABLE | USB_CDC_NOTIF_UART_RX_FLUSH)) {
-				if (notificationValue & USB_CDC_NOTIF_UART_RX_AVAILABLE) {
+			if (notificationValue & (USB_CDC_NOTIF_SERIAL_RX_AVAILABLE | USB_CDC_NOTIF_SERIAL_RX_FLUSH)) {
+				if (notificationValue & USB_CDC_NOTIF_SERIAL_RX_AVAILABLE) {
 					assert(rx_use_dma == false);
 					rx_int_process();
 				}
 
-				if (notificationValue & USB_CDC_NOTIF_UART_RX_FLUSH) {
+				if (notificationValue & USB_CDC_NOTIF_SERIAL_RX_FLUSH) {
 					if (rx_use_dma == false) {
 						rx_int_finish();
 					} else {
@@ -655,7 +655,7 @@ _Noreturn static void traceswo_thread(void *params)
 				}
 			}
 
-			if ((notificationValue & USB_CDC_NOTIF_UART_RX_TIMEOUT) && (rx_ongoing != false)) {
+			if ((notificationValue & USB_CDC_NOTIF_SERIAL_RX_TIMEOUT) && (rx_ongoing != false)) {
 				rx_dma_finish_receiving();
 			}
 		}
@@ -690,13 +690,13 @@ static void traceswo_rx_uart_handler(void)
 
 			rp_uart_clear_rx_irq_flag(TRACESWO_UART);
 			rp_uart_set_rx_irq_enabled(TRACESWO_UART, false);
-			notify_bits |= USB_CDC_NOTIF_UART_RX_AVAILABLE;
+			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_AVAILABLE;
 		}
 
 		if (uart_int_status & RP_UART_INT_RX_TIMEOUT_BITS) {
 			rp_uart_clear_rx_timeout_irq_flag(TRACESWO_UART);
 			rp_uart_set_rx_timeout_irq_enabled(TRACESWO_UART, false);
-			notify_bits |= USB_CDC_NOTIF_UART_RX_FLUSH;
+			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_FLUSH;
 		}
 	} else {
 		higher_priority_task_woken = rx_dma_start_receiving();
@@ -728,7 +728,7 @@ BaseType_t traceswo_rx_dma_handler(void)
 			rx_dma_current_buffer = 0;
 		}
 
-		xTaskNotifyFromISR(traceswo_task, USB_CDC_NOTIF_UART_RX_FLUSH, eSetBits, &higher_priority_task_woken);
+		xTaskNotifyFromISR(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_FLUSH, eSetBits, &higher_priority_task_woken);
 	}
 
 	return higher_priority_task_woken;
@@ -764,7 +764,7 @@ static void traceswo_rx_pio_handler(void)
 			}
 
 			pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
-			notify_bits |= USB_CDC_NOTIF_UART_RX_AVAILABLE;
+			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_AVAILABLE;
 		}
 	} else {
 		higher_priority_task_woken = rx_dma_start_receiving();
