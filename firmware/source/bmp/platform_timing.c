@@ -30,7 +30,7 @@
 #include "FreeRTOS.h"
 #include "timers.h"
 
-#include "timing_rp2040.h"
+#include "platform_timing.h"
 #include "morse.h"
 
 #include "usb.h"

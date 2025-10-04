@@ -29,7 +29,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "timing_rp2040.h"
+#include "platform_timing.h"
 #include "serialno.h"
 
 static bool idle_state = false;
