@@ -33,14 +33,7 @@
 #include "target.h"
 #include "target_internal.h"
 
-extern void swdptap_seq_out_buffer(const uint32_t *tms_states, size_t clock_cycles);
-extern uint8_t rp2040_pio_adiv5_swd_write_no_check(uint8_t request, uint32_t data);
-extern uint8_t rp2040_pio_adiv5_swd_read_no_check(uint8_t request, uint32_t *data);
-extern uint8_t rp2040_pio_adiv5_swd_write_check(uint8_t request, uint32_t data);
-extern uint8_t rp2040_pio_adiv5_swd_read_check(uint8_t request, uint32_t *data, bool *parity);
-
-extern uint8_t rp2040_pio_adiv5_swd_raw_access_req(uint8_t request);
-extern uint8_t rp2040_pio_adiv5_swd_raw_access_data(uint32_t data_out, uint32_t *data_in, uint8_t rnw);
+#include "platform_swdtap.h"
 
 uint8_t make_packet_request(const uint8_t rnw, const uint16_t addr)
 {
@@ -147,14 +140,14 @@ static void jtag_to_swd_sequence(void)
 bool adiv5_swd_write_no_check(const uint16_t addr, const uint32_t data)
 {
 	const uint8_t request = make_packet_request(ADIV5_LOW_WRITE, addr);
-	return rp2040_pio_adiv5_swd_write_no_check(request, data) != SWD_ACK_OK;
+	return swdtap_adiv5_write_no_check(request, data) != SWD_ACK_OK;
 }
 
 uint32_t adiv5_swd_read_no_check(const uint16_t addr)
 {
 	const uint8_t request = make_packet_request(ADIV5_LOW_READ, addr);
 	uint32_t data = 0;
-	const uint8_t res = rp2040_pio_adiv5_swd_read_no_check(request, &data);
+	const uint8_t res = swdtap_adiv5_read_no_check(request, &data);
 	return res == SWD_ACK_OK ? data : 0;
 }
 
@@ -419,9 +412,9 @@ uint32_t adiv5_swd_raw_access(adiv5_debug_port_s *dp, const uint8_t rnw, const u
 	platform_timeout_set(&timeout, 250U);
 	do {
 		if (rnw) {
-			ack = rp2040_pio_adiv5_swd_read_check(request, &response, &parity);
+			ack = swdtap_adiv5_read_check(request, &response, &parity);
 		} else {
-			ack = rp2040_pio_adiv5_swd_write_check(request, value);
+			ack = swdtap_adiv5_write_check(request, value);
 		}
 		if (ack == SWD_ACK_FAULT) {
 			DEBUG_ERROR("SWD access resulted in fault, retrying\n");

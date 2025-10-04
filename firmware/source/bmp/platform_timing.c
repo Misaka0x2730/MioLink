@@ -36,13 +36,16 @@
 #include "usb.h"
 
 bool running_status = false;
+uint32_t target_interface_frequency = PLATFORM_DEFAULT_FREQUENCY;
+
 static volatile uint32_t time_ms = 0;
 
 static size_t morse_tick = 0;
 static uint8_t monitor_ticks = 0;
 static uint8_t monitor_error_count = 0;
 
-uint32_t target_interface_frequency = PLATFORM_DEFAULT_FREQUENCY;
+static void usb_config_morse_msg_update(void);
+static void timing_application_timer_cb(TimerHandle_t xTimer);
 
 static void usb_config_morse_msg_update(void)
 {
