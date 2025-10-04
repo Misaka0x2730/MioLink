@@ -20,18 +20,19 @@
  */
 
 #include "general.h"
-#include "platform.h"
-#include "swd.h"
 
 #include "hardware/pio.h"
-#include "tap_pio_common.h"
+
+#include "platform.h"
+
+#include "tap_pio.h"
 
 static int pio_dma_channel = -1;
 
-void tap_pio_common_dma_send_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, const uint32_t data_amount)
+void tap_pio_dma_send_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, const uint32_t data_amount)
 {
 	assert(buffer_send != NULL);
-	assert((data_amount > 0) && (data_amount <= PIO_BUFFER_SIZE));
+	assert((data_amount > 0) && (data_amount <= TAP_PIO_DMA_BUF_SIZE));
 
 	check_pio_param(pio);
 	check_sm_param(sm);
@@ -52,11 +53,11 @@ void tap_pio_common_dma_send_uint32(PIO pio, uint32_t sm, const uint32_t *buffer
 	dma_channel_wait_for_finish_blocking(pio_dma_channel);
 }
 
-uint32_t tap_pio_common_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, uint32_t *buffer_recv,
+uint32_t tap_pio_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, uint32_t *buffer_recv,
 	const uint32_t data_amount, const uint32_t data_amount_to_read)
 {
 	assert(buffer_send != NULL);
-	assert((data_amount > 0) && (data_amount <= PIO_BUFFER_SIZE));
+	assert((data_amount > 0) && (data_amount <= TAP_PIO_DMA_BUF_SIZE));
 
 	check_pio_param(pio);
 	check_sm_param(sm);
@@ -90,10 +91,10 @@ uint32_t tap_pio_common_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_
 	return recv_data_amount;
 }
 
-void tap_pio_common_dma_send_uint8(PIO pio, uint32_t sm, const uint8_t *buffer_send, const uint32_t data_amount)
+void tap_pio_dma_send_uint8(PIO pio, uint32_t sm, const uint8_t *buffer_send, const uint32_t data_amount)
 {
 	assert(buffer_send != NULL);
-	assert((data_amount > 0) && (data_amount <= PIO_BUFFER_SIZE));
+	assert((data_amount > 0) && (data_amount <= TAP_PIO_DMA_BUF_SIZE));
 
 	check_pio_param(pio);
 	check_sm_param(sm);
@@ -114,11 +115,11 @@ void tap_pio_common_dma_send_uint8(PIO pio, uint32_t sm, const uint8_t *buffer_s
 	dma_channel_wait_for_finish_blocking(pio_dma_channel);
 }
 
-uint32_t tap_pio_common_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer_send, uint8_t *buffer_recv,
+uint32_t tap_pio_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer_send, uint8_t *buffer_recv,
 	const uint32_t data_amount, const uint32_t data_amount_to_read)
 {
 	assert(buffer_send != NULL);
-	assert((data_amount > 0) && (data_amount <= PIO_BUFFER_SIZE));
+	assert((data_amount > 0) && (data_amount <= TAP_PIO_DMA_BUF_SIZE));
 
 	check_pio_param(pio);
 	check_sm_param(sm);
@@ -152,7 +153,7 @@ uint32_t tap_pio_common_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t 
 	return recv_data_amount;
 }
 
-uint32_t tap_pio_common_set_sm_freq(PIO pio, uint32_t sm, uint32_t freq, uint32_t max_interface_freq)
+uint32_t tap_pio_set_sm_freq(PIO pio, uint32_t sm, uint32_t freq, uint32_t max_interface_freq)
 {
 	const uint32_t min_freq = (max_interface_freq >> 16); /* Max divider = 65536 */
 	const uint32_t max_freq = max_interface_freq;

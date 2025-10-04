@@ -24,6 +24,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "pico/unique_id.h"
+
 #include "serialno.h"
 
 char serial_no[DFU_SERIAL_LENGTH];

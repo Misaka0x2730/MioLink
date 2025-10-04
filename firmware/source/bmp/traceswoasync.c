@@ -24,9 +24,11 @@
 
 #include "hardware/clocks.h"
 #include "hardware/uart.h"
-
+#include "hardware/pio.h"
 #include "rp_uart.h"
 #include "rp_dma.h"
+
+#include "platform.h"
 
 #include "FreeRTOS.h"
 #include "atomic.h"
@@ -35,15 +37,14 @@
 
 #include "tusb.h"
 
-#include "platform.h"
+#include "tap_pio.h"
+#include "usb_cdc.h"
 #include "usb_serial.h"
-
 #include "swo.h"
+
 #include "gdb_packet.h"
 
-#include "hardware/pio.h"
-#include "tap_pio_common.h"
-#include "traceswo_manchester.pio.h"
+#include "pio_traceswo_manchester.pio.h"
 
 #define TRACESWO_UART_RX_INT_FIFO_LEVEL (16)
 
@@ -74,20 +75,6 @@
 #define TRACESWO_TASK_CORE_AFFINITY (0x01) /* Core 0 only */
 #define TRACESWO_TASK_STACK_SIZE    (512)
 
-static uint8_t rx_buf[TRACESWO_RX_DMA_NUMBER_OF_BUFFERS][TRACESWO_RX_DMA_BUFFER_SIZE] = {0};
-static uint32_t rx_int_buf_pos = 0;
-static xTimerHandle rx_timeout_timer;
-static uint32_t rx_dma_buffer_full_mask = 0;
-static uint32_t rx_dma_current_buffer = 0;
-static bool rx_use_dma = false;
-static int rx_dma_channel = -1;
-static int rx_dma_ctrl_channel = -1;
-static uint32_t rx_dma_next_buffer_to_send = 0;
-static bool rx_ongoing = false;
-
-/* Current SWO decoding mode being used */
-swo_coding_e swo_current_mode = swo_none;
-
 static struct {
 	uint8_t *address;
 } rx_dma_ctrl_block_info[TRACESWO_RX_DMA_NUMBER_OF_BUFFERS + 1]
@@ -97,17 +84,45 @@ typedef enum {
 	TRACESWO_PIO_SM = 0,
 } traceswo_pio_sm;
 
+static uint8_t rx_buf[TRACESWO_RX_DMA_NUMBER_OF_BUFFERS][TRACESWO_RX_DMA_BUFFER_SIZE] = {0};
+static bool rx_ongoing = false;
+static bool rx_use_dma = false;
+static xTimerHandle rx_timeout_timer;
 
 static uint32_t traceswo_pio_baudrate = 0;
-
 static bool traceswo_decoding = false;
-
 static TaskHandle_t traceswo_task;
 
+static uint32_t rx_int_buf_pos = 0;
+
+static uint32_t rx_dma_buffer_full_mask = 0;
+static uint32_t rx_dma_current_buffer = 0;
+static int rx_dma_channel = -1;
+static int rx_dma_ctrl_channel = -1;
+static uint32_t rx_dma_next_buffer_to_send = 0;
+
+/* Current SWO decoding mode being used */
+swo_coding_e swo_current_mode = swo_none;
+
+static void traceswo_update_led(void);
+static bool traceswo_send_to_usb(uint8_t *data, const size_t len, const bool flush, const bool allow_drop_buffer);
+
+static void rx_int_init(swo_coding_e swo_mode, const uint32_t baudrate);
+static void rx_int_process(void);
+static void rx_int_finish(void);
+
+static void dma_rx_init(swo_coding_e swo_mode, const uint32_t baudrate);
+static BaseType_t rx_dma_start_receiving(void);
+static void rx_dma_process_buffers(void);
+static bool rx_dma_finish_receiving(void);
+
+static void rx_timeout_callback(TimerHandle_t xTimer);
 static void traceswo_rx_uart_handler(void);
 static void traceswo_rx_pio_handler(void);
 
-void traceswo_update_led(void)
+static void traceswo_thread(void *params);
+
+static void traceswo_update_led(void)
 {
 	platform_set_serial_state(rx_ongoing);
 }
@@ -131,240 +146,6 @@ static bool traceswo_send_to_usb(uint8_t *data, const size_t len, const bool flu
 	}
 
 	return result;
-}
-
-static void dma_rx_init(swo_coding_e swo_mode, const uint32_t baudrate)
-{
-	assert(swo_mode != swo_none);
-
-	if (swo_mode == swo_nrz_uart)
-	{
-		rp_uart_set_dma_req_enabled(TRACESWO_UART, false, false);
-		rp_uart_set_rx_and_timeout_irq_enabled(TRACESWO_UART, false, false);
-		rp_uart_set_int_fifo_levels(TRACESWO_UART, 0, 0);
-	}
-	else if (swo_mode == swo_manchester)
-	{
-		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
-	}
-
-	dma_channel_set_irq0_enabled(rx_dma_ctrl_channel, false);
-	dma_channel_abort(rx_dma_ctrl_channel);
-	dma_channel_acknowledge_irq0(rx_dma_ctrl_channel);
-
-	dma_channel_set_irq0_enabled(rx_dma_channel, false);
-	dma_channel_abort(rx_dma_channel);
-	dma_channel_acknowledge_irq0(rx_dma_channel);
-
-	dma_channel_config rx_ctrl_config = dma_channel_get_default_config(rx_dma_ctrl_channel);
-	channel_config_set_transfer_data_size(&rx_ctrl_config, DMA_SIZE_32);
-	channel_config_set_read_increment(&rx_ctrl_config, true);
-	channel_config_set_write_increment(&rx_ctrl_config, false);
-	channel_config_set_high_priority(&rx_ctrl_config, true);
-	channel_config_set_ring(&rx_ctrl_config, false, 7);
-
-	dma_channel_configure(rx_dma_ctrl_channel, &rx_ctrl_config,
-		rp_dma_get_al2_write_addr_trig(rx_dma_channel),
-		rx_dma_ctrl_block_info, 1, false);
-
-	dma_channel_config rx_config = dma_channel_get_default_config(rx_dma_channel);
-	channel_config_set_transfer_data_size(&rx_config, DMA_SIZE_8);
-	channel_config_set_read_increment(&rx_config, false);
-	channel_config_set_write_increment(&rx_config, true);
-	channel_config_set_high_priority(&rx_config, true);
-	channel_config_set_chain_to(&rx_config, rx_dma_ctrl_channel);
-
-	if (swo_mode == swo_nrz_uart)
-	{
-		channel_config_set_dreq(&rx_config, uart_get_dreq(TRACESWO_UART, false));
-		dma_channel_configure(rx_dma_channel, &rx_config, rx_buf, rp_uart_get_dr_address(TRACESWO_UART),
-			TRACESWO_RX_DMA_BUFFER_SIZE, false);
-	}
-	else if (swo_mode == swo_manchester)
-	{
-		channel_config_set_dreq(&rx_config, pio_get_dreq(TRACESWO_PIO, TRACESWO_PIO_SM, false));
-		dma_channel_configure(rx_dma_channel, &rx_config, rx_buf, (void *)&(TRACESWO_PIO->rxf[0]) + 3,
-			TRACESWO_RX_DMA_BUFFER_SIZE, false);
-	}
-
-	rx_use_dma = true;
-
-	rp_dma_set_channel_enabled(rx_dma_channel, false, false);
-	dma_channel_set_irq0_enabled(rx_dma_channel, true);
-
-	dma_channel_set_read_addr(rx_dma_ctrl_channel, (void *)rx_dma_ctrl_block_info, true);
-
-	/* Calculate timer period - time to fill 2 rx buffers */
-	uint32_t timer_period = (TRACESWO_RX_DMA_BUFFER_SIZE * 2 * 1000); /* 1000 - because we need milliseconds */
-	timer_period /= (baudrate / 10); /* byte rate, 1 data byte = 10 bits (8 data, 1 start and 1 stop) */
-	if (timer_period < TRACESWO_RX_DMA_MIN_TIMEOUT) {
-		timer_period = TRACESWO_RX_DMA_MIN_TIMEOUT;
-	} else if (timer_period > TRACESWO_RX_DMA_MAX_TIMEOUT) {
-		timer_period = TRACESWO_RX_DMA_MAX_TIMEOUT;
-	}
-
-	xTimerChangePeriod(rx_timeout_timer, pdMS_TO_TICKS(timer_period), portMAX_DELAY);
-
-	if (swo_mode == swo_nrz_uart)
-	{
-		rp_uart_set_rx_and_timeout_irq_enabled(TRACESWO_UART, true, true);
-	}
-	else if (swo_mode == swo_manchester)
-	{
-		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), true);
-	}
-}
-
-static BaseType_t rx_dma_start_receiving(void)
-{
-	assert(rx_ongoing == false);
-
-	rx_ongoing = true;
-
-	if (swo_current_mode == swo_nrz_uart) {
-		rp_uart_set_rx_and_timeout_irq_enabled(TRACESWO_UART, false, false);
-		rp_uart_clear_rx_and_rx_timeout_irq_flags(TRACESWO_UART);
-		rp_uart_set_dma_req_enabled(TRACESWO_UART, true, false);
-
-		rp_dma_set_channel_enabled(rx_dma_channel, true, false);
-	} else if (swo_current_mode == swo_manchester)
-	{
-		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
-		rp_dma_set_channel_enabled(rx_dma_channel, true, true);
-	}
-
-	dma_channel_acknowledge_irq0(rx_dma_channel);
-	dma_channel_set_irq0_enabled(rx_dma_channel,  true);
-
-	BaseType_t higher_priority_task_woken = pdFALSE;
-
-	xTimerResetFromISR(rx_timeout_timer, &higher_priority_task_woken);
-	return higher_priority_task_woken;
-}
-
-static void rx_dma_process_buffers(void)
-{
-	xTimerReset(rx_timeout_timer, 0);
-
-	while (1) {
-		const uint32_t buffer_state = rx_dma_buffer_full_mask;
-		const uint32_t buffer_bit = (1u << rx_dma_next_buffer_to_send);
-		const bool allow_drop_buffer = (__builtin_popcount(buffer_state) >= TRACESWO_RX_DMA_DROP_BUFFER_THRESHOLD);
-		const uint32_t data_len = sizeof(rx_buf[rx_dma_next_buffer_to_send]);
-		if (buffer_state & buffer_bit) {
-			if (traceswo_decoding) {
-				if (traceswo_decode(rx_buf[rx_dma_next_buffer_to_send], data_len, false, allow_drop_buffer)) {
-					Atomic_AND_u32(&rx_dma_buffer_full_mask, ~buffer_bit);
-					if (++rx_dma_next_buffer_to_send >= TRACESWO_RX_DMA_NUMBER_OF_BUFFERS) {
-						rx_dma_next_buffer_to_send = 0;
-					}
-				} else {
-					xTimerReset(rx_timeout_timer, 0);
-					vTaskDelay(pdMS_TO_TICKS(1));
-					continue;
-				}
-			} else if (traceswo_send_to_usb(
-						   rx_buf[rx_dma_next_buffer_to_send], data_len, false, allow_drop_buffer)) {
-				Atomic_AND_u32(&rx_dma_buffer_full_mask, ~buffer_bit);
-				if (++rx_dma_next_buffer_to_send >= TRACESWO_RX_DMA_NUMBER_OF_BUFFERS) {
-					rx_dma_next_buffer_to_send = 0;
-				}
-			}
-		} else {
-			break;
-		}
-	}
-}
-
-static void rx_timeout_callback(TimerHandle_t xTimer)
-{
-	(void)(xTimer);
-	if (rx_use_dma) {
-		xTaskNotify(traceswo_task, USB_SERIAL_DATA_RX_TIMEOUT, eSetBits);
-	} else if (swo_current_mode == swo_manchester) {
-		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
-		xTaskNotify(traceswo_task, USB_SERIAL_DATA_RX_FLUSH, eSetBits);
-	}
-}
-
-static bool rx_dma_finish_receiving(void)
-{
-	assert(rx_ongoing != false);
-
-	if (swo_current_mode == swo_nrz_uart) {
-		rp_uart_set_dma_req_enabled(TRACESWO_UART, false, false);
-	} else if (swo_current_mode == swo_manchester)
-	{
-		pio_sm_set_enabled(TRACESWO_PIO, TRACESWO_PIO_SM, false);
-	}
-
-	dma_channel_set_irq0_enabled(rx_dma_ctrl_channel, false);
-	dma_channel_abort(rx_dma_ctrl_channel);
-	dma_channel_acknowledge_irq0(rx_dma_ctrl_channel);
-
-	const uint32_t current_buffer = rx_dma_current_buffer;
-
-	if (++rx_dma_current_buffer >= TRACESWO_RX_DMA_NUMBER_OF_BUFFERS) {
-		rx_dma_current_buffer = 0;
-	}
-
-	xTimerStop(rx_timeout_timer, pdMS_TO_TICKS(0));
-
-	rx_ongoing = false;
-
-	const uint32_t remaining = rp_dma_get_trans_count(rx_dma_channel);
-	const uint32_t data_in_buffer = sizeof(rx_buf[0]) - remaining;
-
-	dma_channel_set_irq0_enabled(rx_dma_channel, false);
-	dma_channel_abort(rx_dma_channel);
-	dma_channel_acknowledge_irq0(rx_dma_channel);
-
-	dma_channel_set_read_addr(rx_dma_ctrl_channel, (void *)(rx_dma_ctrl_block_info + rx_dma_current_buffer), true);
-
-	if (swo_current_mode == swo_nrz_uart) {
-		rp_uart_set_rx_and_timeout_irq_enabled(TRACESWO_UART, true, true);
-	} else if (swo_current_mode == swo_manchester)
-	{
-		rp_dma_set_channel_enabled(rx_dma_channel, false, false);
-
-		pio_sm_set_enabled(TRACESWO_PIO, TRACESWO_PIO_SM, true);
-		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), true);
-	}
-
-	while (1) {
-		const uint32_t buffer_state = rx_dma_buffer_full_mask;
-		const uint32_t buffer_bit = (1u << rx_dma_next_buffer_to_send);
-		if (buffer_state & buffer_bit) {
-			if (traceswo_decoding) {
-				traceswo_decode(rx_buf[rx_dma_next_buffer_to_send],
-					sizeof(rx_buf[rx_dma_next_buffer_to_send]), false, true);
-			} else {
-				traceswo_send_to_usb(rx_buf[rx_dma_next_buffer_to_send],
-					sizeof(rx_buf[rx_dma_next_buffer_to_send]), false, true);
-			}
-
-			Atomic_AND_u32(&rx_dma_buffer_full_mask, ~buffer_bit);
-			if (++rx_dma_next_buffer_to_send >= TRACESWO_RX_DMA_NUMBER_OF_BUFFERS) {
-				rx_dma_next_buffer_to_send = 0;
-			}
-		} else {
-			break;
-		}
-	}
-
-	if ((current_buffer + 1) >= TRACESWO_RX_DMA_NUMBER_OF_BUFFERS) {
-		rx_dma_next_buffer_to_send = 0;
-	} else {
-		rx_dma_next_buffer_to_send = current_buffer + 1;
-	}
-
-	if (traceswo_decoding) {
-		traceswo_decode(rx_buf[current_buffer], data_in_buffer, true, true);
-	} else {
-		traceswo_send_to_usb(rx_buf[current_buffer], data_in_buffer, true, true);
-	}
-
-	return false;
 }
 
 static void rx_int_init(swo_coding_e swo_mode, const uint32_t baudrate)
@@ -461,7 +242,377 @@ static void rx_int_finish(void)
 	{
 		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), true);
 	}
+}
 
+static void dma_rx_init(swo_coding_e swo_mode, const uint32_t baudrate)
+{
+	assert(swo_mode != swo_none);
+
+	if (swo_mode == swo_nrz_uart)
+	{
+		rp_uart_set_dma_req_enabled(TRACESWO_UART, false, false);
+		rp_uart_set_rx_and_timeout_irq_enabled(TRACESWO_UART, false, false);
+		rp_uart_set_int_fifo_levels(TRACESWO_UART, 0, 0);
+	}
+	else if (swo_mode == swo_manchester)
+	{
+		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
+	}
+
+	dma_channel_set_irq0_enabled(rx_dma_ctrl_channel, false);
+	dma_channel_abort(rx_dma_ctrl_channel);
+	dma_channel_acknowledge_irq0(rx_dma_ctrl_channel);
+
+	dma_channel_set_irq0_enabled(rx_dma_channel, false);
+	dma_channel_abort(rx_dma_channel);
+	dma_channel_acknowledge_irq0(rx_dma_channel);
+
+	dma_channel_config rx_ctrl_config = dma_channel_get_default_config(rx_dma_ctrl_channel);
+	channel_config_set_transfer_data_size(&rx_ctrl_config, DMA_SIZE_32);
+	channel_config_set_read_increment(&rx_ctrl_config, true);
+	channel_config_set_write_increment(&rx_ctrl_config, false);
+	channel_config_set_high_priority(&rx_ctrl_config, true);
+	channel_config_set_ring(&rx_ctrl_config, false, 7);
+
+	dma_channel_configure(rx_dma_ctrl_channel, &rx_ctrl_config,
+		rp_dma_get_al2_write_addr_trig(rx_dma_channel),
+		rx_dma_ctrl_block_info, 1, false);
+
+	dma_channel_config rx_config = dma_channel_get_default_config(rx_dma_channel);
+	channel_config_set_transfer_data_size(&rx_config, DMA_SIZE_8);
+	channel_config_set_read_increment(&rx_config, false);
+	channel_config_set_write_increment(&rx_config, true);
+	channel_config_set_high_priority(&rx_config, true);
+	channel_config_set_chain_to(&rx_config, rx_dma_ctrl_channel);
+
+	if (swo_mode == swo_nrz_uart)
+	{
+		channel_config_set_dreq(&rx_config, uart_get_dreq(TRACESWO_UART, false));
+		dma_channel_configure(rx_dma_channel, &rx_config, rx_buf, rp_uart_get_dr_address(TRACESWO_UART),
+			TRACESWO_RX_DMA_BUFFER_SIZE, false);
+	}
+	else if (swo_mode == swo_manchester)
+	{
+		channel_config_set_dreq(&rx_config, pio_get_dreq(TRACESWO_PIO, TRACESWO_PIO_SM, false));
+		dma_channel_configure(rx_dma_channel, &rx_config, rx_buf, (void *)&(TRACESWO_PIO->rxf[0]) + 3,
+			TRACESWO_RX_DMA_BUFFER_SIZE, false);
+	}
+
+	rx_use_dma = true;
+
+	rp_dma_set_channel_enabled(rx_dma_channel, false, false);
+	dma_channel_set_irq0_enabled(rx_dma_channel, true);
+
+	dma_channel_set_read_addr(rx_dma_ctrl_channel, (void *)rx_dma_ctrl_block_info, true);
+
+	/* Calculate timer period - time to fill 2 rx buffers */
+	uint32_t timer_period = (TRACESWO_RX_DMA_BUFFER_SIZE * 2 * 1000); /* 1000 - because we need milliseconds */
+	timer_period /= (baudrate / 10); /* byte rate, 1 data byte = 10 bits (8 data, 1 start and 1 stop) */
+	if (timer_period < TRACESWO_RX_DMA_MIN_TIMEOUT) {
+		timer_period = TRACESWO_RX_DMA_MIN_TIMEOUT;
+	} else if (timer_period > TRACESWO_RX_DMA_MAX_TIMEOUT) {
+		timer_period = TRACESWO_RX_DMA_MAX_TIMEOUT;
+	}
+
+	xTimerChangePeriod(rx_timeout_timer, pdMS_TO_TICKS(timer_period), portMAX_DELAY);
+
+	if (swo_mode == swo_nrz_uart)
+	{
+		rp_uart_set_rx_and_timeout_irq_enabled(TRACESWO_UART, true, true);
+	}
+	else if (swo_mode == swo_manchester)
+	{
+		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), true);
+	}
+}
+
+static BaseType_t rx_dma_start_receiving(void)
+{
+	assert(rx_ongoing == false);
+
+	rx_ongoing = true;
+
+	if (swo_current_mode == swo_nrz_uart) {
+		rp_uart_set_rx_and_timeout_irq_enabled(TRACESWO_UART, false, false);
+		rp_uart_clear_rx_and_rx_timeout_irq_flags(TRACESWO_UART);
+		rp_uart_set_dma_req_enabled(TRACESWO_UART, true, false);
+
+		rp_dma_set_channel_enabled(rx_dma_channel, true, false);
+	} else if (swo_current_mode == swo_manchester) {
+		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
+		rp_dma_set_channel_enabled(rx_dma_channel, true, true);
+	}
+
+	dma_channel_acknowledge_irq0(rx_dma_channel);
+	dma_channel_set_irq0_enabled(rx_dma_channel,  true);
+
+	BaseType_t higher_priority_task_woken = pdFALSE;
+
+	xTimerResetFromISR(rx_timeout_timer, &higher_priority_task_woken);
+	return higher_priority_task_woken;
+}
+
+static void rx_dma_process_buffers(void)
+{
+	xTimerReset(rx_timeout_timer, 0);
+
+	while (1) {
+		const uint32_t buffer_state = rx_dma_buffer_full_mask;
+		const uint32_t buffer_bit = (1u << rx_dma_next_buffer_to_send);
+		const bool allow_drop_buffer = (__builtin_popcount(buffer_state) >= TRACESWO_RX_DMA_DROP_BUFFER_THRESHOLD);
+		const uint32_t data_len = sizeof(rx_buf[rx_dma_next_buffer_to_send]);
+		if (buffer_state & buffer_bit) {
+			if (traceswo_decoding) {
+				if (traceswo_decode(rx_buf[rx_dma_next_buffer_to_send], data_len, false, allow_drop_buffer)) {
+					Atomic_AND_u32(&rx_dma_buffer_full_mask, ~buffer_bit);
+					if (++rx_dma_next_buffer_to_send >= TRACESWO_RX_DMA_NUMBER_OF_BUFFERS) {
+						rx_dma_next_buffer_to_send = 0;
+					}
+				} else {
+					xTimerReset(rx_timeout_timer, 0);
+					vTaskDelay(pdMS_TO_TICKS(1));
+					continue;
+				}
+			} else if (traceswo_send_to_usb(
+						   rx_buf[rx_dma_next_buffer_to_send], data_len, false, allow_drop_buffer)) {
+				Atomic_AND_u32(&rx_dma_buffer_full_mask, ~buffer_bit);
+				if (++rx_dma_next_buffer_to_send >= TRACESWO_RX_DMA_NUMBER_OF_BUFFERS) {
+					rx_dma_next_buffer_to_send = 0;
+				}
+			}
+		} else {
+			break;
+		}
+	}
+}
+
+static bool rx_dma_finish_receiving(void)
+{
+	assert(rx_ongoing != false);
+
+	if (swo_current_mode == swo_nrz_uart) {
+		rp_uart_set_dma_req_enabled(TRACESWO_UART, false, false);
+	} else if (swo_current_mode == swo_manchester)
+	{
+		pio_sm_set_enabled(TRACESWO_PIO, TRACESWO_PIO_SM, false);
+	}
+
+	dma_channel_set_irq0_enabled(rx_dma_ctrl_channel, false);
+	dma_channel_abort(rx_dma_ctrl_channel);
+	dma_channel_acknowledge_irq0(rx_dma_ctrl_channel);
+
+	const uint32_t current_buffer = rx_dma_current_buffer;
+
+	if (++rx_dma_current_buffer >= TRACESWO_RX_DMA_NUMBER_OF_BUFFERS) {
+		rx_dma_current_buffer = 0;
+	}
+
+	xTimerStop(rx_timeout_timer, pdMS_TO_TICKS(0));
+
+	rx_ongoing = false;
+
+	const uint32_t remaining = rp_dma_get_trans_count(rx_dma_channel);
+	const uint32_t data_in_buffer = sizeof(rx_buf[0]) - remaining;
+
+	dma_channel_set_irq0_enabled(rx_dma_channel, false);
+	dma_channel_abort(rx_dma_channel);
+	dma_channel_acknowledge_irq0(rx_dma_channel);
+
+	dma_channel_set_read_addr(rx_dma_ctrl_channel, (void *)(rx_dma_ctrl_block_info + rx_dma_current_buffer), true);
+
+	if (swo_current_mode == swo_nrz_uart) {
+		rp_uart_set_rx_and_timeout_irq_enabled(TRACESWO_UART, true, true);
+	} else if (swo_current_mode == swo_manchester)
+	{
+		rp_dma_set_channel_enabled(rx_dma_channel, false, false);
+
+		pio_sm_set_enabled(TRACESWO_PIO, TRACESWO_PIO_SM, true);
+		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), true);
+	}
+
+	while (1) {
+		const uint32_t buffer_state = rx_dma_buffer_full_mask;
+		const uint32_t buffer_bit = (1u << rx_dma_next_buffer_to_send);
+		if (buffer_state & buffer_bit) {
+			if (traceswo_decoding) {
+				traceswo_decode(rx_buf[rx_dma_next_buffer_to_send],
+					sizeof(rx_buf[rx_dma_next_buffer_to_send]), false, true);
+			} else {
+				traceswo_send_to_usb(rx_buf[rx_dma_next_buffer_to_send],
+					sizeof(rx_buf[rx_dma_next_buffer_to_send]), false, true);
+			}
+
+			Atomic_AND_u32(&rx_dma_buffer_full_mask, ~buffer_bit);
+			if (++rx_dma_next_buffer_to_send >= TRACESWO_RX_DMA_NUMBER_OF_BUFFERS) {
+				rx_dma_next_buffer_to_send = 0;
+			}
+		} else {
+			break;
+		}
+	}
+
+	if ((current_buffer + 1) >= TRACESWO_RX_DMA_NUMBER_OF_BUFFERS) {
+		rx_dma_next_buffer_to_send = 0;
+	} else {
+		rx_dma_next_buffer_to_send = current_buffer + 1;
+	}
+
+	if (traceswo_decoding) {
+		traceswo_decode(rx_buf[current_buffer], data_in_buffer, true, true);
+	} else {
+		traceswo_send_to_usb(rx_buf[current_buffer], data_in_buffer, true, true);
+	}
+
+	return false;
+}
+
+static void rx_timeout_callback(TimerHandle_t xTimer)
+{
+	(void)(xTimer);
+	if (rx_use_dma) {
+		xTaskNotify(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_TIMEOUT, eSetBits);
+	} else if (swo_current_mode == swo_manchester) {
+		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
+		xTaskNotify(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_FLUSH, eSetBits);
+	}
+}
+
+static void traceswo_rx_uart_handler(void)
+{
+	traceISR_ENTER();
+
+	const uint32_t uart_int_status = rp_uart_get_int_status(TRACESWO_UART);
+	assert(uart_int_status != 0);
+
+	uint32_t notify_bits = 0;
+
+	BaseType_t higher_priority_task_woken = pdFALSE;
+
+	if (rx_use_dma == false) {
+		if (uart_int_status & RP_UART_INT_RX_BITS) {
+			for (uint32_t i = 0; i < (TRACESWO_UART_RX_INT_FIFO_LEVEL - 1); i++) {
+				if (rp_uart_is_rx_fifo_empty(TRACESWO_UART)) {
+					break;
+				}
+
+				((uint8_t *)rx_buf)[rx_int_buf_pos++] = rp_uart_read(TRACESWO_UART);
+				if (rx_int_buf_pos >= sizeof(rx_buf)) {
+					rx_int_buf_pos = 0;
+				}
+			}
+
+			rp_uart_clear_rx_irq_flag(TRACESWO_UART);
+			rp_uart_set_rx_irq_enabled(TRACESWO_UART, false);
+			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_AVAILABLE;
+		}
+
+		if (uart_int_status & RP_UART_INT_RX_TIMEOUT_BITS) {
+			rp_uart_clear_rx_timeout_irq_flag(TRACESWO_UART);
+			rp_uart_set_rx_timeout_irq_enabled(TRACESWO_UART, false);
+			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_FLUSH;
+		}
+	} else {
+		higher_priority_task_woken = rx_dma_start_receiving();
+		rp_uart_clear_rx_and_rx_timeout_irq_flags(TRACESWO_UART);
+
+		traceswo_update_led();
+
+		portYIELD_FROM_ISR(higher_priority_task_woken);
+
+		return;
+	}
+
+	xTaskNotifyFromISR(traceswo_task, notify_bits, eSetBits, &higher_priority_task_woken);
+	portYIELD_FROM_ISR(higher_priority_task_woken);
+}
+
+static void traceswo_rx_pio_handler(void)
+{
+	static volatile uint32_t test_count = 0;
+	test_count++;
+	traceISR_ENTER();
+
+	const uint32_t pio_int_status = tap_pio_get_irq0_status(TRACESWO_PIO);
+	assert(pio_int_status != 0);
+
+	uint32_t notify_bits = 0;
+
+	BaseType_t higher_priority_task_woken = pdFALSE;
+
+	if (rx_use_dma == false) {
+		if (pio_int_status & pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM)) {
+
+			while (1)
+			{
+				if (pio_sm_get_rx_fifo_level(TRACESWO_PIO, TRACESWO_PIO_SM) == 0)
+				{
+					break;
+				}
+
+				((uint8_t *)rx_buf)[rx_int_buf_pos++] = pio_sm_get(TRACESWO_PIO, TRACESWO_PIO_SM);
+				if (rx_int_buf_pos >= sizeof(rx_buf)) {
+					rx_int_buf_pos = 0;
+				}
+			}
+
+			pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
+			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_AVAILABLE;
+		}
+	} else {
+		higher_priority_task_woken = rx_dma_start_receiving();
+
+		traceswo_update_led();
+
+		portYIELD_FROM_ISR(higher_priority_task_woken);
+
+		return;
+	}
+
+	xTaskNotifyFromISR(traceswo_task, notify_bits, eSetBits, &higher_priority_task_woken);
+	portYIELD_FROM_ISR(higher_priority_task_woken);
+}
+
+static void traceswo_thread(void *params)
+{
+	uint32_t notificationValue = 0;
+
+	rx_timeout_timer =
+		xTimerCreate("TRACE_RX_TIMEOUT", pdMS_TO_TICKS(TRACESWO_RX_DMA_MAX_TIMEOUT), pdFALSE, NULL, rx_timeout_callback);
+
+	rx_dma_channel = dma_claim_unused_channel(true);
+	rx_dma_ctrl_channel = dma_claim_unused_channel(true);
+
+	memset(&rx_dma_ctrl_block_info, 0, sizeof(rx_dma_ctrl_block_info));
+	for (uint32_t i = 0; i < TRACESWO_RX_DMA_NUMBER_OF_BUFFERS; i++) {
+		rx_dma_ctrl_block_info[i].address = (rx_buf[i]);
+	}
+
+	uint32_t wait_time = TRACESWO_TASK_NOTIFY_WAIT_PERIOD;
+
+	while (1) {
+		if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(wait_time)) == pdPASS) {
+			if (notificationValue & (USB_CDC_NOTIF_SERIAL_RX_AVAILABLE | USB_CDC_NOTIF_SERIAL_RX_FLUSH)) {
+				if (notificationValue & USB_CDC_NOTIF_SERIAL_RX_AVAILABLE) {
+					assert(rx_use_dma == false);
+					rx_int_process();
+				}
+
+				if (notificationValue & USB_CDC_NOTIF_SERIAL_RX_FLUSH) {
+					if (rx_use_dma == false) {
+						rx_int_finish();
+					} else {
+						rx_dma_process_buffers();
+					}
+				}
+			}
+
+			if ((notificationValue & USB_CDC_NOTIF_SERIAL_RX_TIMEOUT) && (rx_ongoing != false)) {
+				rx_dma_finish_receiving();
+			}
+		}
+
+		traceswo_update_led();
+	}
 }
 
 void swo_init(swo_coding_e swo_mode, uint32_t baudrate, uint32_t itm_stream_bitmask)
@@ -511,7 +662,7 @@ void swo_init(swo_coding_e swo_mode, uint32_t baudrate, uint32_t itm_stream_bitm
 		sm_config_set_in_shift(&traceswo_program_config, true, true, 8);
 		sm_config_set_fifo_join(&traceswo_program_config, PIO_FIFO_JOIN_RX);
 
-		tap_pio_common_disable_input_sync(TARGET_SWD_PIO, target_pins->tdo);
+		tap_pio_disable_input_sync(TAP_PIO_SWD, target_pins->tdo);
 
 		irq_handler_t current_handler = irq_get_exclusive_handler(TRACESWO_PIO_IRQ);
 		assert(current_handler == NULL);
@@ -521,7 +672,7 @@ void swo_init(swo_coding_e swo_mode, uint32_t baudrate, uint32_t itm_stream_bitm
 		pio_sm_init(TRACESWO_PIO, TRACESWO_PIO_SM, traceswo_manchester_program.origin, &traceswo_program_config);
 		pio_sm_set_enabled(TRACESWO_PIO, TRACESWO_PIO_SM, true);
 
-		traceswo_pio_baudrate = (tap_pio_common_set_sm_freq(TRACESWO_PIO, TRACESWO_PIO_SM, (baudrate / 2) * TRACESWO_PIO_CLOCKS_IN_ONE_BIT, clock_get_hz(clk_sys))) * 2 / TRACESWO_PIO_CLOCKS_IN_ONE_BIT;
+		traceswo_pio_baudrate = (tap_pio_set_sm_freq(TRACESWO_PIO, TRACESWO_PIO_SM, (baudrate / 2) * TRACESWO_PIO_CLOCKS_IN_ONE_BIT, clock_get_hz(clk_sys))) * 2 / TRACESWO_PIO_CLOCKS_IN_ONE_BIT;
 	}
 
 	if (baudrate >= TRACESWO_RX_DMA_BAUDRATE_THRESHOLD) {
@@ -575,7 +726,7 @@ void swo_deinit(bool deallocate)
 		}
 		else if (swo_current_mode == swo_manchester)
 		{
-			tap_pio_common_disable_all_machines(TRACESWO_PIO);
+			tap_pio_disable_all_machines(TRACESWO_PIO);
 			pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
 
 			pio_clear_instruction_memory(TRACESWO_PIO);
@@ -588,6 +739,18 @@ void swo_deinit(bool deallocate)
 	}
 
 	swo_current_mode = swo_none;
+}
+
+void traceswo_task_init(void)
+{
+#if configUSE_CORE_AFFINITY
+	const BaseType_t result = xTaskCreateAffinitySet(traceswo_thread, "target_trace", TRACESWO_TASK_STACK_SIZE, NULL,
+		PLATFORM_PRIORITY_NORMAL, TRACESWO_TASK_CORE_AFFINITY, &traceswo_task);
+#else
+	const BaseType_t result = xTaskCreate(
+		traceswo_thread, "target_trace", TRACESWO_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_NORMAL, &traceswo_task);
+#endif
+	assert(result == pdPASS);
 }
 
 bool traceswo_uart_is_used(uart_inst_t *uart_instance)
@@ -606,112 +769,6 @@ uint32_t swo_get_baudrate(void)
 	return 0;
 }
 
-_Noreturn static void traceswo_thread(void *params);
-
-void traceswo_task_init(void)
-{
-#if configUSE_CORE_AFFINITY
-	const BaseType_t result = xTaskCreateAffinitySet(traceswo_thread, "target_trace", TRACESWO_TASK_STACK_SIZE, NULL,
-		PLATFORM_PRIORITY_NORMAL, TRACESWO_TASK_CORE_AFFINITY, &traceswo_task);
-#else
-	const BaseType_t result = xTaskCreate(
-		traceswo_thread, "target_trace", TRACESWO_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_NORMAL, &traceswo_task);
-#endif
-	assert(result == pdPASS);
-}
-
-_Noreturn static void traceswo_thread(void *params)
-{
-	uint32_t notificationValue = 0;
-
-	rx_timeout_timer =
-		xTimerCreate("TRACE_RX_TIMEOUT", pdMS_TO_TICKS(TRACESWO_RX_DMA_MAX_TIMEOUT), pdFALSE, NULL, rx_timeout_callback);
-
-	rx_dma_channel = dma_claim_unused_channel(true);
-	rx_dma_ctrl_channel = dma_claim_unused_channel(true);
-
-	memset(&rx_dma_ctrl_block_info, 0, sizeof(rx_dma_ctrl_block_info));
-	for (uint32_t i = 0; i < TRACESWO_RX_DMA_NUMBER_OF_BUFFERS; i++) {
-		rx_dma_ctrl_block_info[i].address = (rx_buf[i]);
-	}
-
-	uint32_t wait_time = TRACESWO_TASK_NOTIFY_WAIT_PERIOD;
-
-	while (1) {
-		if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(wait_time)) == pdPASS) {
-			if (notificationValue & (USB_SERIAL_DATA_RX_AVAILABLE | USB_SERIAL_DATA_RX_FLUSH)) {
-				if (notificationValue & USB_SERIAL_DATA_RX_AVAILABLE) {
-					assert(rx_use_dma == false);
-					rx_int_process();
-				}
-
-				if (notificationValue & USB_SERIAL_DATA_RX_FLUSH) {
-					if (rx_use_dma == false) {
-						rx_int_finish();
-					} else {
-						rx_dma_process_buffers();
-					}
-				}
-			}
-
-			if ((notificationValue & USB_SERIAL_DATA_RX_TIMEOUT) && (rx_ongoing != false)) {
-				rx_dma_finish_receiving();
-			}
-		}
-
-		traceswo_update_led();
-	}
-}
-
-static void traceswo_rx_uart_handler(void)
-{
-	traceISR_ENTER();
-
-	const uint32_t uart_int_status = rp_uart_get_int_status(TRACESWO_UART);
-	assert(uart_int_status != 0);
-
-	uint32_t notify_bits = 0;
-
-	BaseType_t higher_priority_task_woken = pdFALSE;
-
-	if (rx_use_dma == false) {
-		if (uart_int_status & RP_UART_INT_RX_BITS) {
-			for (uint32_t i = 0; i < (TRACESWO_UART_RX_INT_FIFO_LEVEL - 1); i++) {
-				if (rp_uart_is_rx_fifo_empty(TRACESWO_UART)) {
-					break;
-				}
-
-				((uint8_t *)rx_buf)[rx_int_buf_pos++] = rp_uart_read(TRACESWO_UART);
-				if (rx_int_buf_pos >= sizeof(rx_buf)) {
-					rx_int_buf_pos = 0;
-				}
-			}
-
-			rp_uart_clear_rx_irq_flag(TRACESWO_UART);
-			rp_uart_set_rx_irq_enabled(TRACESWO_UART, false);
-			notify_bits |= USB_SERIAL_DATA_RX_AVAILABLE;
-		}
-
-		if (uart_int_status & RP_UART_INT_RX_TIMEOUT_BITS) {
-			rp_uart_clear_rx_timeout_irq_flag(TRACESWO_UART);
-			rp_uart_set_rx_timeout_irq_enabled(TRACESWO_UART, false);
-			notify_bits |= USB_SERIAL_DATA_RX_FLUSH;
-		}
-	} else {
-		higher_priority_task_woken = rx_dma_start_receiving();
-		rp_uart_clear_rx_and_rx_timeout_irq_flags(TRACESWO_UART);
-
-		traceswo_update_led();
-
-		portYIELD_FROM_ISR(higher_priority_task_woken);
-
-		return;
-	}
-
-	xTaskNotifyFromISR(traceswo_task, notify_bits, eSetBits, &higher_priority_task_woken);
-	portYIELD_FROM_ISR(higher_priority_task_woken);
-}
-
 BaseType_t traceswo_rx_dma_handler(void)
 {
 	assert(rx_dma_channel != -1);
@@ -727,54 +784,8 @@ BaseType_t traceswo_rx_dma_handler(void)
 			rx_dma_current_buffer = 0;
 		}
 
-		xTaskNotifyFromISR(traceswo_task, USB_SERIAL_DATA_RX_FLUSH, eSetBits, &higher_priority_task_woken);
+		xTaskNotifyFromISR(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_FLUSH, eSetBits, &higher_priority_task_woken);
 	}
 
 	return higher_priority_task_woken;
-}
-
-static void traceswo_rx_pio_handler(void)
-{
-	static volatile uint32_t test_count = 0;
-	test_count++;
-	traceISR_ENTER();
-
-	const uint32_t pio_int_status = tap_pio_common_get_irq0_status(TRACESWO_PIO);
-	assert(pio_int_status != 0);
-
-	uint32_t notify_bits = 0;
-
-	BaseType_t higher_priority_task_woken = pdFALSE;
-
-	if (rx_use_dma == false) {
-		if (pio_int_status & pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM)) {
-
-			while (1)
-			{
-				if (pio_sm_get_rx_fifo_level(TRACESWO_PIO, TRACESWO_PIO_SM) == 0)
-				{
-					break;
-				}
-
-				((uint8_t *)rx_buf)[rx_int_buf_pos++] = pio_sm_get(TRACESWO_PIO, TRACESWO_PIO_SM);
-				if (rx_int_buf_pos >= sizeof(rx_buf)) {
-					rx_int_buf_pos = 0;
-				}
-			}
-
-			pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
-			notify_bits |= USB_SERIAL_DATA_RX_AVAILABLE;
-		}
-	} else {
-		higher_priority_task_woken = rx_dma_start_receiving();
-
-		traceswo_update_led();
-
-		portYIELD_FROM_ISR(higher_priority_task_woken);
-
-		return;
-	}
-
-	xTaskNotifyFromISR(traceswo_task, notify_bits, eSetBits, &higher_priority_task_woken);
-	portYIELD_FROM_ISR(higher_priority_task_woken);
 }

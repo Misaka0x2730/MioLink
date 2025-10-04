@@ -1,8 +1,7 @@
 /*
- * This file is part of the Black Magic Debug project.
+ * This file is part of the MioLink project.
  *
- * Copyright (C) 2015 Gareth McMullin <gareth@blacksphere.co.nz>
- * Modified by Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
+ * Copyright (C) 2025 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,17 +17,16 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef PLATFORMS_TIMING_RP2040_H
-#define PLATFORMS_TIMING_RP2040_H
-
-#include <stdint.h>
-#include <stdbool.h>
+#ifndef MIOLINK_PLATFORM_SWDTAP_H
+#define MIOLINK_PLATFORM_SWDTAP_H
 
 #include "general.h"
 
-#define PLATFORM_DEFAULT_FREQUENCY (4000000UL)
+void swdptap_seq_out_buffer(const uint32_t *tms_states, const size_t clock_cycles);
 
-void platform_timing_init(void);
-uint32_t platform_timeout_time_left(const platform_timeout_s *target);
+uint8_t swdtap_adiv5_write_no_check(const uint8_t request, const uint32_t data);
+uint8_t swdtap_adiv5_read_no_check(const uint8_t request, uint32_t *data);
+uint8_t swdtap_adiv5_write_check(const uint8_t request, const uint32_t data);
+uint8_t swdtap_adiv5_read_check(const uint8_t request, uint32_t *data, bool *parity);
 
-#endif /* PLATFORMS_TIMING_RP2040_H */
+#endif /* MIOLINK_PLATFORM_SWDTAP_H */

@@ -20,27 +20,32 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "general.h"
-#include "platform.h"
-#include "morse.h"
-#include "timing_rp2040.h"
-#include "usb.h"
 
 #include "hardware/pio.h"
 #include "hardware/clocks.h"
 
+#include "platform.h"
+#include "platform_timing.h"
+
 #include "FreeRTOS.h"
 #include "timers.h"
 
-#include "tap_pio_common.h"
+#include "tap_pio.h"
+#include "usb.h"
+
+#include "morse.h"
 
 bool running_status = false;
+uint32_t target_interface_frequency = PLATFORM_DEFAULT_FREQUENCY;
+
 static volatile uint32_t time_ms = 0;
 
 static size_t morse_tick = 0;
 static uint8_t monitor_ticks = 0;
 static uint8_t monitor_error_count = 0;
 
-uint32_t target_interface_frequency = PLATFORM_DEFAULT_FREQUENCY;
+static void usb_config_morse_msg_update(void);
+static void timing_application_timer_cb(TimerHandle_t xTimer);
 
 static void usb_config_morse_msg_update(void)
 {
@@ -119,7 +124,7 @@ void platform_update_sys_freq(void)
 	set_sys_clock_hz(configCPU_CLOCK_HZ, true);
 }
 
-static uint32_t platform_get_max_interface_freq(void)
+static uint32_t platform_get_interface_periph_clk(void)
 {
 	return clock_get_hz(clk_sys) / 8;
 }
@@ -127,22 +132,21 @@ static uint32_t platform_get_max_interface_freq(void)
 void platform_max_frequency_set(uint32_t freq)
 {
 	for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
-		tap_pio_common_set_sm_freq(TARGET_SWD_PIO, i, freq, platform_get_max_interface_freq());
+		tap_pio_set_sm_freq(TAP_PIO_SWD, i, freq, platform_get_interface_periph_clk());
 	}
 
 	for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
-		target_interface_frequency = tap_pio_common_set_sm_freq(TARGET_JTAG_PIO, i, freq, platform_get_max_interface_freq());
+		target_interface_frequency = tap_pio_set_sm_freq(TAP_PIO_JTAG, i, freq, platform_get_interface_periph_clk());
 	}
 }
 
 uint32_t platform_max_frequency_get(void)
 {
-	const uint32_t interface_freq = platform_get_max_interface_freq();
+	const uint32_t interface_freq = platform_get_interface_periph_clk();
 
-	uint32_t clkdiv_int =
-		(TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].clkdiv & PIO_SM0_CLKDIV_INT_BITS) >> PIO_SM0_CLKDIV_INT_LSB;
+	uint32_t clkdiv_int = (TAP_PIO_SWD->sm[TAP_PIO_SM_SWD].clkdiv & PIO_SM0_CLKDIV_INT_BITS) >> PIO_SM0_CLKDIV_INT_LSB;
 	uint32_t clkdiv_frac =
-		(TARGET_SWD_PIO->sm[TARGET_SWD_PIO_SM].clkdiv & PIO_SM0_CLKDIV_FRAC_BITS) >> PIO_SM0_CLKDIV_FRAC_LSB;
+		(TAP_PIO_SWD->sm[TAP_PIO_SM_SWD].clkdiv & PIO_SM0_CLKDIV_FRAC_BITS) >> PIO_SM0_CLKDIV_FRAC_LSB;
 
 	if (clkdiv_int == 0) {
 		clkdiv_int = ((uint32_t)UINT16_MAX) + 1;

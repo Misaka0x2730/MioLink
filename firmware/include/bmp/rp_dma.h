@@ -1,7 +1,7 @@
 /*
  * This file is part of the MioLink project.
  *
- * Copyright (C) 2024 Dmitry Rezvanov <gareth@blacksphere.co.nz>
+ * Copyright (C) 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@
 #define MIOLINK_RP_DMA_H
 
 #include "general.h"
+
 #include "hardware/dma.h"
 
 static inline void *rp_dma_get_al2_write_addr_trig(const uint32_t dma_channel)
@@ -50,4 +51,4 @@ static inline void rp_dma_set_chain_to(const uint32_t dma_channel, const uint32_
 		DMA_CH0_CTRL_TRIG_CHAIN_TO_BITS);
 }
 
-#endif //MIOLINK_RP_DMA_H
+#endif /* MIOLINK_RP_DMA_H */

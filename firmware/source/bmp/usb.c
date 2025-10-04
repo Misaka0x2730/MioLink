@@ -20,13 +20,18 @@
  */
 
 #include "general.h"
+
 #include "platform.h"
-#include "tusb.h"
+
 #include "FreeRTOS.h"
 #include "task.h"
-#include "serialno.h"
+
+#include "tusb.h"
+
 #include "version.h"
-#include "usb_serial.h"
+#include "usb_cdc.h"
+
+#include "serialno.h"
 
 #define USB_TASK_CORE_AFFINITY (0x01) /* Core 0 only */
 #define USB_TASK_STACK_SIZE    (512)
@@ -547,10 +552,10 @@ extern TaskHandle_t gdb_task;
 
 void tud_cdc_rx_cb(uint8_t interface)
 {
-	if (interface == USB_SERIAL_GDB) {
-		xTaskNotify(gdb_task, USB_SERIAL_DATA_RX, eSetBits);
-	} else if (interface == USB_SERIAL_TARGET) {
-		xTaskNotify(usb_uart_task, USB_SERIAL_DATA_RX, eSetBits);
+	if (interface == USB_CDC_GDB) {
+		xTaskNotify(gdb_task, USB_CDC_NOTIF_USB_RX_AVAILABLE, eSetBits);
+	} else if (interface == USB_CDC_TARGET_SERIAL) {
+		xTaskNotify(usb_uart_task, USB_CDC_NOTIF_USB_RX_AVAILABLE, eSetBits);
 	}
 }
 
@@ -559,18 +564,18 @@ void tud_cdc_line_state_cb(uint8_t interface, bool dtr, bool rts)
 	(void)rts;
 	(void)dtr;
 
-	if (interface == USB_SERIAL_GDB) {
-		xTaskNotify(gdb_task, USB_SERIAL_LINE_STATE_UPDATE, eSetBits);
-	} else if (interface == USB_SERIAL_TARGET) {
-		xTaskNotify(usb_uart_task, USB_SERIAL_LINE_STATE_UPDATE, eSetBits);
+	if (interface == USB_CDC_GDB) {
+		xTaskNotify(gdb_task, USB_CDC_NOTIF_LINE_STATE_UPDATE, eSetBits);
+	} else if (interface == USB_CDC_TARGET_SERIAL) {
+		xTaskNotify(usb_uart_task, USB_CDC_NOTIF_LINE_STATE_UPDATE, eSetBits);
 	}
 }
 
 void tud_cdc_line_coding_cb(uint8_t interface, cdc_line_coding_t const *p_line_coding)
 {
 	(void)p_line_coding;
-	if (interface == USB_SERIAL_TARGET) {
-		xTaskNotify(usb_uart_task, USB_SERIAL_LINE_CODING_UPDATE, eSetBits);
+	if (interface == USB_CDC_TARGET_SERIAL) {
+		xTaskNotify(usb_uart_task, USB_CDC_NOTIF_LINE_CODING_UPDATE, eSetBits);
 	}
 }
 

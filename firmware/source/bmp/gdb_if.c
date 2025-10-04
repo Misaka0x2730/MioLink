@@ -26,21 +26,30 @@
  */
 
 #include "general.h"
+
 #include "platform.h"
-#include "usb.h"
-#include "usb_serial.h"
-#include "tusb.h"
-#include "gdb_if.h"
+#include "platform_timing.h"
+
 #include "FreeRTOS.h"
 #include "task.h"
-#include "timing_rp2040.h"
 
-static uint32_t gdb_to_usb_count;
+#include "tusb.h"
+
+#include "usb_cdc.h"
+#include "usb.h"
+
+#include "gdb_if.h"
+
 static char gdb_to_usb_buf[1024U];
+static uint32_t gdb_to_usb_count = 0;
+
+static uint8_t usb_to_gdb_buf[1024U] = {0};
+static uint32_t usb_to_gdb_count = 0;
+static uint32_t usb_to_gdb_buf_pos = 0;
 
 bool gdb_serial_get_dtr(void)
 {
-	return (tud_cdc_n_get_line_state(USB_SERIAL_GDB) & 0x01) != 0;
+	return (tud_cdc_n_get_line_state(USB_CDC_GDB) & 0x01) != 0;
 }
 
 void gdb_if_putchar(const char character, const bool flush)
@@ -54,30 +63,26 @@ void gdb_if_putchar(const char character, const bool flush)
 			return;
 		}
 
-		uint32_t pos_in = 0;
+		uint32_t buf_pos = 0;
 		while (gdb_to_usb_count > 0) {
-			const uint32_t avail = tud_cdc_n_write_available(USB_SERIAL_GDB);
-			if (avail == 0) {
+			const uint32_t avail = tud_cdc_n_write_available(USB_CDC_GDB);
+			const uint32_t bytes_to_write = MIN(avail, gdb_to_usb_count);
+
+			if (bytes_to_write == 0) {
+				/* Nothing can be written right now, wait a bit */
 				vTaskDelay(pdMS_TO_TICKS(1));
-			} else if (avail >= gdb_to_usb_count) {
-				tud_cdc_n_write(USB_SERIAL_GDB, gdb_to_usb_buf + pos_in, gdb_to_usb_count);
-				gdb_to_usb_count = 0;
 			} else {
-				uint32_t written = tud_cdc_n_write(USB_SERIAL_GDB, gdb_to_usb_buf + pos_in, avail);
-				pos_in += written;
-				gdb_to_usb_count -= avail;
+				const uint32_t written_bytes = tud_cdc_n_write(USB_CDC_GDB, gdb_to_usb_buf + buf_pos, bytes_to_write);
+				buf_pos += written_bytes;
+				gdb_to_usb_count -= written_bytes;
 			}
 		}
 
 		if (flush) {
-			tud_cdc_n_write_flush(USB_SERIAL_GDB);
+			tud_cdc_n_write_flush(USB_CDC_GDB);
 		}
 	}
 }
-
-static uint8_t usb_to_gdb_buf[1024U] = {0};
-static uint32_t usb_to_gdb_count = 0;
-static uint32_t usb_to_gdb_buf_pos = 0;
 
 char gdb_if_getchar(void)
 {
@@ -99,15 +104,14 @@ char gdb_if_getchar(void)
 		usb_to_gdb_buf_pos = 0;
 		usb_to_gdb_count = 0;
 
-		if (tud_cdc_n_available(USB_SERIAL_GDB) > 0) {
-			usb_to_gdb_count = tud_cdc_n_read(USB_SERIAL_GDB, usb_to_gdb_buf, sizeof(usb_to_gdb_buf));
+		if (tud_cdc_n_available(USB_CDC_GDB) > 0) {
+			usb_to_gdb_count = tud_cdc_n_read(USB_CDC_GDB, usb_to_gdb_buf, sizeof(usb_to_gdb_buf));
 			continue;
 		}
 
 		if (xTaskNotifyWait(0, UINT32_MAX, &notification_value, pdMS_TO_TICKS(portMAX_DELAY)) != pdFALSE) {
-			if (notification_value & USB_SERIAL_DATA_RX) {
-				usb_to_gdb_count = tud_cdc_n_read(USB_SERIAL_GDB, usb_to_gdb_buf, sizeof(usb_to_gdb_buf));
-				continue;
+			if (notification_value & USB_CDC_NOTIF_USB_RX_AVAILABLE) {
+				usb_to_gdb_count = tud_cdc_n_read(USB_CDC_GDB, usb_to_gdb_buf, sizeof(usb_to_gdb_buf));
 			}
 		}
 	} while (1);
@@ -132,8 +136,8 @@ char gdb_if_getchar_to(const uint32_t timeout)
 	usb_to_gdb_buf_pos = 0;
 	usb_to_gdb_count = 0;
 
-	if (tud_cdc_n_available(USB_SERIAL_GDB) > 0) {
-		usb_to_gdb_count = tud_cdc_n_read(USB_SERIAL_GDB, usb_to_gdb_buf, sizeof(usb_to_gdb_buf));
+	if (tud_cdc_n_available(USB_CDC_GDB) > 0) {
+		usb_to_gdb_count = tud_cdc_n_read(USB_CDC_GDB, usb_to_gdb_buf, sizeof(usb_to_gdb_buf));
 		if (usb_to_gdb_count > 0) {
 			return (char)usb_to_gdb_buf[usb_to_gdb_buf_pos++];
 		}
@@ -145,17 +149,16 @@ char gdb_if_getchar_to(const uint32_t timeout)
 	while (!platform_timeout_is_expired(&receive_timeout)) {
 		const uint32_t timeout_left = platform_timeout_time_left(&receive_timeout);
 
-		if ((timeout_left == 0) ||
-			(xTaskNotifyWait(0, UINT32_MAX, &notification_value, pdMS_TO_TICKS(timeout_left)) != pdFALSE)) {
-			if (notification_value & USB_SERIAL_DATA_RX) {
-				usb_to_gdb_count = tud_cdc_n_read(USB_SERIAL_GDB, usb_to_gdb_buf, sizeof(usb_to_gdb_buf));
+		if (timeout_left == 0) {
+			break;
+		}
+
+		if (xTaskNotifyWait(0, UINT32_MAX, &notification_value, pdMS_TO_TICKS(timeout_left)) != pdFALSE) {
+			if (notification_value & USB_CDC_NOTIF_USB_RX_AVAILABLE) {
+				usb_to_gdb_count = tud_cdc_n_read(USB_CDC_GDB, usb_to_gdb_buf, sizeof(usb_to_gdb_buf));
 				if (usb_to_gdb_count > 0) {
 					return (char)usb_to_gdb_buf[usb_to_gdb_buf_pos++];
 				}
-			}
-
-			if (timeout_left == 0) {
-				break;
 			}
 		}
 	}

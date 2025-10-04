@@ -19,10 +19,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef PLATFORMS_COMMON_TRACESWO_H
-#define PLATFORMS_COMMON_TRACESWO_H
+#ifndef MIOLINK_SWO_H
+#define MIOLINK_SWO_H
 
 #include <stdlib.h>
+
+#include "hardware/uart.h"
+
 #include "FreeRTOS.h"
 
 #define TRACESWO_UART      (uart0)
@@ -61,4 +64,4 @@ BaseType_t traceswo_rx_dma_handler(void);
 
 bool traceswo_uart_is_used(uart_inst_t *uart_instance);
 
-#endif /* PLATFORMS_COMMON_TRACESWO_H */
+#endif /* MIOLINK_SWO_H */

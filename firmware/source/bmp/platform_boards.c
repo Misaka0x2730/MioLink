@@ -23,11 +23,14 @@
 
 #include "hardware/gpio.h"
 #include "hardware/adc.h"
+#include "hardware/sync.h"
 #include "pico/cyw43_arch.h"
 
 #include "platform.h"
+
 #include "version.h"
-#include "hardware/sync.h"
+
+#define BOARD_IDENT_FORMAT "Black Magic Probe %s%s"
 
 static platform_device_type_t device_type = PLATFORM_DEVICE_TYPE_NOT_SET;
 
@@ -43,7 +46,7 @@ static const platform_target_pins_t miolink_rev_a_target_pins = {.tck = MIOLINK_
 	.uart_tx = MIOLINK_REVA_TARGET_UART_TX_PIN,
 	.uart_rx = MIOLINK_REVA_TARGET_UART_RX_PIN,
 	.reset = MIOLINK_REVA_TARGET_NRST_PIN,
-	.reset_inverted = true};
+	.reset_state = true};
 
 static const platform_led_pins_t miolink_rev_a_led_pins = {
 	.act = MIOLINK_REVA_LED_ACT_PIN, .ser = MIOLINK_REVA_LED_SER_PIN, .err = MIOLINK_REVA_LED_ERR_PIN};
@@ -61,7 +64,7 @@ static const platform_target_pins_t miolink_rev_b_target_pins = {.tck = MIOLINK_
 	.uart_tx = MIOLINK_REVB_TARGET_UART_TX_PIN,
 	.uart_rx = MIOLINK_REVB_TARGET_UART_RX_PIN,
 	.reset = MIOLINK_REVB_TARGET_NRST_PIN,
-	.reset_inverted = true};
+	.reset_state = true};
 
 static const platform_led_pins_t miolink_rev_b_led_pins = {
 	.act = MIOLINK_REVB_LED_ACT_PIN, .ser = MIOLINK_REVB_LED_SER_PIN, .err = MIOLINK_REVB_LED_ERR_PIN};
@@ -79,7 +82,7 @@ static const platform_target_pins_t miolink_pico_target_pins = {.tck = MIOLINK_P
 	.uart_tx = MIOLINK_PICO_TARGET_UART_TX_PIN,
 	.uart_rx = MIOLINK_PICO_TARGET_UART_RX_PIN,
 	.reset = MIOLINK_PICO_TARGET_NRST_PIN,
-	.reset_inverted = true};
+	.reset_state = true};
 
 static const platform_led_pins_t miolink_pico_led_pins = {
 	.act = MIOLINK_PICO_LED_ACT_PIN, .ser = MIOLINK_PICO_LED_SER_PIN, .err = MIOLINK_PICO_LED_ERR_PIN};
@@ -97,7 +100,7 @@ static const platform_target_pins_t pico_target_pins = {.tck = PICO_TARGET_TCK_P
 	.uart_tx = PICO_TARGET_UART_TX_PIN,
 	.uart_rx = PICO_TARGET_UART_RX_PIN,
 	.reset = PICO_TARGET_NRST_PIN,
-	.reset_inverted = false};
+	.reset_state = false};
 
 static const platform_led_pins_t pico_led_pins = {
 	.act = PICO_LED_ACT_PIN, .ser = PIN_NOT_CONNECTED, .err = PIN_NOT_CONNECTED};
@@ -181,13 +184,17 @@ const platform_target_pins_t *platform_get_target_pins(void)
 	const platform_target_pins_t *p_pins = NULL;
 
 	switch (device_type) {
-	case PLATFORM_DEVICE_TYPE_MIOLINK:
-		if (platform_hwversion() == PLATFORM_MIOLINK_REV_A) {
+	case PLATFORM_DEVICE_TYPE_MIOLINK: {
+		const int hw_version = platform_hwversion();
+		if (hw_version == PLATFORM_MIOLINK_REV_A) {
 			p_pins = &miolink_rev_a_target_pins;
-		} else {
+		} else if (hw_version == PLATFORM_MIOLINK_REV_B) {
 			p_pins = &miolink_rev_b_target_pins;
+		} else {
+			assert(false);
 		}
 		break;
+	}
 
 	case PLATFORM_DEVICE_TYPE_MIOLINK_PICO:
 		p_pins = &miolink_pico_target_pins;
@@ -264,8 +271,6 @@ const platform_vtref_info_t *platform_get_vtref_info(void)
 
 	return p_vtref_info;
 }
-
-#define BOARD_IDENT_FORMAT "Black Magic Probe %s%s"
 
 void platform_make_board_ident(void)
 {

@@ -24,8 +24,8 @@
  *
  */
 
-#ifndef TUSB_CONFIG_H
-#define TUSB_CONFIG_H
+#ifndef MIOLINK_TUSB_CONFIG_H
+#define MIOLINK_TUSB_CONFIG_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -118,4 +118,4 @@ extern "C" {
 }
 #endif
 
-#endif /* TUSB_CONFIG_H */
+#endif /* MIOLINK_TUSB_CONFIG_H */

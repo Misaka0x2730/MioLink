@@ -1,7 +1,8 @@
 /*
- * This file is part of the MioLink project.
+ * This file is part of the Black Magic Debug project.
  *
- * Copyright (C) 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
+ * Copyright (C) 2015 Gareth McMullin <gareth@blacksphere.co.nz>
+ * Modified by Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,11 +18,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef MIOLINK_VERSION_H
-#define MIOLINK_VERSION_H
+#ifndef MIOLINK_PLATFORM_TIMING_H
+#define MIOLINK_PLATFORM_TIMING_H
 
-#include "git_version.h"
+#include "general.h"
 
-#define FIRMWARE_VERSION GIT_MIOLINK_VERSION ", BMP " GIT_BMP_VERSION ", FreeRTOS " GIT_FREERTOS_VERSION
+#define PLATFORM_DEFAULT_FREQUENCY (4000000UL)
 
-#endif /* MIOLINK_VERSION_H */
+void platform_timing_init(void);
+uint32_t platform_timeout_time_left(const platform_timeout_s *target);
+
+#endif /* MIOLINK_PLATFORM_TIMING_H */

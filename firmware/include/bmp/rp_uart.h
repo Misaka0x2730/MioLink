@@ -1,7 +1,7 @@
 /*
  * This file is part of the MioLink project.
  *
- * Copyright (C) 2024 Dmitry Rezvanov <gareth@blacksphere.co.nz>
+ * Copyright (C) 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@
 #define MIOLINK_RP_UART_H
 
 #include "general.h"
+
 #include "hardware/clocks.h"
 #include "hardware/uart.h"
 
@@ -107,4 +108,4 @@ static inline bool rp_uart_is_transmitting(uart_inst_t *uart)
 	return ((uart_get_hw(uart)->fr & UART_UARTFR_BUSY_BITS) != 0);
 }
 
-#endif //MIOLINK_RP_UART_H
+#endif /* MIOLINK_RP_UART_H */
