@@ -1,7 +1,7 @@
 /*
  * This file is part of the MioLink project.
  *
- * Copyright (C) 2024 Dmitry Rezvanov <gareth@blacksphere.co.nz>
+ * Copyright (C) 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
