@@ -20,9 +20,10 @@
  */
 
 #include "general.h"
-#include "platform.h"
 
 #include "hardware/pio.h"
+
+#include "platform.h"
 
 #include "tap_pio.h"
 

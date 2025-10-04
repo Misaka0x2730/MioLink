@@ -24,21 +24,17 @@
 /* This file implements the low-level JTAG TAP interface.  */
 
 #include "general.h"
+
 #include "platform.h"
 
 #include "tap_pio.h"
+
 #include "jtagtap.h"
+
 #include "pio_jtag.pio.h"
 
 #define TARGET_JTAG_TICKS_NO_FINAL(ticks) (ticks - 1)
 #define TARGET_JTAG_TICKS_FINAL(ticks)    (ticks - 2)
-
-static void jtagtap_reset(void);
-static void jtagtap_tms_seq(uint32_t tms_states, size_t ticks);
-static void jtagtap_tdi_tdo_seq(uint8_t *data_out, bool final_tms, const uint8_t *data_in, size_t clock_cycles);
-static void jtagtap_tdi_seq(bool final_tms, const uint8_t *data_in, size_t clock_cycles);
-static bool jtagtap_next(bool tms, bool tdi);
-static void jtagtap_cycle(bool tms, bool tdi, size_t clock_cycles);
 
 typedef enum {
 	TARGET_JTAG_SET_INITIAL_0 = 0,
@@ -52,7 +48,13 @@ typedef enum {
 } target_jtag_set_final_t;
 
 jtag_proc_s jtag_proc;
-extern uint32_t target_interface_frequency;
+
+static void jtagtap_reset(void);
+static void jtagtap_tms_seq(uint32_t tms_states, size_t ticks);
+static void jtagtap_tdi_tdo_seq(uint8_t *data_out, bool final_tms, const uint8_t *data_in, size_t clock_cycles);
+static void jtagtap_tdi_seq(bool final_tms, const uint8_t *data_in, size_t clock_cycles);
+static bool jtagtap_next(bool tms, bool tdi);
+static void jtagtap_cycle(bool tms, bool tdi, size_t clock_cycles);
 
 void jtagtap_init(void)
 {
@@ -119,7 +121,7 @@ void jtagtap_init(void)
 	pio_sm_init(TAP_PIO_JTAG, TAP_PIO_SM_JTAG_TMS_SEQ, target_jtag_program.origin, &prog_config);
 	pio_sm_set_enabled(TAP_PIO_JTAG, TAP_PIO_SM_JTAG_TMS_SEQ, false);
 
-	platform_max_frequency_set(target_interface_frequency);
+	platform_max_frequency_set(platform_max_frequency_get());
 
 	jtag_proc.jtagtap_reset = jtagtap_reset;
 	jtag_proc.jtagtap_next = jtagtap_next;

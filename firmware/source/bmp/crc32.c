@@ -28,7 +28,9 @@
 
 static int crc_dma_channel = -1;
 
-static bool rp2040_crc32(target_s *const target, uint32_t *const result, const uint32_t base, const size_t len)
+static bool platform_crc32(target_s *const target, uint32_t *const result, const uint32_t base, const size_t len);
+
+static bool platform_crc32(target_s *const target, uint32_t *const result, const uint32_t base, const size_t len)
 {
 	uint8_t bytes[2048U]; /* ADIv5 MEM-AP AutoInc range */
 
@@ -97,7 +99,7 @@ bool bmd_crc32(target_s *const target, uint32_t *const result, const uint32_t ba
 #ifndef DEBUG_INFO_IS_NOOP
 	const uint32_t start_time = platform_time_ms();
 #endif
-	const bool status = rp2040_crc32(target, result, base, len);
+	const bool status = platform_crc32(target, result, base, len);
 
 #ifndef DEBUG_INFO_IS_NOOP
 	const uint32_t end_time = platform_time_ms();

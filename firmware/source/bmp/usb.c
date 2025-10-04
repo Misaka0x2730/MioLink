@@ -20,15 +20,18 @@
  */
 
 #include "general.h"
+
 #include "platform.h"
 
-#include "tusb.h"
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "serialno.h"
+#include "tusb.h"
+
 #include "version.h"
 #include "usb_cdc.h"
+
+#include "serialno.h"
 
 #define USB_TASK_CORE_AFFINITY (0x01) /* Core 0 only */
 #define USB_TASK_STACK_SIZE    (512)

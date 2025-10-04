@@ -20,12 +20,13 @@
  */
 
 #include "general.h"
-#include "platform.h"
 
 #include "hardware/gpio.h"
 #include "hardware/adc.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
+
+#include "platform.h"
 
 static int adc_target_voltage_dma_chan = -1;
 static uint8_t adc_target_voltage_buf[250] = {0};

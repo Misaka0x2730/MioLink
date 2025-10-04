@@ -26,11 +26,12 @@
  */
 
 #include "general.h"
+
 #include "platform.h"
+#include "platform_timing.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include "platform_timing.h"
 
 #include "tusb.h"
 

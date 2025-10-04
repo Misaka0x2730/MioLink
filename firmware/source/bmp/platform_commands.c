@@ -20,17 +20,18 @@
  */
 
 #include "general.h"
+
 #include "platform.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "usb_serial.h"
-#include "swo.h"
-
 #include "command.h"
 #include "target_internal.h"
 #include "gdb_packet.h"
+
+#include "swo.h"
+#include "usb_serial.h"
 
 static bool cmd_uart_on_tdi_tdo(target_s *target, int argc, const char **argv);
 static bool cmd_rtos_heapinfo(target_s *target, int argc, const char **argv);

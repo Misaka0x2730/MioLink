@@ -21,13 +21,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "general.h"
-#include "platform.h"
 
 #include "hardware/clocks.h"
 #include "hardware/uart.h"
-
 #include "rp_uart.h"
 #include "rp_dma.h"
+
+#include "platform.h"
 
 #include "FreeRTOS.h"
 #include "atomic.h"

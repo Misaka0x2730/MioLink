@@ -24,18 +24,19 @@
 #include "general.h"
 
 #include "hardware/pio.h"
+
 #include "platform.h"
+#include "platform_swdtap.h"
+
 #include "tap_pio.h"
+
+#include "swd.h"
 #include "maths_utils.h"
 
 #include "pio_swd_miolink_rev_a.pio.h"
 #include "pio_swd_miolink_rev_b.pio.h"
 #include "pio_swd_miolink_pico.pio.h"
 #include "pio_swd_pico.pio.h"
-
-#include "swd.h"
-#include "platform_swdtap.h"
-
 
 #define SWDP_ACK_OK (0x01U)
 

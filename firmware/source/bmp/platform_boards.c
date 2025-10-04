@@ -20,12 +20,13 @@
  */
 
 #include "general.h"
-#include "platform.h"
 
 #include "hardware/gpio.h"
 #include "hardware/adc.h"
 #include "hardware/sync.h"
 #include "pico/cyw43_arch.h"
+
+#include "platform.h"
 
 #include "version.h"
 

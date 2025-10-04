@@ -21,13 +21,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "general.h"
-#include "platform.h"
 
 #include "hardware/clocks.h"
 #include "hardware/uart.h"
-
+#include "hardware/pio.h"
 #include "rp_uart.h"
 #include "rp_dma.h"
+
+#include "platform.h"
 
 #include "FreeRTOS.h"
 #include "atomic.h"
@@ -36,14 +37,13 @@
 
 #include "tusb.h"
 
+#include "tap_pio.h"
 #include "usb_cdc.h"
 #include "usb_serial.h"
-
 #include "swo.h"
+
 #include "gdb_packet.h"
 
-#include "hardware/pio.h"
-#include "tap_pio.h"
 #include "pio_traceswo_manchester.pio.h"
 
 #define TRACESWO_UART_RX_INT_FIFO_LEVEL (16)

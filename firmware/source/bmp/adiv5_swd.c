@@ -27,13 +27,13 @@
 
 #include "general.h"
 
+#include "platform_swdtap.h"
+
 #include "exception.h"
 #include "adiv5.h"
 #include "swd.h"
 #include "target.h"
 #include "target_internal.h"
-
-#include "platform_swdtap.h"
 
 uint8_t make_packet_request(const uint8_t rnw, const uint16_t addr)
 {

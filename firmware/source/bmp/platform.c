@@ -20,16 +20,17 @@
  */
 
 #include "general.h"
-#include "platform.h"
 
 #include "hardware/gpio.h"
 #include "pico/bootrom.h"
 #include "pico/cyw43_arch.h"
 
+#include "platform.h"
+#include "platform_timing.h"
+
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "platform_timing.h"
 #include "serialno.h"
 
 static bool idle_state = false;
@@ -134,6 +135,8 @@ void platform_init(void)
 
 	platform_vtref_init();
 	platform_timing_init();
+
+	platform_max_frequency_set(PLATFORM_DEFAULT_FREQUENCY);
 }
 
 void platform_nrst_set_val(bool assert)

@@ -20,20 +20,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "general.h"
-#include "platform.h"
 
 #include "hardware/pio.h"
 #include "hardware/clocks.h"
 
-#include "tap_pio.h"
+#include "platform.h"
+#include "platform_timing.h"
 
 #include "FreeRTOS.h"
 #include "timers.h"
 
-#include "platform_timing.h"
-#include "morse.h"
-
+#include "tap_pio.h"
 #include "usb.h"
+
+#include "morse.h"
 
 bool running_status = false;
 uint32_t target_interface_frequency = PLATFORM_DEFAULT_FREQUENCY;
