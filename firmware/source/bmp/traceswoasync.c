@@ -75,20 +75,6 @@
 #define TRACESWO_TASK_CORE_AFFINITY (0x01) /* Core 0 only */
 #define TRACESWO_TASK_STACK_SIZE    (512)
 
-static uint8_t rx_buf[TRACESWO_RX_DMA_NUMBER_OF_BUFFERS][TRACESWO_RX_DMA_BUFFER_SIZE] = {0};
-static uint32_t rx_int_buf_pos = 0;
-static xTimerHandle rx_timeout_timer;
-static uint32_t rx_dma_buffer_full_mask = 0;
-static uint32_t rx_dma_current_buffer = 0;
-static bool rx_use_dma = false;
-static int rx_dma_channel = -1;
-static int rx_dma_ctrl_channel = -1;
-static uint32_t rx_dma_next_buffer_to_send = 0;
-static bool rx_ongoing = false;
-
-/* Current SWO decoding mode being used */
-swo_coding_e swo_current_mode = swo_none;
-
 static struct {
 	uint8_t *address;
 } rx_dma_ctrl_block_info[TRACESWO_RX_DMA_NUMBER_OF_BUFFERS + 1]
@@ -98,17 +84,45 @@ typedef enum {
 	TRACESWO_PIO_SM = 0,
 } traceswo_pio_sm;
 
+static uint8_t rx_buf[TRACESWO_RX_DMA_NUMBER_OF_BUFFERS][TRACESWO_RX_DMA_BUFFER_SIZE] = {0};
+static bool rx_ongoing = false;
+static bool rx_use_dma = false;
+static xTimerHandle rx_timeout_timer;
 
 static uint32_t traceswo_pio_baudrate = 0;
-
 static bool traceswo_decoding = false;
-
 static TaskHandle_t traceswo_task;
 
+static uint32_t rx_int_buf_pos = 0;
+
+static uint32_t rx_dma_buffer_full_mask = 0;
+static uint32_t rx_dma_current_buffer = 0;
+static int rx_dma_channel = -1;
+static int rx_dma_ctrl_channel = -1;
+static uint32_t rx_dma_next_buffer_to_send = 0;
+
+/* Current SWO decoding mode being used */
+swo_coding_e swo_current_mode = swo_none;
+
+static void traceswo_update_led(void);
+static bool traceswo_send_to_usb(uint8_t *data, const size_t len, const bool flush, const bool allow_drop_buffer);
+
+static void rx_int_init(swo_coding_e swo_mode, const uint32_t baudrate);
+static void rx_int_process(void);
+static void rx_int_finish(void);
+
+static void dma_rx_init(swo_coding_e swo_mode, const uint32_t baudrate);
+static BaseType_t rx_dma_start_receiving(void);
+static void rx_dma_process_buffers(void);
+static bool rx_dma_finish_receiving(void);
+
+static void rx_timeout_callback(TimerHandle_t xTimer);
 static void traceswo_rx_uart_handler(void);
 static void traceswo_rx_pio_handler(void);
 
-void traceswo_update_led(void)
+static void traceswo_thread(void *params);
+
+static void traceswo_update_led(void)
 {
 	platform_set_serial_state(rx_ongoing);
 }
@@ -132,6 +146,102 @@ static bool traceswo_send_to_usb(uint8_t *data, const size_t len, const bool flu
 	}
 
 	return result;
+}
+
+static void rx_int_init(swo_coding_e swo_mode, const uint32_t baudrate)
+{
+	rx_use_dma = false;
+
+	if (swo_mode == swo_nrz_uart)
+	{
+		/* Set RX FIFO level to 1/2 */
+		rp_uart_set_int_fifo_levels(TRACESWO_UART, 2, 0);
+		rp_uart_set_rx_and_timeout_irq_enabled(TRACESWO_UART, true, true);
+	}
+	else if (swo_mode == swo_manchester)
+	{
+		xTimerChangePeriod(rx_timeout_timer, pdMS_TO_TICKS(TRACESWO_RX_INT_PIO_TIMEOUT), portMAX_DELAY);
+
+		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), true);
+	}
+}
+
+static void rx_int_process(void)
+{
+	if (rx_int_buf_pos > 0) {
+		if ((traceswo_decoding) && (rx_int_buf_pos >= TRACESWO_DECODE_THRESHOLD)) {
+			/* write decoded swo packets to the uart port */
+			traceswo_decode(rx_buf, rx_int_buf_pos, false, true);
+
+			rx_int_buf_pos = 0;
+		} else if (traceswo_send_to_usb((uint8_t *)(rx_buf), rx_int_buf_pos, false, true) != false) {
+			rx_int_buf_pos = 0;
+		}
+
+		rx_ongoing = true;
+	}
+
+	if (swo_current_mode == swo_nrz_uart) {
+		rp_uart_set_rx_irq_enabled(TRACESWO_UART, true);
+	} else if (swo_current_mode == swo_manchester)
+	{
+		xTimerReset(rx_timeout_timer, 0);
+		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), true);
+	}
+}
+
+static void rx_int_finish(void)
+{
+	if (rx_int_buf_pos > 0) {
+		traceswo_send_to_usb((uint8_t *)(rx_buf), rx_int_buf_pos, false, true);
+		rx_int_buf_pos = 0;
+	}
+
+	if (swo_current_mode == swo_nrz_uart) {
+		while (rp_uart_is_rx_fifo_empty(TRACESWO_UART) == false) {
+			((uint8_t *)rx_buf)[rx_int_buf_pos++] = rp_uart_read(TRACESWO_UART);
+
+			if (rx_int_buf_pos >= sizeof(rx_buf)) {
+				rx_int_buf_pos = 0;
+			}
+		}
+	} else if (swo_current_mode == swo_manchester)
+	{
+		xTimerStop(rx_timeout_timer, pdMS_TO_TICKS(0));
+
+		while (1)
+		{
+			if (pio_sm_get_rx_fifo_level(TRACESWO_PIO, TRACESWO_PIO_SM) == 0)
+			{
+				break;
+			}
+
+			((uint8_t *)rx_buf)[rx_int_buf_pos++] = pio_sm_get(TRACESWO_PIO, TRACESWO_PIO_SM);
+			if (rx_int_buf_pos >= sizeof(rx_buf)) {
+				rx_int_buf_pos = 0;
+			}
+		}
+	}
+
+	if (rx_int_buf_pos > 0) {
+		if (traceswo_decoding) {
+			/* write decoded swo packets to the uart port */
+			traceswo_decode(rx_buf, rx_int_buf_pos, true, true);
+		} else {
+			traceswo_send_to_usb((uint8_t *)(rx_buf), rx_int_buf_pos, true, true);
+		}
+
+		rx_int_buf_pos = 0;
+	}
+
+	rx_ongoing = false;
+
+	if (swo_current_mode == swo_nrz_uart) {
+		rp_uart_set_rx_timeout_irq_enabled(TRACESWO_UART, true);
+	} else if (swo_current_mode == swo_manchester)
+	{
+		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), true);
+	}
 }
 
 static void dma_rx_init(swo_coding_e swo_mode, const uint32_t baudrate)
@@ -276,17 +386,6 @@ static void rx_dma_process_buffers(void)
 	}
 }
 
-static void rx_timeout_callback(TimerHandle_t xTimer)
-{
-	(void)(xTimer);
-	if (rx_use_dma) {
-		xTaskNotify(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_TIMEOUT, eSetBits);
-	} else if (swo_current_mode == swo_manchester) {
-		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
-		xTaskNotify(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_FLUSH, eSetBits);
-	}
-}
-
 static bool rx_dma_finish_receiving(void)
 {
 	assert(rx_ongoing != false);
@@ -367,101 +466,153 @@ static bool rx_dma_finish_receiving(void)
 	return false;
 }
 
-static void rx_int_init(swo_coding_e swo_mode, const uint32_t baudrate)
+static void rx_timeout_callback(TimerHandle_t xTimer)
 {
-	rx_use_dma = false;
-
-	if (swo_mode == swo_nrz_uart)
-	{
-		/* Set RX FIFO level to 1/2 */
-		rp_uart_set_int_fifo_levels(TRACESWO_UART, 2, 0);
-		rp_uart_set_rx_and_timeout_irq_enabled(TRACESWO_UART, true, true);
-	}
-	else if (swo_mode == swo_manchester)
-	{
-		xTimerChangePeriod(rx_timeout_timer, pdMS_TO_TICKS(TRACESWO_RX_INT_PIO_TIMEOUT), portMAX_DELAY);
-
-		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), true);
+	(void)(xTimer);
+	if (rx_use_dma) {
+		xTaskNotify(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_TIMEOUT, eSetBits);
+	} else if (swo_current_mode == swo_manchester) {
+		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
+		xTaskNotify(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_FLUSH, eSetBits);
 	}
 }
 
-static void rx_int_process(void)
+static void traceswo_rx_uart_handler(void)
 {
-	if (rx_int_buf_pos > 0) {
-		if ((traceswo_decoding) && (rx_int_buf_pos >= TRACESWO_DECODE_THRESHOLD)) {
-			/* write decoded swo packets to the uart port */
-			traceswo_decode(rx_buf, rx_int_buf_pos, false, true);
+	traceISR_ENTER();
 
-			rx_int_buf_pos = 0;
-		} else if (traceswo_send_to_usb((uint8_t *)(rx_buf), rx_int_buf_pos, false, true) != false) {
-			rx_int_buf_pos = 0;
-		}
+	const uint32_t uart_int_status = rp_uart_get_int_status(TRACESWO_UART);
+	assert(uart_int_status != 0);
 
-		rx_ongoing = true;
-	}
+	uint32_t notify_bits = 0;
 
-	if (swo_current_mode == swo_nrz_uart) {
-		rp_uart_set_rx_irq_enabled(TRACESWO_UART, true);
-	} else if (swo_current_mode == swo_manchester)
-	{
-		xTimerReset(rx_timeout_timer, 0);
-		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), true);
-	}
-}
+	BaseType_t higher_priority_task_woken = pdFALSE;
 
-static void rx_int_finish(void)
-{
-	if (rx_int_buf_pos > 0) {
-		traceswo_send_to_usb((uint8_t *)(rx_buf), rx_int_buf_pos, false, true);
-		rx_int_buf_pos = 0;
-	}
+	if (rx_use_dma == false) {
+		if (uart_int_status & RP_UART_INT_RX_BITS) {
+			for (uint32_t i = 0; i < (TRACESWO_UART_RX_INT_FIFO_LEVEL - 1); i++) {
+				if (rp_uart_is_rx_fifo_empty(TRACESWO_UART)) {
+					break;
+				}
 
-	if (swo_current_mode == swo_nrz_uart) {
-		while (rp_uart_is_rx_fifo_empty(TRACESWO_UART) == false) {
-			((uint8_t *)rx_buf)[rx_int_buf_pos++] = rp_uart_read(TRACESWO_UART);
-
-			if (rx_int_buf_pos >= sizeof(rx_buf)) {
-				rx_int_buf_pos = 0;
+				((uint8_t *)rx_buf)[rx_int_buf_pos++] = rp_uart_read(TRACESWO_UART);
+				if (rx_int_buf_pos >= sizeof(rx_buf)) {
+					rx_int_buf_pos = 0;
+				}
 			}
-		}
-	} else if (swo_current_mode == swo_manchester)
-	{
-		xTimerStop(rx_timeout_timer, pdMS_TO_TICKS(0));
 
-		while (1)
-		{
-			if (pio_sm_get_rx_fifo_level(TRACESWO_PIO, TRACESWO_PIO_SM) == 0)
+			rp_uart_clear_rx_irq_flag(TRACESWO_UART);
+			rp_uart_set_rx_irq_enabled(TRACESWO_UART, false);
+			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_AVAILABLE;
+		}
+
+		if (uart_int_status & RP_UART_INT_RX_TIMEOUT_BITS) {
+			rp_uart_clear_rx_timeout_irq_flag(TRACESWO_UART);
+			rp_uart_set_rx_timeout_irq_enabled(TRACESWO_UART, false);
+			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_FLUSH;
+		}
+	} else {
+		higher_priority_task_woken = rx_dma_start_receiving();
+		rp_uart_clear_rx_and_rx_timeout_irq_flags(TRACESWO_UART);
+
+		traceswo_update_led();
+
+		portYIELD_FROM_ISR(higher_priority_task_woken);
+
+		return;
+	}
+
+	xTaskNotifyFromISR(traceswo_task, notify_bits, eSetBits, &higher_priority_task_woken);
+	portYIELD_FROM_ISR(higher_priority_task_woken);
+}
+
+static void traceswo_rx_pio_handler(void)
+{
+	static volatile uint32_t test_count = 0;
+	test_count++;
+	traceISR_ENTER();
+
+	const uint32_t pio_int_status = tap_pio_get_irq0_status(TRACESWO_PIO);
+	assert(pio_int_status != 0);
+
+	uint32_t notify_bits = 0;
+
+	BaseType_t higher_priority_task_woken = pdFALSE;
+
+	if (rx_use_dma == false) {
+		if (pio_int_status & pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM)) {
+
+			while (1)
 			{
-				break;
+				if (pio_sm_get_rx_fifo_level(TRACESWO_PIO, TRACESWO_PIO_SM) == 0)
+				{
+					break;
+				}
+
+				((uint8_t *)rx_buf)[rx_int_buf_pos++] = pio_sm_get(TRACESWO_PIO, TRACESWO_PIO_SM);
+				if (rx_int_buf_pos >= sizeof(rx_buf)) {
+					rx_int_buf_pos = 0;
+				}
 			}
 
-			((uint8_t *)rx_buf)[rx_int_buf_pos++] = pio_sm_get(TRACESWO_PIO, TRACESWO_PIO_SM);
-			if (rx_int_buf_pos >= sizeof(rx_buf)) {
-				rx_int_buf_pos = 0;
+			pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
+			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_AVAILABLE;
+		}
+	} else {
+		higher_priority_task_woken = rx_dma_start_receiving();
+
+		traceswo_update_led();
+
+		portYIELD_FROM_ISR(higher_priority_task_woken);
+
+		return;
+	}
+
+	xTaskNotifyFromISR(traceswo_task, notify_bits, eSetBits, &higher_priority_task_woken);
+	portYIELD_FROM_ISR(higher_priority_task_woken);
+}
+
+static void traceswo_thread(void *params)
+{
+	uint32_t notificationValue = 0;
+
+	rx_timeout_timer =
+		xTimerCreate("TRACE_RX_TIMEOUT", pdMS_TO_TICKS(TRACESWO_RX_DMA_MAX_TIMEOUT), pdFALSE, NULL, rx_timeout_callback);
+
+	rx_dma_channel = dma_claim_unused_channel(true);
+	rx_dma_ctrl_channel = dma_claim_unused_channel(true);
+
+	memset(&rx_dma_ctrl_block_info, 0, sizeof(rx_dma_ctrl_block_info));
+	for (uint32_t i = 0; i < TRACESWO_RX_DMA_NUMBER_OF_BUFFERS; i++) {
+		rx_dma_ctrl_block_info[i].address = (rx_buf[i]);
+	}
+
+	uint32_t wait_time = TRACESWO_TASK_NOTIFY_WAIT_PERIOD;
+
+	while (1) {
+		if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(wait_time)) == pdPASS) {
+			if (notificationValue & (USB_CDC_NOTIF_SERIAL_RX_AVAILABLE | USB_CDC_NOTIF_SERIAL_RX_FLUSH)) {
+				if (notificationValue & USB_CDC_NOTIF_SERIAL_RX_AVAILABLE) {
+					assert(rx_use_dma == false);
+					rx_int_process();
+				}
+
+				if (notificationValue & USB_CDC_NOTIF_SERIAL_RX_FLUSH) {
+					if (rx_use_dma == false) {
+						rx_int_finish();
+					} else {
+						rx_dma_process_buffers();
+					}
+				}
+			}
+
+			if ((notificationValue & USB_CDC_NOTIF_SERIAL_RX_TIMEOUT) && (rx_ongoing != false)) {
+				rx_dma_finish_receiving();
 			}
 		}
+
+		traceswo_update_led();
 	}
-
-	if (rx_int_buf_pos > 0) {
-		if (traceswo_decoding) {
-			/* write decoded swo packets to the uart port */
-			traceswo_decode(rx_buf, rx_int_buf_pos, true, true);
-		} else {
-			traceswo_send_to_usb((uint8_t *)(rx_buf), rx_int_buf_pos, true, true);
-		}
-
-		rx_int_buf_pos = 0;
-	}
-
-	rx_ongoing = false;
-
-	if (swo_current_mode == swo_nrz_uart) {
-		rp_uart_set_rx_timeout_irq_enabled(TRACESWO_UART, true);
-	} else if (swo_current_mode == swo_manchester)
-	{
-		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), true);
-	}
-
 }
 
 void swo_init(swo_coding_e swo_mode, uint32_t baudrate, uint32_t itm_stream_bitmask)
@@ -590,6 +741,18 @@ void swo_deinit(bool deallocate)
 	swo_current_mode = swo_none;
 }
 
+void traceswo_task_init(void)
+{
+#if configUSE_CORE_AFFINITY
+	const BaseType_t result = xTaskCreateAffinitySet(traceswo_thread, "target_trace", TRACESWO_TASK_STACK_SIZE, NULL,
+		PLATFORM_PRIORITY_NORMAL, TRACESWO_TASK_CORE_AFFINITY, &traceswo_task);
+#else
+	const BaseType_t result = xTaskCreate(
+		traceswo_thread, "target_trace", TRACESWO_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_NORMAL, &traceswo_task);
+#endif
+	assert(result == pdPASS);
+}
+
 bool traceswo_uart_is_used(uart_inst_t *uart_instance)
 {
 	return ((swo_current_mode == swo_nrz_uart) && (uart_instance == TRACESWO_UART));
@@ -604,112 +767,6 @@ uint32_t swo_get_baudrate(void)
 	}
 
 	return 0;
-}
-
-_Noreturn static void traceswo_thread(void *params);
-
-void traceswo_task_init(void)
-{
-#if configUSE_CORE_AFFINITY
-	const BaseType_t result = xTaskCreateAffinitySet(traceswo_thread, "target_trace", TRACESWO_TASK_STACK_SIZE, NULL,
-		PLATFORM_PRIORITY_NORMAL, TRACESWO_TASK_CORE_AFFINITY, &traceswo_task);
-#else
-	const BaseType_t result = xTaskCreate(
-		traceswo_thread, "target_trace", TRACESWO_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_NORMAL, &traceswo_task);
-#endif
-	assert(result == pdPASS);
-}
-
-_Noreturn static void traceswo_thread(void *params)
-{
-	uint32_t notificationValue = 0;
-
-	rx_timeout_timer =
-		xTimerCreate("TRACE_RX_TIMEOUT", pdMS_TO_TICKS(TRACESWO_RX_DMA_MAX_TIMEOUT), pdFALSE, NULL, rx_timeout_callback);
-
-	rx_dma_channel = dma_claim_unused_channel(true);
-	rx_dma_ctrl_channel = dma_claim_unused_channel(true);
-
-	memset(&rx_dma_ctrl_block_info, 0, sizeof(rx_dma_ctrl_block_info));
-	for (uint32_t i = 0; i < TRACESWO_RX_DMA_NUMBER_OF_BUFFERS; i++) {
-		rx_dma_ctrl_block_info[i].address = (rx_buf[i]);
-	}
-
-	uint32_t wait_time = TRACESWO_TASK_NOTIFY_WAIT_PERIOD;
-
-	while (1) {
-		if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(wait_time)) == pdPASS) {
-			if (notificationValue & (USB_CDC_NOTIF_SERIAL_RX_AVAILABLE | USB_CDC_NOTIF_SERIAL_RX_FLUSH)) {
-				if (notificationValue & USB_CDC_NOTIF_SERIAL_RX_AVAILABLE) {
-					assert(rx_use_dma == false);
-					rx_int_process();
-				}
-
-				if (notificationValue & USB_CDC_NOTIF_SERIAL_RX_FLUSH) {
-					if (rx_use_dma == false) {
-						rx_int_finish();
-					} else {
-						rx_dma_process_buffers();
-					}
-				}
-			}
-
-			if ((notificationValue & USB_CDC_NOTIF_SERIAL_RX_TIMEOUT) && (rx_ongoing != false)) {
-				rx_dma_finish_receiving();
-			}
-		}
-
-		traceswo_update_led();
-	}
-}
-
-static void traceswo_rx_uart_handler(void)
-{
-	traceISR_ENTER();
-
-	const uint32_t uart_int_status = rp_uart_get_int_status(TRACESWO_UART);
-	assert(uart_int_status != 0);
-
-	uint32_t notify_bits = 0;
-
-	BaseType_t higher_priority_task_woken = pdFALSE;
-
-	if (rx_use_dma == false) {
-		if (uart_int_status & RP_UART_INT_RX_BITS) {
-			for (uint32_t i = 0; i < (TRACESWO_UART_RX_INT_FIFO_LEVEL - 1); i++) {
-				if (rp_uart_is_rx_fifo_empty(TRACESWO_UART)) {
-					break;
-				}
-
-				((uint8_t *)rx_buf)[rx_int_buf_pos++] = rp_uart_read(TRACESWO_UART);
-				if (rx_int_buf_pos >= sizeof(rx_buf)) {
-					rx_int_buf_pos = 0;
-				}
-			}
-
-			rp_uart_clear_rx_irq_flag(TRACESWO_UART);
-			rp_uart_set_rx_irq_enabled(TRACESWO_UART, false);
-			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_AVAILABLE;
-		}
-
-		if (uart_int_status & RP_UART_INT_RX_TIMEOUT_BITS) {
-			rp_uart_clear_rx_timeout_irq_flag(TRACESWO_UART);
-			rp_uart_set_rx_timeout_irq_enabled(TRACESWO_UART, false);
-			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_FLUSH;
-		}
-	} else {
-		higher_priority_task_woken = rx_dma_start_receiving();
-		rp_uart_clear_rx_and_rx_timeout_irq_flags(TRACESWO_UART);
-
-		traceswo_update_led();
-
-		portYIELD_FROM_ISR(higher_priority_task_woken);
-
-		return;
-	}
-
-	xTaskNotifyFromISR(traceswo_task, notify_bits, eSetBits, &higher_priority_task_woken);
-	portYIELD_FROM_ISR(higher_priority_task_woken);
 }
 
 BaseType_t traceswo_rx_dma_handler(void)
@@ -731,50 +788,4 @@ BaseType_t traceswo_rx_dma_handler(void)
 	}
 
 	return higher_priority_task_woken;
-}
-
-static void traceswo_rx_pio_handler(void)
-{
-	static volatile uint32_t test_count = 0;
-	test_count++;
-	traceISR_ENTER();
-
-	const uint32_t pio_int_status = tap_pio_get_irq0_status(TRACESWO_PIO);
-	assert(pio_int_status != 0);
-
-	uint32_t notify_bits = 0;
-
-	BaseType_t higher_priority_task_woken = pdFALSE;
-
-	if (rx_use_dma == false) {
-		if (pio_int_status & pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM)) {
-
-			while (1)
-			{
-				if (pio_sm_get_rx_fifo_level(TRACESWO_PIO, TRACESWO_PIO_SM) == 0)
-				{
-					break;
-				}
-
-				((uint8_t *)rx_buf)[rx_int_buf_pos++] = pio_sm_get(TRACESWO_PIO, TRACESWO_PIO_SM);
-				if (rx_int_buf_pos >= sizeof(rx_buf)) {
-					rx_int_buf_pos = 0;
-				}
-			}
-
-			pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
-			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_AVAILABLE;
-		}
-	} else {
-		higher_priority_task_woken = rx_dma_start_receiving();
-
-		traceswo_update_led();
-
-		portYIELD_FROM_ISR(higher_priority_task_woken);
-
-		return;
-	}
-
-	xTaskNotifyFromISR(traceswo_task, notify_bits, eSetBits, &higher_priority_task_woken);
-	portYIELD_FROM_ISR(higher_priority_task_woken);
 }
