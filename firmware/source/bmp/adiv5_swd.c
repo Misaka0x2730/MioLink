@@ -41,22 +41,23 @@ extern uint8_t rp2040_pio_adiv5_swd_read_check(uint8_t request, uint32_t *data, 
 extern uint8_t rp2040_pio_adiv5_swd_raw_access_req(uint8_t request);
 extern uint8_t rp2040_pio_adiv5_swd_raw_access_data(uint32_t data_out, uint32_t *data_in, uint8_t rnw);
 
-uint8_t make_packet_request(uint8_t rnw, uint16_t addr)
+uint8_t make_packet_request(const uint8_t rnw, const uint16_t addr)
 {
-	bool is_ap = addr & ADIV5_APnDP;
+	/* Start out with the park and start bits in the request byte */
+	uint8_t request = 0x81U;
 
-	addr &= 0xffU;
-
-	uint8_t request = 0x81U; /* Park and Startbit */
-
-	if (is_ap)
+	/* If we're wanting to talk with an AP, set the APnDP bit and parity */
+	if (addr & ADIV5_APnDP)
 		request ^= 0x22U;
+	/* If we're making a read request, set the RnW bit and flip the parity */
 	if (rnw)
 		request ^= 0x24U;
 
-	addr &= 0xcU;
-	request |= (addr << 1U) & 0x18U;
-	if (addr == 4U || addr == 8U)
+	/* Now grab A[2:3] and encode those */
+	const uint8_t reg = addr & 0x0cU;
+	request |= (reg << 1U) & 0x18U;
+	/* Then adjust the parity again accordingly */
+	if (reg == 4U || reg == 8U)
 		request ^= 0x20U;
 
 	return request;
@@ -84,11 +85,22 @@ static void dormant_to_swd_sequence(void)
 	 * §5.3.4 Switching out of Dormant state
 	 */
 
-	DEBUG_INFO("Switching out of dormant state into SWD\n");
-
 	/* Send at least 8 SWCLKTCK cycles with SWDIOTMS HIGH */
 	swd_line_reset_sequence(false);
+
+	/*
+	 * If the target is both JTAG and SWD with JTAG as default, switch JTAG->DS first.
+	 * See B5.3.2
+	 */
+	DEBUG_INFO("Switching from JTAG to dormant\n");
+	swd_proc.seq_out(ADIV5_JTAG_TO_DORMANT_SEQUENCE0, 5U);
+	swd_proc.seq_out(ADIV5_JTAG_TO_DORMANT_SEQUENCE1, 31U);
+	swd_proc.seq_out(ADIV5_JTAG_TO_DORMANT_SEQUENCE2, 8U);
 	/* Send the 128-bit Selection Alert sequence on SWDIOTMS */
+	DEBUG_INFO("Switching out of dormant state into SWD\n");
+	const uint32_t data[] = {ADIV5_SELECTION_ALERT_SEQUENCE_0, ADIV5_SELECTION_ALERT_SEQUENCE_1,
+		ADIV5_SELECTION_ALERT_SEQUENCE_2, ADIV5_SELECTION_ALERT_SEQUENCE_3};
+	swdptap_seq_out_buffer(data, 32U * 4);
 	/*
 	 * We combine the last two sequences in a single seq_out as an optimization
 	 *
@@ -98,9 +110,7 @@ static void dormant_to_swd_sequence(void)
 	 * The bits are shifted out to the right, so we shift the second sequence left by the size of the first sequence
 	 * The first sequence is 4 bits and the second 8 bits, totaling 12 bits in the combined sequence
 	 */
-	const uint32_t data[] = {ADIV5_SELECTION_ALERT_SEQUENCE_0, ADIV5_SELECTION_ALERT_SEQUENCE_1,
-		ADIV5_SELECTION_ALERT_SEQUENCE_2, ADIV5_SELECTION_ALERT_SEQUENCE_3, ADIV5_ACTIVATION_CODE_ARM_SWD_DP << 4U};
-	swdptap_seq_out_buffer(data, (32U * 4) + 12U);
+	swd_proc.seq_out(ADIV5_ACTIVATION_CODE_ARM_SWD_DP << 4U, 12U);
 
 	/*
 	 * The target is in the protocol error state after selecting SWD
@@ -147,7 +157,12 @@ uint32_t adiv5_swd_read_no_check(const uint16_t addr)
 	return res == SWD_ACK_OK ? data : 0;
 }
 
-bool adiv5_swd_scan(const uint32_t targetid)
+bool adiv5_swd_scan(void)
+{
+	return adiv5_swd_scan_targetid(0);
+}
+
+bool adiv5_swd_scan_targetid(const uint32_t targetid)
 {
 	/* Free the device list if any */
 	target_list_free();
@@ -165,7 +180,7 @@ bool adiv5_swd_scan(const uint32_t targetid)
 	dp->error = adiv5_swd_clear_error;
 	dp->abort = adiv5_swd_abort;
 
-#if PC_HOSTED == 0
+#if CONFIG_BMDA == 0
 	swdptap_init();
 #else
 	if (!bmda_swd_dp_init(dp)) {
@@ -234,13 +249,13 @@ bool adiv5_swd_scan(const uint32_t targetid)
 	}
 
 	/* If we were given targetid or we have a DPv2+ device, do a multi-drop scan */
-#if PC_HOSTED == 0
+#if CONFIG_BMDA == 0
 	/* On non hosted platforms, scan_multidrop can be constant */
 	const
 #endif
 		bool scan_multidrop = targetid || dp->version >= 2U;
 
-#if PC_HOSTED == 1
+#if CONFIG_BMDA == 1
 	if (scan_multidrop && !dp->write_no_check) {
 		DEBUG_WARN("Discovered multi-drop enabled target but CMSIS_DAP < v1.2 cannot handle multi-drop\n");
 		scan_multidrop = false;
@@ -267,7 +282,7 @@ bool adiv5_swd_scan(const uint32_t targetid)
  * must be configured before they are connected together to ensure that their instance IDs do not conflict.
  * Auto-detection of the target
  *
- * It is not possible to interrogate a multi-drop Serial Wire Debug system th at includes multiple devices to establish
+ * It is not possible to interrogate a multi-drop Serial Wire Debug system that includes multiple devices to establish
  * which devices are connected. Because all devices are selected on coming out of a line reset, no communication with
  * a device is possible without prior selection of that target using its target ID. Therefore, connection to a multi-drop
  * Serial Wire Debug system that includes multiple devices requires that either:
@@ -353,14 +368,25 @@ uint32_t adiv5_swd_clear_error(adiv5_debug_port_s *const dp, const bool protocol
 		swd_line_reset_sequence(true);
 		if (dp->version >= 2U)
 			adiv5_write_no_check(dp, ADIV5_DP_TARGETSEL, dp->targetsel);
-		adiv5_read_no_check(dp, ADIV5_DP_DPIDR);
-		/* Exception here is unexpected, so do not catch */
+		adiv5_dp_low_access(dp, ADIV5_LOW_READ, ADIV5_DP_DPIDR, 0U);
 	}
-	const uint32_t err = adiv5_read_no_check(dp, ADIV5_DP_CTRLSTAT) &
-		(ADIV5_DP_CTRLSTAT_STICKYORUN | ADIV5_DP_CTRLSTAT_STICKYCMP | ADIV5_DP_CTRLSTAT_STICKYERR |
-			ADIV5_DP_CTRLSTAT_WDATAERR);
-	uint32_t clr = 0;
+	/* Try to read the current target status */
+	const uint32_t err = adiv5_read_no_check(dp, ADIV5_DP_CTRLSTAT);
+	/* If the read failed for some reason */
+	if (err == 0U) {
+		/* We probably hit a protocol error.. */
+		if (!protocol_recovery)
+			/* So, restart this function, doing a full protocol recovery cycle */
+			return adiv5_swd_clear_error(dp, true);
+		/*
+		 * Otherwise if we tried and failed to recover the part, propagate an error value so
+		 * the caller doesn't think everything's fine and dandy
+		 */
+		return ADIV5_DP_CTRLSTAT_ERRMASK;
+	}
 
+	/* Hope we got a valid status.. unpack any errors that need clearing */
+	uint32_t clr = 0;
 	if (err & ADIV5_DP_CTRLSTAT_STICKYORUN)
 		clr |= ADIV5_DP_ABORT_ORUNERRCLR;
 	if (err & ADIV5_DP_CTRLSTAT_STICKYCMP)
@@ -370,10 +396,13 @@ uint32_t adiv5_swd_clear_error(adiv5_debug_port_s *const dp, const bool protocol
 	if (err & ADIV5_DP_CTRLSTAT_WDATAERR)
 		clr |= ADIV5_DP_ABORT_WDERRCLR;
 
+	/* If there are any, then clear them */
 	if (clr)
 		adiv5_write_no_check(dp, ADIV5_DP_ABORT, clr);
 	dp->fault = 0;
-	return err;
+	return err &
+		(ADIV5_DP_CTRLSTAT_STICKYORUN | ADIV5_DP_CTRLSTAT_STICKYCMP | ADIV5_DP_CTRLSTAT_STICKYERR |
+			ADIV5_DP_CTRLSTAT_WDATAERR);
 }
 
 uint32_t adiv5_swd_raw_access(adiv5_debug_port_s *dp, const uint8_t rnw, const uint16_t addr, const uint32_t value)

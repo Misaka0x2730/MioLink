@@ -33,6 +33,7 @@
 #include "gdb_if.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "timing_rp2040.h"
 
 static uint32_t gdb_to_usb_count;
 static char gdb_to_usb_buf[1024U];

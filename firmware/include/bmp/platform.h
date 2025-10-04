@@ -28,13 +28,14 @@
 #include "hardware/uart.h"
 #include "hardware/dma.h"
 #include "pico/unique_id.h"
-#include "timing_rp2040.h"
 #include "hardware/pio.h"
 
 #define TARGET_SWD_IDLE_CYCLES (8)
 #if (TARGET_SWD_IDLE_CYCLES < 8)
 #error "TARGET_SWD_IDLE_CYCLES should be at least 8"
 #endif
+
+extern bool running_status;
 
 #if ENABLE_DEBUG == 1
 #define PLATFORM_HAS_DEBUG
