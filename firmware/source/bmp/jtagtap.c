@@ -27,10 +27,8 @@
 #include "platform.h"
 
 #include "tap_pio.h"
-
 #include "jtagtap.h"
-
-#include "target_jtag.pio.h"
+#include "pio_jtag.pio.h"
 
 #define TARGET_JTAG_TICKS_NO_FINAL(ticks) (ticks - 1)
 #define TARGET_JTAG_TICKS_FINAL(ticks)    (ticks - 2)

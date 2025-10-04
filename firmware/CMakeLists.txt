@@ -152,12 +152,12 @@ target_link_libraries(MioLink PUBLIC FreeRTOS-Kernel
                                      FreeRTOS-Kernel-Heap4)
 
 # Compile PIO programs
-pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/miolink_rev_a_swd.pio)
-pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/miolink_rev_b_swd.pio)
-pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/miolink_pico_swd.pio)
-pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/pico_swd.pio)
-pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/target_jtag.pio)
-pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/traceswo_manchester.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/pio/pio_swd_miolink_rev_a.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/pio/pio_swd_miolink_rev_b.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/pio/pio_swd_miolink_pico.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/pio/pio_swd_pico.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/pio/pio_jtag.pio)
+pico_generate_pio_header(MioLink ${CMAKE_CURRENT_LIST_DIR}/source/bmp/pio/pio_traceswo_manchester.pio)
 
 # Set linker script and set parameter to print memory usage
 if (build_type STREQUAL debug)

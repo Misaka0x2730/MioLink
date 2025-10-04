@@ -44,7 +44,7 @@
 
 #include "hardware/pio.h"
 #include "tap_pio.h"
-#include "traceswo_manchester.pio.h"
+#include "pio_traceswo_manchester.pio.h"
 
 #define TRACESWO_UART_RX_INT_FIFO_LEVEL (16)
 

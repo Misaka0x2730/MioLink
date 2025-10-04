@@ -32,10 +32,10 @@
 
 #include "swd.h"
 
-#include "miolink_rev_a_swd.pio.h"
-#include "miolink_rev_b_swd.pio.h"
-#include "miolink_pico_swd.pio.h"
-#include "pico_swd.pio.h"
+#include "pio_swd_miolink_rev_a.pio.h"
+#include "pio_swd_miolink_rev_b.pio.h"
+#include "pio_swd_miolink_pico.pio.h"
+#include "pio_swd_pico.pio.h"
 
 #define SWDP_ACK_OK (0x01U)
 
