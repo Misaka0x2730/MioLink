@@ -24,11 +24,9 @@
 #ifndef MIOLINK_PLATFORM_H
 #define MIOLINK_PLATFORM_H
 
-#include "hardware/gpio.h"
-#include "hardware/uart.h"
-#include "hardware/dma.h"
-#include "pico/unique_id.h"
-#include "hardware/pio.h"
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 
 #define TARGET_SWD_IDLE_CYCLES (8)
 #if (TARGET_SWD_IDLE_CYCLES < 8)

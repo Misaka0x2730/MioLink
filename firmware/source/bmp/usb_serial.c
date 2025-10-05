@@ -24,6 +24,8 @@
 
 #include "hardware/clocks.h"
 #include "hardware/uart.h"
+#include "hardware/irq.h"
+#include "hardware/gpio.h"
 #include "rp_uart.h"
 #include "rp_dma.h"
 

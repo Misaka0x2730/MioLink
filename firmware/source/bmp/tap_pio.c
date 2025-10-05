@@ -21,6 +21,7 @@
 
 #include "general.h"
 
+#include "hardware/dma.h"
 #include "hardware/pio.h"
 
 #include "platform.h"
