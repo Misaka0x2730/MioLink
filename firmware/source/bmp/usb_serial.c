@@ -541,7 +541,7 @@ static void uart_rx_isr(void)
 		if (uart_int_status & RP_UART_INT_RX_TIMEOUT_BITS) {
 			rp_uart_clear_rx_timeout_irq_flag(current_uart);
 			rp_uart_set_rx_timeout_irq_enabled(current_uart, false);
-			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_FLUSH;
+			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_TIMEOUT;
 		}
 	} else {
 		higher_priority_task_woken = uart_rx_dma_start_receiving();
@@ -580,7 +580,7 @@ static void uart_dma_handler(void)
 		if (++uart_rx_dma_current_buffer >= USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS) {
 			uart_rx_dma_current_buffer = 0;
 		}
-		xTaskNotifyFromISR(usb_uart_task, USB_CDC_NOTIF_SERIAL_RX_FLUSH, eSetBits, &higher_priority_task_woken);
+		xTaskNotifyFromISR(usb_uart_task, USB_CDC_NOTIF_SERIAL_RX_AVAILABLE, eSetBits, &higher_priority_task_woken);
 	}
 
 #ifdef PLATFORM_HAS_TRACESWO
@@ -624,27 +624,24 @@ static void target_serial_thread(void *params)
 				uart_update_config(&line_coding);
 			}
 
-			if (notification_value & (USB_CDC_NOTIF_SERIAL_RX_AVAILABLE | USB_CDC_NOTIF_SERIAL_RX_FLUSH)) {
-				if (notification_value & USB_CDC_NOTIF_SERIAL_RX_AVAILABLE) {
-					assert(uart_rx_use_dma == false);
+			if (notification_value & USB_CDC_NOTIF_SERIAL_RX_AVAILABLE) {
+				if (uart_rx_use_dma == false) {
 					uart_rx_int_process();
+				} else {
+					uart_rx_dma_process_buffers();
 				}
+			}
 
-				if (notification_value & USB_CDC_NOTIF_SERIAL_RX_FLUSH) {
-					if (uart_rx_use_dma == false) {
-						uart_rx_int_finish();
-					} else {
-						uart_rx_dma_process_buffers();
-					}
+			if ((notification_value & USB_CDC_NOTIF_SERIAL_RX_TIMEOUT) && (uart_rx_ongoing != false)) {
+				if (uart_rx_use_dma == false) {
+					uart_rx_int_finish();
+				} else {
+					uart_rx_dma_finish_receiving();
 				}
 			}
 
 			if (notification_value & USB_CDC_NOTIF_SERIAL_TX_COMPLETE) {
 				uart_tx_dma_send();
-			}
-
-			if ((notification_value & USB_CDC_NOTIF_SERIAL_RX_TIMEOUT) && (uart_rx_ongoing != false)) {
-				uart_rx_dma_finish_receiving();
 			}
 
 			if ((notification_value & USB_CDC_NOTIF_USB_RX_AVAILABLE) && (uart_tx_ongoing == false)) {

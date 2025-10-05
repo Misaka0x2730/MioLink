@@ -473,7 +473,7 @@ static void rx_timeout_callback(TimerHandle_t xTimer)
 		xTaskNotify(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_TIMEOUT, eSetBits);
 	} else if (swo_current_mode == swo_manchester) {
 		pio_set_irq0_source_enabled(TRACESWO_PIO, pio_get_rx_fifo_not_empty_interrupt_source(TRACESWO_PIO_SM), false);
-		xTaskNotify(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_FLUSH, eSetBits);
+		xTaskNotify(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_TIMEOUT, eSetBits);
 	}
 }
 
@@ -509,7 +509,7 @@ static void traceswo_rx_uart_handler(void)
 		if (uart_int_status & RP_UART_INT_RX_TIMEOUT_BITS) {
 			rp_uart_clear_rx_timeout_irq_flag(TRACESWO_UART);
 			rp_uart_set_rx_timeout_irq_enabled(TRACESWO_UART, false);
-			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_FLUSH;
+			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_TIMEOUT;
 		}
 	} else {
 		higher_priority_task_woken = rx_dma_start_receiving();
@@ -528,8 +528,6 @@ static void traceswo_rx_uart_handler(void)
 
 static void traceswo_rx_pio_handler(void)
 {
-	static volatile uint32_t test_count = 0;
-	test_count++;
 	traceISR_ENTER();
 
 	const uint32_t pio_int_status = tap_pio_get_irq0_status(TRACESWO_PIO);
@@ -591,23 +589,20 @@ static void traceswo_thread(void *params)
 
 	while (1) {
 		if (xTaskNotifyWait(0, UINT32_MAX, &notificationValue, pdMS_TO_TICKS(wait_time)) == pdPASS) {
-			if (notificationValue & (USB_CDC_NOTIF_SERIAL_RX_AVAILABLE | USB_CDC_NOTIF_SERIAL_RX_FLUSH)) {
-				if (notificationValue & USB_CDC_NOTIF_SERIAL_RX_AVAILABLE) {
-					assert(rx_use_dma == false);
+			if (notificationValue & USB_CDC_NOTIF_SERIAL_RX_AVAILABLE) {
+				if (rx_use_dma == false) {
 					rx_int_process();
-				}
-
-				if (notificationValue & USB_CDC_NOTIF_SERIAL_RX_FLUSH) {
-					if (rx_use_dma == false) {
-						rx_int_finish();
-					} else {
-						rx_dma_process_buffers();
-					}
+				} else {
+					rx_dma_process_buffers();
 				}
 			}
 
 			if ((notificationValue & USB_CDC_NOTIF_SERIAL_RX_TIMEOUT) && (rx_ongoing != false)) {
-				rx_dma_finish_receiving();
+				if (rx_use_dma == false) {
+					rx_int_finish();
+				} else {
+					rx_dma_finish_receiving();
+				}
 			}
 		}
 
@@ -784,7 +779,7 @@ BaseType_t traceswo_rx_dma_handler(void)
 			rx_dma_current_buffer = 0;
 		}
 
-		xTaskNotifyFromISR(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_FLUSH, eSetBits, &higher_priority_task_woken);
+		xTaskNotifyFromISR(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_AVAILABLE, eSetBits, &higher_priority_task_woken);
 	}
 
 	return higher_priority_task_woken;
