@@ -152,7 +152,9 @@ void swdptap_init(void)
 	}
 
 	gpio_init(target_pins->tck);
+	gpio_set_slew_rate(target_pins->tck, GPIO_SLEW_RATE_FAST);
 	gpio_init(target_pins->tms);
+	gpio_set_slew_rate(target_pins->tms, GPIO_SLEW_RATE_FAST);
 
 	pio_gpio_init(TAP_PIO_SWD, target_pins->tck);
 	pio_gpio_init(TAP_PIO_SWD, target_pins->tms);

@@ -657,8 +657,6 @@ void swo_init(swo_coding_e swo_mode, uint32_t baudrate, uint32_t itm_stream_bitm
 		sm_config_set_in_shift(&traceswo_program_config, true, true, 8);
 		sm_config_set_fifo_join(&traceswo_program_config, PIO_FIFO_JOIN_RX);
 
-		tap_pio_disable_input_sync(TAP_PIO_SWD, target_pins->tdo);
-
 		irq_handler_t current_handler = irq_get_exclusive_handler(TRACESWO_PIO_IRQ);
 		assert(current_handler == NULL);
 
