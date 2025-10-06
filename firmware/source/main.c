@@ -111,12 +111,12 @@ void main(void)
 	traceSTART();
 #endif
 
+	platform_update_sys_freq();
+
 	platform_init();
 	blackmagic_usb_init();
 	usb_serial_init();
 	traceswo_task_init();
-
-	platform_update_sys_freq();
 
 	multicore_reset_core1();
 

@@ -142,20 +142,6 @@ void platform_max_frequency_set(uint32_t freq)
 
 uint32_t platform_max_frequency_get(void)
 {
-	const uint32_t interface_freq = platform_get_interface_periph_clk();
-
-	uint32_t clkdiv_int = (TAP_PIO_SWD->sm[TAP_PIO_SM_SWD].clkdiv & PIO_SM0_CLKDIV_INT_BITS) >> PIO_SM0_CLKDIV_INT_LSB;
-	uint32_t clkdiv_frac =
-		(TAP_PIO_SWD->sm[TAP_PIO_SM_SWD].clkdiv & PIO_SM0_CLKDIV_FRAC_BITS) >> PIO_SM0_CLKDIV_FRAC_LSB;
-
-	if (clkdiv_int == 0) {
-		clkdiv_int = ((uint32_t)UINT16_MAX) + 1;
-		clkdiv_frac = 0;
-	}
-
-	target_interface_frequency =
-		(uint32_t)(((((uint64_t)interface_freq) << 8) / ((clkdiv_int << 8) + clkdiv_frac)) & 0xFFFFFFFF);
-
 	return target_interface_frequency;
 }
 
