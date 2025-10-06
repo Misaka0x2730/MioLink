@@ -40,11 +40,11 @@ extern bool running_status;
 #if ENABLE_DEBUG == 1
 #define PLATFORM_HAS_DEBUG
 extern bool debug_bmp;
-#define PLATFORM_IDENT              "(Unknown MioLink, ENABLE_DEBUG = " MACRO_VALUE_STR(ENABLE_DEBUG) ") "
-#define PLATFORM_IDENT_MIOLINK      "MioLink, ENABLE_DEBUG = " MACRO_VALUE_STR(ENABLE_DEBUG)
-#define PLATFORM_IDENT_MIOLINK_PICO "MioLink_Pico, ENABLE_DEBUG = " MACRO_VALUE_STR(ENABLE_DEBUG)
-#define PLATFORM_IDENT_PICO         "Pico, ENABLE_DEBUG = " MACRO_VALUE_STR(ENABLE_DEBUG)
-#define PLATFORM_IDENT_PICO_W       "Pico W, ENABLE_DEBUG = " MACRO_VALUE_STR(ENABLE_DEBUG)
+#define PLATFORM_IDENT              "(Unknown MioLink, ENABLE_DEBUG=1)"
+#define PLATFORM_IDENT_MIOLINK      "MioLink, ENABLE_DEBUG=1"
+#define PLATFORM_IDENT_MIOLINK_PICO "MioLink_Pico, ENABLE_DEBUG=1"
+#define PLATFORM_IDENT_PICO         "Pico, ENABLE_DEBUG=1"
+#define PLATFORM_IDENT_PICO_W       "Pico W, ENABLE_DEBUG=1"
 #else
 #define PLATFORM_IDENT              "(Unknown MioLink) "
 #define PLATFORM_IDENT_MIOLINK      "MioLink"
