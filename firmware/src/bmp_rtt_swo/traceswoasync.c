@@ -496,10 +496,8 @@ void swo_init(swo_coding_e swo_mode, uint32_t baudrate, uint32_t itm_stream_bitm
 	gpio_set_function(target_pins->tdo, GPIO_FUNC_UART);
 	gpio_set_function(target_pins->tdi, GPIO_FUNC_SIO);
 
-	irq_handler_t current_handler = irq_get_exclusive_handler(TRACESWO_UART_IRQ);
-	assert(current_handler == NULL);
-
-	irq_set_exclusive_handler(TRACESWO_UART_IRQ, traceswo_rx_uart_handler);
+	irq_add_shared_handler(TRACESWO_UART_IRQ, traceswo_rx_uart_handler,
+		PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
 
 	uart_init(TRACESWO_UART, baudrate);
 
@@ -538,12 +536,7 @@ void swo_deinit(bool deallocate)
 		dma_channel_abort(rx_dma_channel);
 		dma_channel_acknowledge_irq0(rx_dma_channel);
 
-		irq_handler_t current_handler = irq_get_exclusive_handler(TRACESWO_UART_IRQ);
-		irq_set_enabled(TRACESWO_UART_IRQ, false);
-
-		if (current_handler != NULL) {
-			irq_remove_handler(TRACESWO_UART_IRQ, current_handler);
-		}
+		irq_remove_handler(TRACESWO_UART_IRQ, traceswo_rx_uart_handler);
 
 		uart_deinit(TRACESWO_UART);
 
@@ -581,23 +574,28 @@ uint32_t swo_get_baudrate(void)
 	return 0;
 }
 
+bool traceswo_rx_dma_irq0_pending(void)
+{
+	return ((rx_dma_channel >= 0) && (dma_channel_get_irq0_status((uint)rx_dma_channel) == true));
+}
+
 BaseType_t traceswo_rx_dma_handler(void)
 {
-	assert(rx_dma_channel != -1);
+	if ((rx_dma_channel < 0) || (dma_channel_get_irq0_status((uint)rx_dma_channel) == false)) {
+		return pdFALSE;
+	}
 
 	BaseType_t higher_priority_task_woken = pdFALSE;
 
-	if (dma_channel_get_irq0_status(rx_dma_channel)) {
-		dma_channel_acknowledge_irq0(rx_dma_channel);
+	dma_channel_acknowledge_irq0((uint)rx_dma_channel);
 
-		rx_dma_buffer_full_mask |= (1UL << rx_dma_current_buffer);
+	rx_dma_buffer_full_mask |= (1UL << rx_dma_current_buffer);
 
-		if (++rx_dma_current_buffer >= TRACESWO_RX_DMA_NUMBER_OF_BUFFERS) {
-			rx_dma_current_buffer = 0;
-		}
-
-		xTaskNotifyFromISR(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_AVAILABLE, eSetBits, &higher_priority_task_woken);
+	if (++rx_dma_current_buffer >= TRACESWO_RX_DMA_NUMBER_OF_BUFFERS) {
+		rx_dma_current_buffer = 0;
 	}
+
+	xTaskNotifyFromISR(traceswo_task, USB_CDC_NOTIF_SERIAL_RX_AVAILABLE, eSetBits, &higher_priority_task_woken);
 
 	return higher_priority_task_woken;
 }

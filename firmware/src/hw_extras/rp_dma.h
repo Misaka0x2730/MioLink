@@ -20,20 +20,43 @@
 #ifndef MIOLINK_RP_DMA_H
 #define MIOLINK_RP_DMA_H
 
+/**********************************************************************************************************************
+ * Includes
+ **********************************************************************************************************************/
+
 #include "general.h"
 
 #include "hardware/dma.h"
 
+/**********************************************************************************************************************
+ * Global Functions
+ **********************************************************************************************************************/
+
+/**
+ * \brief Pointer to \c CHx_AL2_WRITE_ADDR_TRIG (write to start or reload chained write).
+ *
+ * \param dma_channel DMA channel index (\c 0 … \c NUM_DMA_CHANNELS-1).
+ */
 static inline void *rp_dma_get_al2_write_addr_trig(const uint32_t dma_channel)
 {
 	return (void *)(&(dma_hw->ch[dma_channel].al2_write_addr_trig));
 }
 
+/**
+ * \brief Remaining transfer count for \a dma_channel (\c TRANS_COUNT).
+ */
 static inline uint32_t rp_dma_get_trans_count(const uint32_t dma_channel)
 {
 	return dma_hw->ch[dma_channel].transfer_count;
 }
 
+/**
+ * \brief Enable/disable a channel via \c CTRL_TRIG or \c AL1_CTRL.
+ *
+ * \param dma_channel Channel index.
+ * \param enabled     Desired run state.
+ * \param trigger     \c true: write \c CTRL_TRIG (may start transfer); \c false: alias \c AL1_CTRL only.
+ */
 static inline void rp_dma_set_channel_enabled(const uint32_t dma_channel, const bool enabled, const bool trigger)
 {
 	if (trigger) {
@@ -45,6 +68,9 @@ static inline void rp_dma_set_channel_enabled(const uint32_t dma_channel, const 
 	}
 }
 
+/**
+ * \brief Set \c CHAIN_TO so this channel chains into \a chain_to when complete.
+ */
 static inline void rp_dma_set_chain_to(const uint32_t dma_channel, const uint32_t chain_to)
 {
 	hw_write_masked(&(dma_hw->ch[dma_channel].al1_ctrl), chain_to << DMA_CH0_CTRL_TRIG_CHAIN_TO_LSB,

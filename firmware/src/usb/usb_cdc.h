@@ -21,23 +21,38 @@
 #ifndef MIOLINK_USB_CDC_H
 #define MIOLINK_USB_CDC_H
 
+/**********************************************************************************************************************
+ * Includes
+ **********************************************************************************************************************/
+
 #include <stdint.h>
 #include <stdbool.h>
 
 #include "tusb.h"
 
-typedef enum  {
+/**********************************************************************************************************************
+ * Global Types
+ **********************************************************************************************************************/
+
+/**
+ * \brief Logical CDC interface index for composite USB (GDB, target UART, …).
+ */
+typedef enum {
 	USB_CDC_GDB = 0,
 	USB_CDC_TARGET_SERIAL,
 	USB_CDC_NUM = CFG_TUD_CDC,
 } usb_cdc_t;
 
-#define USB_CDC_NOTIF_USB_RX_AVAILABLE       (0x01)
-#define USB_CDC_NOTIF_LINE_STATE_UPDATE      (0x02)
-#define USB_CDC_NOTIF_LINE_CODING_UPDATE     (0x04)
-#define USB_CDC_NOTIF_SERIAL_RX_AVAILABLE    (0x08)
-#define USB_CDC_NOTIF_SERIAL_RX_TIMEOUT      (0x10)
-#define USB_CDC_NOTIF_SERIAL_TX_COMPLETE     (0x20)
-#define USB_CDC_NOTIF_DUMMY       			 (0x80)
+/**********************************************************************************************************************
+ * Global Definitions
+ **********************************************************************************************************************/
+
+#define USB_CDC_NOTIF_USB_RX_AVAILABLE    (0x01) /**< Host→device USB OUT data available (task notify bit). */
+#define USB_CDC_NOTIF_LINE_STATE_UPDATE   (0x02) /**< DTR/RTS line state change from host. */
+#define USB_CDC_NOTIF_LINE_CODING_UPDATE  (0x04) /**< Baud/format (\c line_coding) update from host. */
+#define USB_CDC_NOTIF_SERIAL_RX_AVAILABLE (0x08) /**< Target UART RX data ready (DMA or IRQ path). */
+#define USB_CDC_NOTIF_SERIAL_RX_TIMEOUT   (0x10) /**< Target UART RX idle timeout. */
+#define USB_CDC_NOTIF_SERIAL_TX_COMPLETE  (0x20) /**< Target UART TX DMA finished. */
+#define USB_CDC_NOTIF_DUMMY               (0x80) /**< Placeholder / internal notify bit. */
 
 #endif /* MIOLINK_USB_CDC_H */

@@ -1,8 +1,19 @@
-# Set pico-sdk path
+# Find Git for version detection
+find_package(Git QUIET)
+
+# ============================================================================
+# Pico SDK setting up
+# ============================================================================
+
+# Set Pico SDK path
 set(PICO_SDK_PATH ${CMAKE_CURRENT_LIST_DIR}/pico-sdk)
 
-# pico-sdk import
+# Pico SDK import
 include(${CMAKE_CURRENT_LIST_DIR}/pico-sdk/external/pico_sdk_import.cmake)
+
+# ============================================================================
+# FreeRTOS-Kernel setting up
+# ============================================================================
 
 # FreeRTOS-Kernel import
 set(FREERTOS_KERNEL_PATH ${CMAKE_CURRENT_LIST_DIR}/FreeRTOS-Kernel)
@@ -12,14 +23,24 @@ include(${CMAKE_CURRENT_LIST_DIR}/FreeRTOS-Kernel/portable/ThirdParty/GCC/RP2040
 execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ${CMAKE_CURRENT_LIST_DIR}/FreeRTOS-Kernel/.git describe --tags --always
     OUTPUT_VARIABLE GIT_FREERTOS_REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-# tinyusb library
+# ============================================================================
+# TinyUSB setting up
+# ============================================================================
+
+# TinyUSB library
 set(TINYUSB_OPT_OS OPT_OS_FREERTOS)
 set(PICO_TINYUSB_PATH ${CMAKE_CURRENT_LIST_DIR}/tinyusb)
+
+# ============================================================================
+# BlackMagic setting up
+# ============================================================================
 
 # BlackMagic library
 add_library(blackmagic INTERFACE)
 
-# BlackMagic parameters (see blackmagic meson.build and src/target/meson.build)
+include(${CMAKE_CURRENT_LIST_DIR}/../cmake/bmp_targets.cmake)
+
+# BlackMagic parameters (see blackmagic meson.build)
 target_compile_definitions(blackmagic INTERFACE
     GDB_PACKET_BUFFER_SIZE=8192
     PC_HOSTED=0
@@ -32,31 +53,9 @@ target_compile_definitions(blackmagic INTERFACE
     CONFIG_BMDA=0
     # 32-bit pointer size for RP2040
     CONFIG_POINTER_SIZE=4
-    # All supported debug targets (match blackmagic src/target/meson.build libbmd_target_deps)
-    CONFIG_CORTEXAR=1
-    CONFIG_CORTEXM=1
-    CONFIG_RISCV=1
-    CONFIG_RISCV_ACCEL=1
-    CONFIG_APOLLO3=1
-    CONFIG_AT32=1
-    CONFIG_CH32=1
-    CONFIG_CH579=1
-    CONFIG_EFM32=1
-    CONFIG_GD32=1
-    CONFIG_HC32=1
-    CONFIG_LPC=1
-    CONFIG_MM32=1
-    CONFIG_NRF=1
-    CONFIG_NXP=1
-    CONFIG_PUYA=1
-    CONFIG_RA=1
-    CONFIG_RZ=1
-    CONFIG_RP=1
-    CONFIG_SAM=1
-    CONFIG_STM=1
-    CONFIG_TI=1
-    CONFIG_TI_ICEPICK=1
-    CONFIG_XILINX=1
+
+    # BlackMagic targets
+    ${BMP_TARGET_DEFS}
 )
 
 # BlackMagic sources
@@ -86,7 +85,11 @@ target_include_directories(blackmagic INTERFACE ${CMAKE_CURRENT_LIST_DIR}/blackm
 # Generate version variable for BlackMagic
 execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ${CMAKE_CURRENT_LIST_DIR}/blackmagic/.git describe --tags --always
     OUTPUT_VARIABLE GIT_BMP_REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
-   
+
+# ============================================================================
+# SEGGER RTT setting up
+# ============================================================================
+
 # SEGGER RTT library
 add_library(segger_rtt INTERFACE)
 
@@ -105,6 +108,10 @@ target_sources(segger_rtt INTERFACE
 target_link_libraries(segger_rtt INTERFACE
     segger_rtt_config
 )
+
+# ============================================================================
+# SEGGER SysView setting up
+# ============================================================================
 
 # SEGGER SysView library
 add_library(segger_sysview INTERFACE)

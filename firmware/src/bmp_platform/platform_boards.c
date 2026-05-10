@@ -33,27 +33,7 @@
 
 #include "version.h"
 
-#if ENABLE_DEBUG == 1
-#define BUILD_TYPE_STRING "Debug Build"
-#else
-#define BUILD_TYPE_STRING
-#endif
-
-#if PLATFORM_AUTO_DETECT
-#define BOARD_AUTO_DETECT_STRING "auto-detect"
-#else
-#define BOARD_AUTO_DETECT_STRING
-#endif
-
-#if PLATFORM_AUTO_DETECT && (ENABLE_DEBUG == 1)
-#define PLATFORM_IDENT_EXTRA_INFO ", " BOARD_AUTO_DETECT_STRING ", " BUILD_TYPE_STRING
-#elif (ENABLE_DEBUG == 1)
-#define PLATFORM_IDENT_EXTRA_INFO ", "BUILD_TYPE_STRING
-#elif PLATFORM_AUTO_DETECT
-#define PLATFORM_IDENT_EXTRA_INFO ", " BOARD_AUTO_DETECT_STRING
-#else
-#define PLATFORM_IDENT_EXTRA_INFO
-#endif
+#include "platform_ident_extra_info.h"
 
 #define PLATFORM_IDENT_MIOLINK      "MioLink" PLATFORM_IDENT_EXTRA_INFO
 #define PLATFORM_IDENT_MIOLINK_PICO "MioLink_Pico" PLATFORM_IDENT_EXTRA_INFO
@@ -87,94 +67,153 @@ static const char *platform_ident_ptr = "";
 char board_ident[BOARD_IDENT_LENGTH] = "";
 
 #if PLATFORM_AUTO_DETECT || PLATFORM_BOARD_MIOLINK
-/* MioLink revA pins */
-static const platform_target_pins_t miolink_rev_a_target_pins = {.tck = MIOLINK_REVA_TARGET_TCK_PIN,
-	.tms = MIOLINK_REVA_TARGET_TMS_PIN,
-	.tms_dir = MIOLINK_REVA_TARGET_TMS_DIR_PIN,
-	.tdi = MIOLINK_REVA_TARGET_TDI_PIN,
-	.tdo = MIOLINK_REVA_TARGET_TDO_PIN,
-	.uart_tx = MIOLINK_REVA_TARGET_UART_TX_PIN,
-	.uart_rx = MIOLINK_REVA_TARGET_UART_RX_PIN,
-	.reset = MIOLINK_REVA_TARGET_NRST_PIN,
-	.reset_state = true};
+
+/**
+ * \brief GPIO maps for MioLink main board — hardware revision A.
+ *
+ * Numeric values come from board headers (\c MIOLINK_REVA_*).
+ */
+
+static const platform_target_pins_t miolink_rev_a_target_pins = {
+	.tck = MIOLINK_REVA_TARGET_TCK_PIN,             /**< Target SWD/JTAG clock (TCK). */
+	.tms = MIOLINK_REVA_TARGET_TMS_PIN,             /**< Target TMS / bidirectional SWDIO data. */
+	.tms_dir = MIOLINK_REVA_TARGET_TMS_DIR_PIN,     /**< TMS/SWDIO direction control (when used). */
+	.tdi = MIOLINK_REVA_TARGET_TDI_PIN,             /**< Target TDI (JTAG). */
+	.tdo = MIOLINK_REVA_TARGET_TDO_PIN,             /**< Target TDO (JTAG). */
+	.uart_tx = MIOLINK_REVA_TARGET_UART_TX_PIN,     /**< Target UART TX (probe → target). */
+	.uart_rx = MIOLINK_REVA_TARGET_UART_RX_PIN,     /**< Target UART RX (target → probe). */
+	.reset = MIOLINK_REVA_TARGET_NRST_PIN,         /**< Target nRESET / SRST output. */
+	.reset_state = true,                            /**< Default nRESET level when idle (active-low semantics). */
+};
 
 static const platform_led_pins_t miolink_rev_a_led_pins = {
-	.act = MIOLINK_REVA_LED_ACT_PIN, .ser = MIOLINK_REVA_LED_SER_PIN, .err = MIOLINK_REVA_LED_ERR_PIN};
+	.act = MIOLINK_REVA_LED_ACT_PIN, /**< Activity / general status LED. */
+	.ser = MIOLINK_REVA_LED_SER_PIN, /**< UART / serial activity LED. */
+	.err = MIOLINK_REVA_LED_ERR_PIN, /**< Error / fault LED. */
+};
 
-static const platform_vtref_info_t miolink_rev_a_vtref_info = {.enable_pin = MIOLINK_REVA_TARGET_VOLTAGE_ENABLE_PIN,
-	.fault_pin = MIOLINK_REVA_TARGET_VOLTAGE_FAULT_PIN,
-	.adc_channel = MIOLINK_REVA_TARGET_VOLTAGE_ADC_CHANNEL};
+static const platform_vtref_info_t miolink_rev_a_vtref_info = {
+	.enable_pin = MIOLINK_REVA_TARGET_VOLTAGE_ENABLE_PIN, /**< Target supply enable output. */
+	.fault_pin = MIOLINK_REVA_TARGET_VOLTAGE_FAULT_PIN,   /**< Power-good or fault sense input. */
+	.adc_channel = MIOLINK_REVA_TARGET_VOLTAGE_ADC_CHANNEL, /**< ADC channel index for rail monitoring. */
+};
 
-/* MioLink revB pins */
-static const platform_target_pins_t miolink_rev_b_target_pins = {.tck = MIOLINK_REVB_TARGET_TCK_PIN,
-	.tms = MIOLINK_REVB_TARGET_TMS_PIN,
-	.tms_dir = MIOLINK_REVB_TARGET_TMS_DIR_PIN,
-	.tdi = MIOLINK_REVB_TARGET_TDI_PIN,
-	.tdo = MIOLINK_REVB_TARGET_TDO_PIN,
-	.uart_tx = MIOLINK_REVB_TARGET_UART_TX_PIN,
-	.uart_rx = MIOLINK_REVB_TARGET_UART_RX_PIN,
-	.reset = MIOLINK_REVB_TARGET_NRST_PIN,
-	.reset_state = true};
+/**
+ * \brief GPIO maps for MioLink main board — hardware revision B.
+ *
+ * Numeric values come from board headers (\c MIOLINK_REVB_*).
+ */
+
+static const platform_target_pins_t miolink_rev_b_target_pins = {
+	.tck = MIOLINK_REVB_TARGET_TCK_PIN,             /**< Target SWD/JTAG clock (TCK). */
+	.tms = MIOLINK_REVB_TARGET_TMS_PIN,             /**< Target TMS / bidirectional SWDIO data. */
+	.tms_dir = MIOLINK_REVB_TARGET_TMS_DIR_PIN,     /**< TMS/SWDIO direction control (when used). */
+	.tdi = MIOLINK_REVB_TARGET_TDI_PIN,             /**< Target TDI (JTAG). */
+	.tdo = MIOLINK_REVB_TARGET_TDO_PIN,             /**< Target TDO (JTAG). */
+	.uart_tx = MIOLINK_REVB_TARGET_UART_TX_PIN,     /**< Target UART TX (probe → target). */
+	.uart_rx = MIOLINK_REVB_TARGET_UART_RX_PIN,     /**< Target UART RX (target → probe). */
+	.reset = MIOLINK_REVB_TARGET_NRST_PIN,         /**< Target nRESET / SRST output. */
+	.reset_state = true,                            /**< Default nRESET level when idle (active-low semantics). */
+};
 
 static const platform_led_pins_t miolink_rev_b_led_pins = {
-	.act = MIOLINK_REVB_LED_ACT_PIN, .ser = MIOLINK_REVB_LED_SER_PIN, .err = MIOLINK_REVB_LED_ERR_PIN};
+	.act = MIOLINK_REVB_LED_ACT_PIN, /**< Activity / general status LED. */
+	.ser = MIOLINK_REVB_LED_SER_PIN, /**< UART / serial activity LED. */
+	.err = MIOLINK_REVB_LED_ERR_PIN, /**< Error / fault LED. */
+};
 
-static const platform_vtref_info_t miolink_rev_b_vtref_info = {.enable_pin = MIOLINK_REVB_TARGET_VOLTAGE_ENABLE_PIN,
-	.fault_pin = MIOLINK_REVB_TARGET_VOLTAGE_FAULT_PIN,
-	.adc_channel = MIOLINK_REVB_TARGET_VOLTAGE_ADC_CHANNEL};
+static const platform_vtref_info_t miolink_rev_b_vtref_info = {
+	.enable_pin = MIOLINK_REVB_TARGET_VOLTAGE_ENABLE_PIN, /**< Target supply enable output. */
+	.fault_pin = MIOLINK_REVB_TARGET_VOLTAGE_FAULT_PIN,   /**< Power-good or fault sense input. */
+	.adc_channel = MIOLINK_REVB_TARGET_VOLTAGE_ADC_CHANNEL, /**< ADC channel index for rail monitoring. */
+};
 #endif
 
 #if PLATFORM_AUTO_DETECT || PLATFORM_BOARD_MIOLINK_PICO
-/* MioLink_Pico pins */
-static const platform_target_pins_t miolink_pico_target_pins = {.tck = MIOLINK_PICO_TARGET_TCK_PIN,
-	.tms = MIOLINK_PICO_TARGET_TMS_PIN,
-	.tms_dir = MIOLINK_PICO_TARGET_TMS_DIR_PIN,
-	.tdi = MIOLINK_PICO_TARGET_TDI_PIN,
-	.tdo = MIOLINK_PICO_TARGET_TDO_PIN,
-	.uart_tx = MIOLINK_PICO_TARGET_UART_TX_PIN,
-	.uart_rx = MIOLINK_PICO_TARGET_UART_RX_PIN,
-	.reset = MIOLINK_PICO_TARGET_NRST_PIN,
-	.reset_state = true};
+
+/**
+ * \brief GPIO maps for MioLink_Pico carrier (\c MIOLINK_PICO_* board macros).
+ */
+
+static const platform_target_pins_t miolink_pico_target_pins = {
+	.tck = MIOLINK_PICO_TARGET_TCK_PIN,             /**< Target SWD/JTAG clock (TCK). */
+	.tms = MIOLINK_PICO_TARGET_TMS_PIN,             /**< Target TMS / bidirectional SWDIO data. */
+	.tms_dir = MIOLINK_PICO_TARGET_TMS_DIR_PIN,     /**< TMS/SWDIO direction control (when used). */
+	.tdi = MIOLINK_PICO_TARGET_TDI_PIN,             /**< Target TDI (JTAG). */
+	.tdo = MIOLINK_PICO_TARGET_TDO_PIN,             /**< Target TDO (JTAG). */
+	.uart_tx = MIOLINK_PICO_TARGET_UART_TX_PIN,     /**< Target UART TX (probe → target). */
+	.uart_rx = MIOLINK_PICO_TARGET_UART_RX_PIN,     /**< Target UART RX (target → probe). */
+	.reset = MIOLINK_PICO_TARGET_NRST_PIN,         /**< Target nRESET / SRST output. */
+	.reset_state = true,                            /**< Default nRESET level when idle (active-low semantics). */
+};
 
 static const platform_led_pins_t miolink_pico_led_pins = {
-	.act = MIOLINK_PICO_LED_ACT_PIN, .ser = MIOLINK_PICO_LED_SER_PIN, .err = MIOLINK_PICO_LED_ERR_PIN};
+	.act = MIOLINK_PICO_LED_ACT_PIN, /**< Activity / general status LED. */
+	.ser = MIOLINK_PICO_LED_SER_PIN, /**< UART / serial activity LED. */
+	.err = MIOLINK_PICO_LED_ERR_PIN, /**< Error / fault LED. */
+};
 
-static const platform_vtref_info_t miolink_pico_vtref_info = {.enable_pin = MIOLINK_PICO_TARGET_VOLTAGE_ENABLE_PIN,
-	.fault_pin = MIOLINK_PICO_TARGET_VOLTAGE_FAULT_PIN,
-	.adc_channel = MIOLINK_PICO_TARGET_VOLTAGE_ADC_CHANNEL};
+static const platform_vtref_info_t miolink_pico_vtref_info = {
+	.enable_pin = MIOLINK_PICO_TARGET_VOLTAGE_ENABLE_PIN, /**< Target supply enable output. */
+	.fault_pin = MIOLINK_PICO_TARGET_VOLTAGE_FAULT_PIN,   /**< Power-good or fault sense input. */
+	.adc_channel = MIOLINK_PICO_TARGET_VOLTAGE_ADC_CHANNEL, /**< ADC channel index for rail monitoring. */
+};
 #endif
 
 #if PLATFORM_AUTO_DETECT || PLATFORM_PICO_BOARD
-/* Pico pins */
-static const platform_target_pins_t pico_target_pins = {.tck = PICO_TARGET_TCK_PIN,
-	.tms = PICO_TARGET_TMS_PIN,
-	.tms_dir = PIN_NOT_CONNECTED,
-	.tdi = PICO_TARGET_TDI_PIN,
-	.tdo = PICO_TARGET_TDO_PIN,
-	.uart_tx = PICO_TARGET_UART_TX_PIN,
-	.uart_rx = PICO_TARGET_UART_RX_PIN,
-	.reset = PICO_TARGET_NRST_PIN,
-	.reset_state = false};
+
+/**
+ * \brief GPIO maps for Raspberry Pi Pico as a debug adapter (\c PICO_* board macros).
+ *
+ * \note No separate TMS direction line; unused LED slots use \ref PIN_NOT_CONNECTED.
+ */
+
+static const platform_target_pins_t pico_target_pins = {
+	.tck = PICO_TARGET_TCK_PIN,                     /**< Target SWD/JTAG clock (TCK). */
+	.tms = PICO_TARGET_TMS_PIN,                     /**< Target TMS / SWDIO. */
+	.tms_dir = PIN_NOT_CONNECTED,                   /**< Not routed on this pinout. */
+	.tdi = PICO_TARGET_TDI_PIN,                     /**< Target TDI (JTAG). */
+	.tdo = PICO_TARGET_TDO_PIN,                     /**< Target TDO (JTAG). */
+	.uart_tx = PICO_TARGET_UART_TX_PIN,             /**< Target UART TX (probe → target). */
+	.uart_rx = PICO_TARGET_UART_RX_PIN,             /**< Target UART RX (target → probe). */
+	.reset = PICO_TARGET_NRST_PIN,                 /**< Target nRESET / SRST output. */
+	.reset_state = false,                           /**< Default nRESET level when idle. */
+};
 
 static const platform_led_pins_t pico_led_pins = {
-	.act = PICO_LED_ACT_PIN, .ser = PIN_NOT_CONNECTED, .err = PIN_NOT_CONNECTED};
+	.act = PICO_LED_ACT_PIN,       /**< On-board LED used as activity. */
+	.ser = PIN_NOT_CONNECTED,      /**< Not populated / not used. */
+	.err = PIN_NOT_CONNECTED,      /**< Not populated / not used. */
+};
 
 #endif
 
 #if PLATFORM_AUTO_DETECT || PLATFORM_PICO_W_BOARD
-/* Pico W pins */
-static const platform_target_pins_t pico_w_target_pins = {.tck = PICO_W_TARGET_TCK_PIN,
-	.tms = PICO_W_TARGET_TMS_PIN,
-	.tms_dir = PIN_NOT_CONNECTED,
-	.tdi = PICO_W_TARGET_TDI_PIN,
-	.tdo = PICO_W_TARGET_TDO_PIN,
-	.uart_tx = PICO_W_TARGET_UART_TX_PIN,
-	.uart_rx = PICO_W_TARGET_UART_RX_PIN,
-	.reset = PICO_W_TARGET_NRST_PIN,
-	.reset_state = false};
+
+/**
+ * \brief GPIO maps for Raspberry Pi Pico W as a debug adapter (\c PICO_W_* board macros).
+ *
+ * \note On-board status LEDs are not wired for BMP-style act/ser/err; all three entries are
+ *       \ref PIN_NOT_CONNECTED.
+ */
+
+static const platform_target_pins_t pico_w_target_pins = {
+	.tck = PICO_W_TARGET_TCK_PIN,                   /**< Target SWD/JTAG clock (TCK). */
+	.tms = PICO_W_TARGET_TMS_PIN,                   /**< Target TMS / SWDIO. */
+	.tms_dir = PIN_NOT_CONNECTED,                   /**< Not routed on this pinout. */
+	.tdi = PICO_W_TARGET_TDI_PIN,                   /**< Target TDI (JTAG). */
+	.tdo = PICO_W_TARGET_TDO_PIN,                   /**< Target TDO (JTAG). */
+	.uart_tx = PICO_W_TARGET_UART_TX_PIN,           /**< Target UART TX (probe → target). */
+	.uart_rx = PICO_W_TARGET_UART_RX_PIN,           /**< Target UART RX (target → probe). */
+	.reset = PICO_W_TARGET_NRST_PIN,               /**< Target nRESET / SRST output. */
+	.reset_state = false,                           /**< Default nRESET level when idle. */
+};
 
 static const platform_led_pins_t pico_w_led_pins = {
-	.act = PIN_NOT_CONNECTED, .ser = PIN_NOT_CONNECTED, .err = PIN_NOT_CONNECTED};
+	.act = PIN_NOT_CONNECTED, /**< No dedicated BMP activity GPIO (see block comment above). */
+	.ser = PIN_NOT_CONNECTED, /**< Not used. */
+	.err = PIN_NOT_CONNECTED, /**< Not used. */
+};
 #endif
 
 platform_device_type_t platform_hwtype(void)

@@ -25,6 +25,7 @@
 #include "hardware/adc.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
+#include "hardware/irq.h"
 
 #include "platform.h"
 
@@ -34,6 +35,10 @@ static uint16_t target_voltage = 0;
 
 static void adc_target_voltage_dma_handler(void)
 {
+	if ((adc_target_voltage_dma_chan < 0) || (dma_channel_get_irq1_status((uint)adc_target_voltage_dma_chan) == false)) {
+		return;
+	}
+
 	uint32_t temp = 0;
 
 	for (size_t i = 0; i < sizeof(adc_target_voltage_buf); i++) {
@@ -49,10 +54,10 @@ static void adc_target_voltage_dma_handler(void)
 
 	target_voltage = (uint16_t)(temp);
 
-	dma_channel_acknowledge_irq1(adc_target_voltage_dma_chan);
-	dma_channel_set_read_addr(adc_target_voltage_dma_chan, &adc_hw->fifo, false);
-	dma_channel_set_write_addr(adc_target_voltage_dma_chan, adc_target_voltage_buf, false);
-	dma_channel_set_trans_count(adc_target_voltage_dma_chan, sizeof(adc_target_voltage_buf), true);
+	dma_channel_acknowledge_irq1((uint)adc_target_voltage_dma_chan);
+	dma_channel_set_read_addr((uint)adc_target_voltage_dma_chan, &adc_hw->fifo, false);
+	dma_channel_set_write_addr((uint)adc_target_voltage_dma_chan, adc_target_voltage_buf, false);
+	dma_channel_set_trans_count((uint)adc_target_voltage_dma_chan, sizeof(adc_target_voltage_buf), true);
 }
 
 void platform_vtref_init(void)
@@ -97,10 +102,11 @@ void platform_vtref_init(void)
 				true                            // start immediately
 			);
 
-			dma_channel_acknowledge_irq0(adc_target_voltage_dma_chan);
-			dma_channel_set_irq1_enabled(adc_target_voltage_dma_chan, true);
+			dma_channel_acknowledge_irq1((uint)adc_target_voltage_dma_chan);
+			dma_channel_set_irq1_enabled((uint)adc_target_voltage_dma_chan, true);
 
-			irq_set_exclusive_handler(DMA_IRQ_1, adc_target_voltage_dma_handler);
+			irq_add_shared_handler(DMA_IRQ_1, adc_target_voltage_dma_handler,
+				PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
 			irq_set_enabled(DMA_IRQ_1, true);
 
 			adc_run(true);

@@ -1,3 +1,7 @@
+# ============================================================================
+# BlackMagic RTT and SWO support
+# ============================================================================
+
 add_library(bmp_rtt_swo INTERFACE)
 
 target_include_directories(bmp_rtt_swo INTERFACE

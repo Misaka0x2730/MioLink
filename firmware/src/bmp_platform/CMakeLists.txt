@@ -1,3 +1,7 @@
+# ============================================================================
+# BlackMagic platform library
+# ============================================================================
+
 add_library(bmp_platform INTERFACE)
 
 target_include_directories(bmp_platform INTERFACE

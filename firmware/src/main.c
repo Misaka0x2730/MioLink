@@ -87,9 +87,10 @@ _Noreturn static void gdb_thread(void *params)
 {
 	(void)params;
 
+	platform_init();
+
 	vTaskSuspendAll();
 
-	platform_init();
 	blackmagic_usb_init();
 	usb_serial_init();
 	traceswo_task_init();

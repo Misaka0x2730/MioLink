@@ -21,11 +21,34 @@
 #ifndef MIOLINK_PLATFORM_TIMING_H
 #define MIOLINK_PLATFORM_TIMING_H
 
+/**********************************************************************************************************************
+ * Includes
+ **********************************************************************************************************************/
+
 #include "general.h"
 
+/**********************************************************************************************************************
+ * Global Definitions
+ **********************************************************************************************************************/
+
+/** \brief Default SWD/JTAG interface frequency (Hz) when nothing else is configured. */
 #define PLATFORM_DEFAULT_FREQUENCY (4000000UL)
 
+/**********************************************************************************************************************
+ * Global Functions Prototypes
+ **********************************************************************************************************************/
+
+/**
+ * \brief Initialise platform timing helpers (timers used by \c platform_timeout_*).
+ */
 void platform_timing_init(void);
+
+/**
+ * \brief Milliseconds remaining until \a target expires.
+ *
+ * \param target Timeout object previously armed with \c platform_timeout_set.
+ * \return Approximate milliseconds left; \c 0 if already expired.
+ */
 uint32_t platform_timeout_time_left(const platform_timeout_s *target);
 
 #endif /* MIOLINK_PLATFORM_TIMING_H */

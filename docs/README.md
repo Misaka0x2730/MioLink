@@ -21,6 +21,7 @@ Detailed instructions on how to use the debugger, how to configure SWO, RTT and 
     - [SWD pins description](#swd-pins-description)
 - [Building and flashing the probe](#building-and-flashing-the-probe)
   - [Requirements](#requirements)
+  - [Board selection](#board-selection)
   - [Build on Windows](#build-on-windows)
     - [Install all requirements and clone the repository](#install-all-requirements-and-clone-the-repository)
     - [Build debug image](#build-debug-image)
@@ -131,6 +132,26 @@ The following tools are required to build this project:
 - cmake
 - gcc
 - arm-none-eabi-gcc
+
+## Board selection
+By default, the firmware is built with `-DPICO_BOARD=auto`, which enables runtime detection of the board type (MioLink rev. A/B, MioLink_Pico, Pico, or Pico W).  
+If you want to build for a specific board, pass `-DPICO_BOARD=<board>` to the `cmake` command.
+
+The following board options are available:
+
+Board | Description
+:----:|:----------:
+`auto` | Default. Runtime board detection, supports all boards with a single firmware.
+`miolink` | MioLink (rev. A and rev. B).
+`miolink_pico` | MioLink_Pico breakout board.
+
+Any Pico SDK board (e.g. `pico`, `pico_w`, `weact_studio_rp2040_2mb`) can also be used.  
+When a specific board is selected, only the code and drivers for that board are included.
+
+Example:
+```
+cmake -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=miolink ..
+```
 
 ## Build on Windows
 The simplest way to build the firmware under Windows environment is to use MinGW64.

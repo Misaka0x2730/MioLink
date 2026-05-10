@@ -45,7 +45,7 @@
 #define configUSE_TICKLESS_IDLE  0
 #define configUSE_IDLE_HOOK      0
 #define configUSE_TICK_HOOK      0
-#define configTICK_RATE_HZ       ((TickType_t)1000)
+#define configTICK_RATE_HZ       ((TickType_t)CONFIG_FREERTOS_TICK_RATE_HZ)
 #define configMAX_PRIORITIES     5
 #define configMINIMAL_STACK_SIZE ((configSTACK_DEPTH_TYPE)128)
 #define configCPU_CLOCK_HZ       (125000000UL)

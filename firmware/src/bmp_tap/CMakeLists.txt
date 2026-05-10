@@ -1,3 +1,7 @@
+# ============================================================================
+# BlackMagic SWD/JTAG library
+# ============================================================================
+
 add_library(bmp_tap INTERFACE)
 
 target_include_directories(bmp_tap INTERFACE

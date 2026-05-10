@@ -107,6 +107,8 @@ static struct {
 
 static bool use_uart_on_tdi_tdo = false;
 static uart_inst_t *current_uart = USB_SERIAL_UART_MAIN;
+/** \c uart_rx_isr on uart0 shares \c TRACESWO_UART_IRQ; do not use \c irq_set_enabled(..., false) on that line. */
+static bool usb_serial_rx_isr_on_tdi = false;
 
 TaskHandle_t usb_uart_task = NULL;
 
@@ -434,9 +436,10 @@ static void uart_update_config(cdc_line_coding_t *line_coding)
 		irq_set_enabled(USB_SERIAL_UART_MAIN_IRQ, false);
 		irq_remove_handler(USB_SERIAL_UART_MAIN_IRQ, current_handler);
 
-		current_handler = irq_get_exclusive_handler(USB_SERIAL_UART_TDI_TDO_IRQ);
-		irq_set_enabled(USB_SERIAL_UART_TDI_TDO_IRQ, false);
-		irq_remove_handler(USB_SERIAL_UART_TDI_TDO_IRQ, current_handler);
+		if (usb_serial_rx_isr_on_tdi != false) {
+			irq_remove_handler(USB_SERIAL_UART_TDI_TDO_IRQ, uart_rx_isr);
+			usb_serial_rx_isr_on_tdi = false;
+		}
 
 		uart_deinit(USB_SERIAL_UART_MAIN);
 		current_uart = USB_SERIAL_UART_TDI_TDO;
@@ -452,9 +455,10 @@ static void uart_update_config(cdc_line_coding_t *line_coding)
 		irq_set_enabled(USB_SERIAL_UART_MAIN_IRQ, false);
 		irq_remove_handler(USB_SERIAL_UART_MAIN_IRQ, current_handler);
 
-		current_handler = irq_get_exclusive_handler(USB_SERIAL_UART_TDI_TDO_IRQ);
-		irq_set_enabled(USB_SERIAL_UART_TDI_TDO_IRQ, false);
-		irq_remove_handler(USB_SERIAL_UART_TDI_TDO_IRQ, current_handler);
+		if (usb_serial_rx_isr_on_tdi != false) {
+			irq_remove_handler(USB_SERIAL_UART_TDI_TDO_IRQ, uart_rx_isr);
+			usb_serial_rx_isr_on_tdi = false;
+		}
 
 		uart_deinit(USB_SERIAL_UART_TDI_TDO);
 		current_uart = USB_SERIAL_UART_MAIN;
@@ -477,11 +481,13 @@ static void uart_update_config(cdc_line_coding_t *line_coding)
 		gpio_set_function(target_pins->tdo, GPIO_FUNC_UART);
 		gpio_set_function(target_pins->tdi, GPIO_FUNC_UART);
 
-		irq_handler_t current_handler = irq_get_exclusive_handler(USB_SERIAL_UART_TDI_TDO_IRQ);
-		if (current_handler != NULL) {
-			irq_remove_handler(USB_SERIAL_UART_TDI_TDO_IRQ, current_handler);
+		if (usb_serial_rx_isr_on_tdi != false) {
+			irq_remove_handler(USB_SERIAL_UART_TDI_TDO_IRQ, uart_rx_isr);
+			usb_serial_rx_isr_on_tdi = false;
 		}
-		irq_set_exclusive_handler(USB_SERIAL_UART_TDI_TDO_IRQ, uart_rx_isr);
+		irq_add_shared_handler(USB_SERIAL_UART_TDI_TDO_IRQ, uart_rx_isr,
+			PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
+		usb_serial_rx_isr_on_tdi = true;
 		irq_set_enabled(USB_SERIAL_UART_TDI_TDO_IRQ, true);
 	}
 
@@ -566,17 +572,30 @@ static void uart_dma_handler(void)
 
 	BaseType_t higher_priority_task_woken = pdFALSE;
 
-	assert((uart_dma_rx_channel != -1) && (uart_dma_tx_channel != -1));
+#ifdef PLATFORM_HAS_TRACESWO
+	if (((uart_dma_tx_channel < 0) || (dma_channel_get_irq0_status((uint)uart_dma_tx_channel) == false)) && ((uart_dma_rx_channel < 0) || (dma_channel_get_irq0_status((uint)uart_dma_rx_channel) == false)) && (traceswo_rx_dma_irq0_pending() == false)) {
+		return;
+	}
+#else
+	if (((uart_dma_tx_channel < 0) || (dma_channel_get_irq0_status((uint)uart_dma_tx_channel) == false)) && ((uart_dma_rx_channel < 0) || (dma_channel_get_irq0_status((uint)uart_dma_rx_channel) == false))) {
+		return;
+	}
+#endif
 
-	if (dma_channel_get_irq0_status(uart_dma_tx_channel)) {
-		dma_channel_set_irq0_enabled(uart_dma_tx_channel, false);
-		dma_channel_acknowledge_irq0(uart_dma_tx_channel);
+	const bool tx_pending =
+		(uart_dma_tx_channel >= 0) && (dma_channel_get_irq0_status((uint)uart_dma_tx_channel) == true);
+	const bool rx_pending =
+		(uart_dma_rx_channel >= 0) && (dma_channel_get_irq0_status((uint)uart_dma_rx_channel) == true);
+
+	if (tx_pending) {
+		dma_channel_set_irq0_enabled((uint)uart_dma_tx_channel, false);
+		dma_channel_acknowledge_irq0((uint)uart_dma_tx_channel);
 
 		xTaskNotifyFromISR(usb_uart_task, USB_CDC_NOTIF_SERIAL_TX_COMPLETE, eSetBits, &higher_priority_task_woken);
 	}
 
-	if (dma_channel_get_irq0_status(uart_dma_rx_channel)) {
-		dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
+	if (rx_pending) {
+		dma_channel_set_irq0_enabled((uint)uart_dma_rx_channel, false);
 		uart_rx_dma_buffer_full_mask |= (1UL << uart_rx_dma_current_buffer);
 
 		if (++uart_rx_dma_current_buffer >= USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS) {
@@ -612,7 +631,8 @@ static void target_serial_thread(void *params)
 		uart_dma_rx_ctrl_block_info[i].address = (uart_rx_buf[i]);
 	}
 
-	irq_set_exclusive_handler(USB_SERIAL_TRACESWO_DMA_IRQ, uart_dma_handler);
+	irq_add_shared_handler(USB_SERIAL_TRACESWO_DMA_IRQ, uart_dma_handler,
+		PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
 	irq_set_enabled(USB_SERIAL_TRACESWO_DMA_IRQ, true);
 
 	uint32_t wait_time = USB_SERIAL_TASK_NOTIFY_WAIT_PERIOD;

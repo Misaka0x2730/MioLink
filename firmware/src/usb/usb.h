@@ -22,13 +22,39 @@
 #ifndef MIOLINK_USB_H
 #define MIOLINK_USB_H
 
+/**********************************************************************************************************************
+ * Includes
+ **********************************************************************************************************************/
+
 #include <stdint.h>
 #include <stdbool.h>
 
+/**********************************************************************************************************************
+ * Global Functions Prototypes
+ **********************************************************************************************************************/
+
+/**
+ * \brief Initialise TinyUSB and related USB state for Black Magic.
+ */
 void blackmagic_usb_init(void);
 
+/**
+ * \brief Return the current USB configuration value (device configuration descriptor index).
+ *
+ * \return Active configuration number, or \c 0 if not configured.
+ */
 uint16_t usb_get_config(void);
+
+/**
+ * \brief Whether USB configuration or interface alt-setting changed since last clear.
+ *
+ * \return \c true if the host updated configuration and the stack should react.
+ */
 bool usb_config_is_updated(void);
+
+/**
+ * \brief Clear the “configuration updated” latch after handling.
+ */
 void usb_config_clear_updated(void);
 
 #endif /* MIOLINK_USB_H */

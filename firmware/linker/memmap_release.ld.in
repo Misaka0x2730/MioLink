@@ -81,7 +81,7 @@ SECTIONS
                        *blackmagic/src/target/jtag*.c.o*
                        *blackmagic/src/target/target_flash.c.o*
                        *bmp_platform/*.c.o*
-                       *bmp_port/*.c.o*
+                       *bmp_general/*.c.o*
                        *bmp_rtt_swo/*.c.o*
                        *bmp_tap/*.c.o*
                        *target_serial/*.c.o*
@@ -121,7 +121,7 @@ SECTIONS
                        *blackmagic/src/target/jtag*.c.o*
                        *blackmagic/src/target/target_flash.c.o*
                        *bmp_platform/*.c.o*
-                       *bmp_port/*.c.o*
+                       *bmp_general/*.c.o*
                        *bmp_rtt_swo/*.c.o*
                        *bmp_tap/*.c.o*
                        *target_serial/*.c.o*
