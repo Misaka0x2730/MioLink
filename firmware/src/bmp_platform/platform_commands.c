@@ -52,7 +52,7 @@ bool cmd_uart_on_tdi_tdo(target_s *target, int argc, const char **argv)
 	if (argc == 1) {
 		print_status = true;
 	} else if (argc == 2) {
-		if (traceswo_uart_is_used(TRACESWO_UART)) {
+		if (swo_current_mode != swo_none) {
 			print_status = true;
 			gdb_out("You should disable TRACESWO before activating UART on TDI and TDO!\n");
 		} else if (parse_enable_or_disable(argv[1], &uart_on_tdi_tdo)) {

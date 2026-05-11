@@ -2,6 +2,51 @@
 
 Use these templates when creating new `.h` and `.c` files in `firmware/`.
 
+## Documentation And Initialization Rules
+
+- Initialize every variable at declaration. Local variables inside functions are exempt only from the Doxygen requirement, not from initialization.
+- Add Doxygen comments for functions, types, global variables, file-scope variables, macros, and macro definitions.
+- Put each function Doxygen block next to the prototype/declaration. Public function comments belong before header prototypes; private `static` function comments belong before source-file prototypes.
+- Do not duplicate the same Doxygen block above the implementation if the prototype already has it.
+
+## Doxygen Snippets
+
+Macro:
+
+```c
+#define <MACRO_NAME> (<VALUE>) /**< Brief macro description. */
+```
+
+Type:
+
+```c
+/**
+ * \brief Brief type description.
+ */
+typedef struct {
+	uint32_t field; /**< Brief field description. */
+} <type_name>_t;
+```
+
+Global or file-scope data:
+
+```c
+extern uint32_t <global_name>; /**< Brief global variable description. */
+static uint32_t <private_value> = 0; /**< Brief file-scope variable description. */
+```
+
+Function prototype:
+
+```c
+/**
+ * \brief Brief function description.
+ *
+ * \param value Brief parameter description.
+ * \return Brief return value description.
+ */
+bool <function_name>(uint32_t value);
+```
+
 ## Choosing A Header
 
 - Use "Original MioLink File Header" for files created specifically for MioLink.

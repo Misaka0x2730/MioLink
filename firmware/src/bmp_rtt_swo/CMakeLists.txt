@@ -12,3 +12,7 @@ file(GLOB bmp_rtt_swo_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/*.c")
 target_sources(bmp_rtt_swo INTERFACE
     ${bmp_rtt_swo_sources}
 )
+
+target_link_libraries(bmp_rtt_swo INTERFACE
+    uart_bridge
+)

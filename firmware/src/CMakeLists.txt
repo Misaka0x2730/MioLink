@@ -1,4 +1,5 @@
 # Add all subdirectories
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/uart_bridge)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/bmp_platform)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/bmp_general)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/bmp_rtt_swo)

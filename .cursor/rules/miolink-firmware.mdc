@@ -1,0 +1,9 @@
+---
+description: MioLink firmware rules for Cursor.
+globs: firmware/**/*
+alwaysApply: false
+---
+
+Use @firmware/AGENTS.md for firmware architecture, build, style, and verification rules.
+
+Use @firmware/FILE_TEMPLATES.md when creating new firmware `.h` or `.c` files.

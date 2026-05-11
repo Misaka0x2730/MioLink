@@ -17,8 +17,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef MIOLINK_RP_DMA_H
-#define MIOLINK_RP_DMA_H
+#ifndef MIOLINK_DMA_EX_H
+#define MIOLINK_DMA_EX_H
 
 /**********************************************************************************************************************
  * Includes
@@ -37,7 +37,7 @@
  *
  * \param dma_channel DMA channel index (\c 0 … \c NUM_DMA_CHANNELS-1).
  */
-static inline void *rp_dma_get_al2_write_addr_trig(const uint32_t dma_channel)
+static inline void *dma_ex_get_al2_write_addr_trig(const uint32_t dma_channel)
 {
 	return (void *)(&(dma_hw->ch[dma_channel].al2_write_addr_trig));
 }
@@ -45,7 +45,7 @@ static inline void *rp_dma_get_al2_write_addr_trig(const uint32_t dma_channel)
 /**
  * \brief Remaining transfer count for \a dma_channel (\c TRANS_COUNT).
  */
-static inline uint32_t rp_dma_get_trans_count(const uint32_t dma_channel)
+static inline uint32_t dma_ex_get_trans_count(const uint32_t dma_channel)
 {
 	return dma_hw->ch[dma_channel].transfer_count;
 }
@@ -57,7 +57,7 @@ static inline uint32_t rp_dma_get_trans_count(const uint32_t dma_channel)
  * \param enabled     Desired run state.
  * \param trigger     \c true: write \c CTRL_TRIG (may start transfer); \c false: alias \c AL1_CTRL only.
  */
-static inline void rp_dma_set_channel_enabled(const uint32_t dma_channel, const bool enabled, const bool trigger)
+static inline void dma_ex_set_channel_enabled(const uint32_t dma_channel, const bool enabled, const bool trigger)
 {
 	if (trigger) {
 		hw_write_masked(&(dma_hw->ch[dma_channel].ctrl_trig), (bool_to_bit(enabled) << DMA_CH0_CTRL_TRIG_EN_LSB),
@@ -69,12 +69,36 @@ static inline void rp_dma_set_channel_enabled(const uint32_t dma_channel, const 
 }
 
 /**
+ * \brief Enable the DMA channel's interrupt on the given IRQ line.
+ *
+ * \param dma_channel Channel index.
+ * \param irq_index   IRQ line index: \c 0 for \c DMA_IRQ_0, \c 1 for \c DMA_IRQ_1.
+ */
+static inline void dma_ex_channel_set_irq_enabled(const uint32_t dma_channel, const uint32_t irq_index)
+{
+	io_rw_32 * const reg = (irq_index == 0u) ? &dma_hw->inte0 : &dma_hw->inte1;
+	hw_set_bits(reg, 1u << dma_channel);
+}
+
+/**
+ * \brief Disable the DMA channel's interrupt on the given IRQ line.
+ *
+ * \param dma_channel Channel index.
+ * \param irq_index   IRQ line index: \c 0 for \c DMA_IRQ_0, \c 1 for \c DMA_IRQ_1.
+ */
+static inline void dma_ex_channel_set_irq_disabled(const uint32_t dma_channel, const uint32_t irq_index)
+{
+	io_rw_32 * const reg = (irq_index == 0u) ? &dma_hw->inte0 : &dma_hw->inte1;
+	hw_clear_bits(reg, 1u << dma_channel);
+}
+
+/**
  * \brief Set \c CHAIN_TO so this channel chains into \a chain_to when complete.
  */
-static inline void rp_dma_set_chain_to(const uint32_t dma_channel, const uint32_t chain_to)
+static inline void dma_ex_set_chain_to(const uint32_t dma_channel, const uint32_t chain_to)
 {
 	hw_write_masked(&(dma_hw->ch[dma_channel].al1_ctrl), chain_to << DMA_CH0_CTRL_TRIG_CHAIN_TO_LSB,
 		DMA_CH0_CTRL_TRIG_CHAIN_TO_BITS);
 }
 
-#endif /* MIOLINK_RP_DMA_H */
+#endif /* MIOLINK_DMA_EX_H */

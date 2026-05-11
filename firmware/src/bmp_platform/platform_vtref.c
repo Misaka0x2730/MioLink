@@ -25,6 +25,7 @@
 #include "hardware/adc.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
+#include "dma_ex.h"
 #include "hardware/irq.h"
 
 #include "platform.h"
@@ -103,7 +104,7 @@ void platform_vtref_init(void)
 			);
 
 			dma_channel_acknowledge_irq1((uint)adc_target_voltage_dma_chan);
-			dma_channel_set_irq1_enabled((uint)adc_target_voltage_dma_chan, true);
+			dma_ex_channel_set_irq_enabled((uint32_t)adc_target_voltage_dma_chan, 1);
 
 			irq_add_shared_handler(DMA_IRQ_1, adc_target_voltage_dma_handler,
 				PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);

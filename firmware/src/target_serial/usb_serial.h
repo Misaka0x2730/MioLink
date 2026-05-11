@@ -100,13 +100,6 @@ uint16_t usb_get_config(void);
 bool gdb_serial_get_dtr(void);
 
 /**
- * \brief Release a UART instance from target-serial use (pins, IRQs, DMA as applicable).
- *
- * \param uart_to_release UART hardware instance to detach.
- */
-void usb_serial_uart_release(uart_inst_t *uart_to_release);
-
-/**
  * \brief Start FreeRTOS task(s) and DMA for USB↔UART bridging.
  */
 void usb_serial_init(void);

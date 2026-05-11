@@ -20,24 +20,23 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+/**********************************************************************************************************************
+ * Private Includes
+ **********************************************************************************************************************/
+
 #include "general.h"
 
-#include "hardware/clocks.h"
 #include "hardware/uart.h"
-#include "hardware/irq.h"
-#include "hardware/gpio.h"
-#include "rp_uart.h"
-#include "rp_dma.h"
 
 #include "platform.h"
 
 #include "FreeRTOS.h"
-#include "atomic.h"
-#include "timers.h"
 #include "task.h"
 
 #include "tusb.h"
 
+#include "uart_bridge.h"
 #include "usb_cdc.h"
 #include "usb_serial.h"
 
@@ -45,13 +44,13 @@
 #include "SEGGER_RTT.h"
 #endif
 
-#ifdef PLATFORM_HAS_TRACESWO
-#include "swo.h"
-#endif
-
 #ifdef ENABLE_RTT
 #include "rtt.h"
 #endif
+
+/**********************************************************************************************************************
+ * Private Definitions
+ **********************************************************************************************************************/
 
 /* UART RX Interrupt mode settings */
 #define USB_SERIAL_UART_RX_INT_FIFO_LEVEL (16)
@@ -76,310 +75,167 @@
 #define USB_SERIAL_UART_DMA_TX_BUFFER_SIZE           (256)
 #define USB_SERIAL_UART_DMA_TX_CHECK_FINISHED_PERIOD (pdMS_TO_TICKS(2))
 
-/* USB serial task settings  */
+/* USB serial task settings */
 #define USB_SERIAL_TASK_NOTIFY_WAIT_PERIOD portMAX_DELAY
 
 #define USB_SERIAL_TASK_CORE_AFFINITY (0x01) /* Core 0 only */
 #define USB_SERIAL_TASK_STACK_SIZE    (512)
 
+/**********************************************************************************************************************
+ * Private Data
+ **********************************************************************************************************************/
+
 static uint8_t uart_rx_buf[USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS][USB_SERIAL_UART_DMA_RX_BUFFER_SIZE] = {0};
-static bool uart_rx_use_dma = false;
-static bool uart_rx_ongoing = false;
-static bool uart_tx_ongoing = false;
-
-static uint32_t uart_rx_int_buf_pos = 0;
-
-static int uart_dma_rx_channel = -1;
-static int uart_dma_rx_ctrl_channel = -1;
-static uint32_t uart_rx_dma_buffer_full_mask = 0;
-static uint32_t uart_rx_dma_current_buffer = 0;
-static uint32_t uart_rx_next_buffer_to_send = 0;
-static xTimerHandle uart_rx_dma_timeout_timer;
-
 static uint8_t uart_tx_dma_buf[USB_SERIAL_UART_DMA_TX_BUFFER_SIZE] = {0};
-static int uart_dma_tx_channel = -1;
-static bool uart_tx_dma_finished = false;
 
-static struct {
-	uint8_t *address;
-} uart_dma_rx_ctrl_block_info[USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS + 1]
+/* Control-block list for the chained RX DMA. Alignment matches the ring-wrap window
+ * (count * sizeof(uint32_t)) used by channel_config_set_ring inside the bridge. */
+static uint8_t *uart_dma_rx_ctrl_block_info[USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS + 1]
 	__attribute__((aligned(USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS * sizeof(uint32_t))));
 
+static uart_bridge_ctx_t s_serial_ctx;
+
 static bool use_uart_on_tdi_tdo = false;
-static uart_inst_t *current_uart = USB_SERIAL_UART_MAIN;
-/** \c uart_rx_isr on uart0 shares \c TRACESWO_UART_IRQ; do not use \c irq_set_enabled(..., false) on that line. */
-static bool usb_serial_rx_isr_on_tdi = false;
 
 TaskHandle_t usb_uart_task = NULL;
+
+/**
+ * Slot indices into \ref s_serial_bindings.  The MAIN UART uses an exclusive UART-IRQ,
+ * while the TDI/TDO UART shares \c uart0's IRQ line with SWO and therefore registers
+ * the same thunk as a shared handler.
+ */
+#define SERIAL_BINDING_MAIN    (0u)
+#define SERIAL_BINDING_TDI_TDO (1u)
+#define SERIAL_BINDING_COUNT   (2u)
 
 #ifdef ENABLE_RTT
 extern void rtt_serial_receive_callback(void);
 #endif
 
-static void uart_rx_int_init(void);
-static void uart_rx_int_process(void);
-static void uart_rx_int_finish(void);
+/**********************************************************************************************************************
+ * Private Functions Prototypes
+ **********************************************************************************************************************/
 
-static void uart_rx_dma_init(const uint32_t baudrate);
-static BaseType_t uart_rx_dma_start_receiving(void);
-static void uart_rx_dma_process_buffers(void);
-static void uart_rx_dma_timeout_callback(TimerHandle_t xTimer);
-static bool uart_rx_dma_finish_receiving(void);
-
-static void uart_tx_dma_send(void);
-static bool uart_tx_dma_check_uart_finished(void);
+static uart_bridge_sink_result_e serial_sink(
+	uart_bridge_ctx_t *ctx, uint8_t *data, size_t len, bool flush, bool allow_drop);
+static size_t serial_tx_source(uart_bridge_ctx_t *ctx, uint8_t *dst, size_t cap);
+static void serial_on_rx_active(uart_bridge_ctx_t *ctx);
+static bool serial_on_release_request(uart_bridge_ctx_t *ctx);
 
 static void uart_rx_isr(void);
-static void uart_dma_handler(void);
-static void uart_update_config(cdc_line_coding_t *line_coding);
-
+static void serial_update_config(cdc_line_coding_t *line_coding);
 static void target_serial_thread(void *params);
 
-static void uart_rx_int_init(void)
-{
-	uart_rx_use_dma = false;
+/**********************************************************************************************************************
+ * Private Data (config)
+ **********************************************************************************************************************/
 
-	/* Set RX FIFO level to 1/2 */
-	rp_uart_set_int_fifo_levels(current_uart, 2, 0);
-	rp_uart_set_rx_and_timeout_irq_enabled(current_uart, true, true);
+/**
+ * Hardware bindings consumed by the bridge.  Pin numbers are filled at runtime in
+ * \ref usb_serial_init from \c platform_get_target_pins(); the bridge treats this
+ * array as read-only afterwards.  Index 0 (MAIN) is the channel's default binding
+ * and uses an exclusive UART-IRQ; index 1 (TDI/TDO) shares \c uart0 with SWO and
+ * therefore declares \c shared_irq = true.
+ */
+static uart_bridge_binding_t s_serial_bindings[SERIAL_BINDING_COUNT] = {
+	[SERIAL_BINDING_MAIN] = {
+		.uart = USB_SERIAL_UART_MAIN,
+		.uart_irq = USB_SERIAL_UART_MAIN_IRQ,
+		.shared_irq = false,
+		.uart_isr = uart_rx_isr,
+		.pins = {
+			[UART_BRIDGE_BINDING_PIN_TX] = {-1, GPIO_FUNC_UART},
+			[UART_BRIDGE_BINDING_PIN_RX] = {-1, GPIO_FUNC_UART},
+		},
+	},
+	[SERIAL_BINDING_TDI_TDO] = {
+		.uart = USB_SERIAL_UART_TDI_TDO,
+		.uart_irq = USB_SERIAL_UART_TDI_TDO_IRQ,
+		.shared_irq = true,
+		.uart_isr = uart_rx_isr,
+		.pins = {
+			[UART_BRIDGE_BINDING_PIN_TX] = {-1, GPIO_FUNC_UART},
+			[UART_BRIDGE_BINDING_PIN_RX] = {-1, GPIO_FUNC_UART},
+		},
+	},
+};
+
+static const uart_bridge_config_t s_serial_cfg = {
+	.rx_buffers_base = (uint8_t *)uart_rx_buf,
+	.rx_buffer_size = USB_SERIAL_UART_DMA_RX_BUFFER_SIZE,
+	.rx_buffer_count = USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS,
+	.rx_ctrl_block_info = uart_dma_rx_ctrl_block_info,
+	.rx_drop_threshold = USB_SERIAL_UART_DMA_RX_DROP_BUFFER_THRESHOLD,
+	.rx_int_fifo_level = USB_SERIAL_UART_RX_INT_FIFO_LEVEL,
+	.rx_dma_baudrate_threshold = USB_SERIAL_UART_DMA_RX_BAUDRATE_THRESHOLD,
+	.rx_dma_min_timeout_ms = USB_SERIAL_UART_DMA_RX_MIN_TIMEOUT,
+	.rx_dma_max_timeout_ms = USB_SERIAL_UART_DMA_RX_MAX_TIMEOUT,
+	.tx_buffer = uart_tx_dma_buf,
+	.tx_buffer_size = sizeof(uart_tx_dma_buf),
+	.tx_dma_check_finished_period_ms = 2,
+	.notif_rx_available = USB_CDC_NOTIF_SERIAL_RX_AVAILABLE,
+	.notif_rx_timeout = USB_CDC_NOTIF_SERIAL_RX_TIMEOUT,
+	.notif_tx_complete = USB_CDC_NOTIF_SERIAL_TX_COMPLETE,
+	.rx_sink = serial_sink,
+	.tx_source = serial_tx_source,
+	.on_rx_active = serial_on_rx_active,
+	.on_release_request = serial_on_release_request,
+	.bindings = s_serial_bindings,
+	.bindings_count = SERIAL_BINDING_COUNT,
+	.timer_name = "SERIAL_UART_RX",
+	.user_ctx = NULL,
+};
+
+/**********************************************************************************************************************
+ * Private Functions
+ **********************************************************************************************************************/
+
+UART_BRIDGE_DECLARE_ISR(uart_rx_isr, s_serial_ctx)
+
+static uart_bridge_sink_result_e serial_sink(
+	uart_bridge_ctx_t *ctx, uint8_t *data, size_t len, bool flush, bool allow_drop)
+{
+	(void)ctx;
+	if (usb_serial_send_to_usb(data, len, flush, allow_drop)) {
+		return UART_BRIDGE_SINK_OK;
+	}
+	return UART_BRIDGE_SINK_STALL;
 }
 
-static void uart_rx_int_process(void)
+static size_t serial_tx_source(uart_bridge_ctx_t *ctx, uint8_t *dst, size_t cap)
 {
-	if (uart_rx_int_buf_pos > 0) {
-		if (usb_serial_send_to_usb((uint8_t *)(uart_rx_buf), uart_rx_int_buf_pos, false, true) != false) {
-			uart_rx_int_buf_pos = 0;
-		}
-
-		uart_rx_ongoing = true;
+	(void)ctx;
+	if (tud_cdc_n_available(USB_CDC_TARGET_SERIAL) == 0) {
+		return 0;
 	}
-
-	rp_uart_set_rx_irq_enabled(current_uart, true);
+	return tud_cdc_n_read(USB_CDC_TARGET_SERIAL, dst, cap);
 }
 
-static void uart_rx_int_finish(void)
+static void serial_on_rx_active(uart_bridge_ctx_t *ctx)
 {
-	if (uart_rx_int_buf_pos > 0) {
-		usb_serial_send_to_usb((uint8_t *)(uart_rx_buf), uart_rx_int_buf_pos, false, true);
-		uart_rx_int_buf_pos = 0;
-	}
-
-	while (rp_uart_is_rx_fifo_empty(current_uart) == false) {
-		((uint8_t *)uart_rx_buf)[uart_rx_int_buf_pos++] = rp_uart_read(current_uart);
-
-		if (uart_rx_int_buf_pos >= sizeof(uart_rx_buf)) {
-			uart_rx_int_buf_pos = 0;
-		}
-	}
-
-	if (uart_rx_int_buf_pos > 0) {
-		usb_serial_send_to_usb((uint8_t *)(uart_rx_buf), uart_rx_int_buf_pos, true, true);
-
-		uart_rx_int_buf_pos = 0;
-	}
-
-	uart_rx_ongoing = false;
-	rp_uart_set_rx_timeout_irq_enabled(current_uart, true);
+	(void)ctx;
+	usb_serial_update_led();
 }
 
-static void uart_rx_dma_init(const uint32_t baudrate)
+static bool serial_on_release_request(uart_bridge_ctx_t *ctx)
 {
-	rp_uart_set_dma_req_enabled(current_uart, false, true);
-	rp_uart_set_rx_and_timeout_irq_enabled(current_uart, false, false);
-	rp_uart_set_int_fifo_levels(current_uart, 0, 0);
+	/* Bridge-driven cooperative eviction: drop our hold on the UART so the
+	 * requesting context (typically SWO) can claim it.  uart_bridge_deinit_uart
+	 * removes the active binding's UART-IRQ handler, returns its GPIO pins to
+	 * SIO, and resets our DMA / timer state. */
+	uart_bridge_deinit_uart(ctx);
 
-	dma_channel_set_irq0_enabled(uart_dma_rx_ctrl_channel, false);
-	dma_channel_abort(uart_dma_rx_ctrl_channel);
-	dma_channel_acknowledge_irq0(uart_dma_rx_ctrl_channel);
-
-	dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
-	dma_channel_abort(uart_dma_rx_channel);
-	dma_channel_acknowledge_irq0(uart_dma_rx_channel);
-
-	dma_channel_config rx_ctrl_config = dma_channel_get_default_config(uart_dma_rx_ctrl_channel);
-	channel_config_set_transfer_data_size(&rx_ctrl_config, DMA_SIZE_32);
-	channel_config_set_read_increment(&rx_ctrl_config, true);
-	channel_config_set_write_increment(&rx_ctrl_config, false);
-	channel_config_set_high_priority(&rx_ctrl_config, true);
-	channel_config_set_ring(&rx_ctrl_config, false, 7);
-
-	dma_channel_configure(uart_dma_rx_ctrl_channel, &rx_ctrl_config,
-		rp_dma_get_al2_write_addr_trig(uart_dma_rx_channel), uart_dma_rx_ctrl_block_info, 1, false);
-
-	dma_channel_config rx_config = dma_channel_get_default_config(uart_dma_rx_channel);
-	channel_config_set_transfer_data_size(&rx_config, DMA_SIZE_8);
-	channel_config_set_read_increment(&rx_config, false);
-	channel_config_set_write_increment(&rx_config, true);
-	channel_config_set_dreq(&rx_config, uart_get_dreq(current_uart, false));
-	channel_config_set_high_priority(&rx_config, true);
-	channel_config_set_chain_to(&rx_config, uart_dma_rx_ctrl_channel);
-
-	dma_channel_configure(uart_dma_rx_channel, &rx_config, uart_rx_buf, rp_uart_get_dr_address(current_uart),
-		USB_SERIAL_UART_DMA_RX_BUFFER_SIZE, false);
-
-	uart_rx_use_dma = true;
-
-	rp_dma_set_channel_enabled(uart_dma_rx_channel, false, false);
-	dma_channel_set_irq0_enabled(uart_dma_rx_channel, true);
-
-	dma_channel_set_read_addr(uart_dma_rx_ctrl_channel, (void *)uart_dma_rx_ctrl_block_info, true);
-
-	/* Calculate timer period - time to fill 2 rx buffers */
-	uint32_t timer_period = (USB_SERIAL_UART_DMA_RX_BUFFER_SIZE * 2 * 1000); /* 1000 - because we need milliseconds */
-	timer_period /= (baudrate / 10); /* byte rate, 1 data byte = 10 bits (8 data, 1 start and 1 stop) */
-	if (timer_period < USB_SERIAL_UART_DMA_RX_MIN_TIMEOUT) {
-		timer_period = USB_SERIAL_UART_DMA_RX_MIN_TIMEOUT;
-	} else if (timer_period > USB_SERIAL_UART_DMA_RX_MAX_TIMEOUT) {
-		timer_period = USB_SERIAL_UART_DMA_RX_MAX_TIMEOUT;
+	/* Kick the serial task so its polling path re-attempts the claim after the
+	 * requesting owner has finished its setup. */
+	if (usb_uart_task != NULL) {
+		xTaskNotify(usb_uart_task, USB_CDC_NOTIF_DUMMY, eSetBits);
 	}
-
-	xTimerChangePeriod(uart_rx_dma_timeout_timer, pdMS_TO_TICKS(timer_period), portMAX_DELAY);
-
-	rp_uart_set_rx_and_timeout_irq_enabled(current_uart, true, true);
+	return true;
 }
 
-static BaseType_t uart_rx_dma_start_receiving(void)
+static void serial_update_config(cdc_line_coding_t *line_coding)
 {
-	assert(uart_rx_ongoing == false);
-
-	uart_rx_ongoing = true;
-
-	rp_dma_set_channel_enabled(uart_dma_rx_channel, true, false);
-
-	rp_uart_set_rx_and_timeout_irq_enabled(current_uart, false, false);
-	rp_uart_clear_rx_and_rx_timeout_irq_flags(current_uart);
-
-	dma_channel_acknowledge_irq0(uart_dma_rx_channel);
-	dma_channel_set_irq0_enabled(uart_dma_rx_channel, true);
-
-	rp_uart_set_dma_req_enabled(current_uart, true, true);
-
-	BaseType_t higher_priority_task_woken = pdFALSE;
-
-	xTimerResetFromISR(uart_rx_dma_timeout_timer, &higher_priority_task_woken);
-	return higher_priority_task_woken;
-}
-
-static void uart_rx_dma_process_buffers(void)
-{
-	xTimerReset(uart_rx_dma_timeout_timer, 0);
-
-	while (1) {
-		const uint32_t buffer_state = uart_rx_dma_buffer_full_mask;
-		const uint32_t buffer_bit = (1UL << uart_rx_next_buffer_to_send);
-		const bool allow_drop_buffer =
-			(__builtin_popcount(buffer_state) >= USB_SERIAL_UART_DMA_RX_DROP_BUFFER_THRESHOLD);
-		const uint32_t data_len = sizeof(uart_rx_buf[uart_rx_next_buffer_to_send]);
-		if (buffer_state & buffer_bit) {
-			if (usb_serial_send_to_usb(uart_rx_buf[uart_rx_next_buffer_to_send], data_len, false, allow_drop_buffer)) {
-				Atomic_AND_u32(&uart_rx_dma_buffer_full_mask, ~buffer_bit);
-				if (++uart_rx_next_buffer_to_send >= USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS) {
-					uart_rx_next_buffer_to_send = 0;
-				}
-			}
-		} else {
-			break;
-		}
-	}
-}
-
-static void uart_rx_dma_timeout_callback(TimerHandle_t xTimer)
-{
-	(void)(xTimer);
-	xTaskNotify(usb_uart_task, USB_CDC_NOTIF_SERIAL_RX_TIMEOUT, eSetBits);
-}
-
-static bool uart_rx_dma_finish_receiving(void)
-{
-	assert(uart_rx_ongoing != false);
-
-	rp_uart_set_dma_req_enabled(current_uart, false, true);
-
-	dma_channel_set_irq0_enabled(uart_dma_rx_ctrl_channel, false);
-	dma_channel_abort(uart_dma_rx_ctrl_channel);
-	dma_channel_acknowledge_irq0(uart_dma_rx_ctrl_channel);
-
-	const uint32_t current_buffer = uart_rx_dma_current_buffer;
-
-	if (++uart_rx_dma_current_buffer >= USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS) {
-		uart_rx_dma_current_buffer = 0;
-	}
-
-	uart_rx_ongoing = false;
-
-	xTimerStop(uart_rx_dma_timeout_timer, pdMS_TO_TICKS(0));
-
-	const uint32_t remaining = rp_dma_get_trans_count(uart_dma_rx_channel);
-	const uint32_t data_in_buffer = sizeof(uart_rx_buf[0]) - remaining;
-
-	dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
-	rp_dma_set_chain_to(uart_dma_rx_channel, uart_dma_rx_channel);
-	dma_channel_abort(uart_dma_rx_channel);
-	dma_channel_acknowledge_irq0(uart_dma_rx_channel);
-	rp_dma_set_chain_to(uart_dma_rx_channel, uart_dma_rx_ctrl_channel);
-
-	dma_channel_set_read_addr(
-		uart_dma_rx_ctrl_channel, (void *)(uart_dma_rx_ctrl_block_info + uart_rx_dma_current_buffer), true);
-	rp_uart_set_rx_and_timeout_irq_enabled(current_uart, true, true);
-
-	while (1) {
-		const uint32_t buffer_state = uart_rx_dma_buffer_full_mask;
-		const uint32_t buffer_bit = (1UL << uart_rx_next_buffer_to_send);
-		if (buffer_state & buffer_bit) {
-			usb_serial_send_to_usb(uart_rx_buf[uart_rx_next_buffer_to_send],
-				sizeof(uart_rx_buf[uart_rx_next_buffer_to_send]), false, true);
-
-			Atomic_AND_u32(&uart_rx_dma_buffer_full_mask, ~buffer_bit);
-			if (++uart_rx_next_buffer_to_send >= USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS) {
-				uart_rx_next_buffer_to_send = 0;
-			}
-		} else {
-			break;
-		}
-	}
-
-	if ((current_buffer + 1) >= USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS) {
-		uart_rx_next_buffer_to_send = 0;
-	} else {
-		uart_rx_next_buffer_to_send = current_buffer + 1;
-	}
-
-	usb_serial_send_to_usb(uart_rx_buf[current_buffer], data_in_buffer, true, true);
-
-	return false;
-}
-
-static void uart_tx_dma_send(void)
-{
-	if (tud_cdc_n_available(USB_CDC_TARGET_SERIAL)) {
-		const uint32_t read_count = tud_cdc_n_read(USB_CDC_TARGET_SERIAL, uart_tx_dma_buf, sizeof(uart_tx_dma_buf));
-		if (read_count != 0) {
-			dma_channel_acknowledge_irq0(uart_dma_tx_channel);
-			dma_channel_set_irq0_enabled(uart_dma_tx_channel, false);
-
-			dma_channel_set_read_addr(uart_dma_tx_channel, uart_tx_dma_buf, false);
-			dma_channel_set_write_addr(uart_dma_tx_channel, rp_uart_get_dr_address(current_uart), false);
-			dma_channel_set_trans_count(uart_dma_tx_channel, read_count, true);
-
-			uart_tx_ongoing = true;
-
-			dma_channel_set_irq0_enabled(uart_dma_tx_channel, true);
-		} else if (uart_tx_ongoing) {
-			uart_tx_dma_finished = true;
-		}
-	} else if (uart_tx_ongoing) {
-		uart_tx_dma_finished = true;
-	}
-}
-
-static bool uart_tx_dma_check_uart_finished(void)
-{
-	return !rp_uart_is_transmitting(current_uart);
-}
-
-static void uart_update_config(cdc_line_coding_t *line_coding)
-{
-	uint32_t stop_bits = 2;
+	uint8_t stop_bits = 2;
 	switch (line_coding->stop_bits) {
 	case 0:
 	case 1:
@@ -404,237 +260,34 @@ static void uart_update_config(cdc_line_coding_t *line_coding)
 	}
 
 	uint8_t data_bits = 8;
-
 	if (line_coding->data_bits <= 8) {
 		data_bits = line_coding->data_bits;
 	}
 
-	portENTER_CRITICAL();
-	xTimerStop(uart_rx_dma_timeout_timer, 0);
+	uart_inst_t *const desired_uart = use_uart_on_tdi_tdo ? USB_SERIAL_UART_TDI_TDO : USB_SERIAL_UART_MAIN;
 
-	dma_channel_set_irq0_enabled(uart_dma_rx_ctrl_channel, false);
-	dma_channel_abort(uart_dma_rx_ctrl_channel);
-	dma_channel_acknowledge_irq0(uart_dma_rx_ctrl_channel);
-
-	dma_channel_set_irq0_enabled(uart_dma_rx_channel, false);
-	dma_channel_abort(uart_dma_rx_channel);
-	dma_channel_acknowledge_irq0(uart_dma_rx_channel);
-
-	dma_channel_set_irq0_enabled(uart_dma_tx_channel, false);
-	dma_channel_abort(uart_dma_tx_channel);
-	dma_channel_acknowledge_irq0(uart_dma_tx_channel);
-
-	if ((use_uart_on_tdi_tdo != false) && (current_uart == USB_SERIAL_UART_MAIN)) {
-#ifdef PLATFORM_HAS_TRACESWO
-		if (traceswo_uart_is_used(USB_SERIAL_UART_TDI_TDO)) {
-			portEXIT_CRITICAL();
-			return;
-		}
-#endif
-
-		irq_handler_t current_handler = irq_get_exclusive_handler(USB_SERIAL_UART_MAIN_IRQ);
-		irq_set_enabled(USB_SERIAL_UART_MAIN_IRQ, false);
-		irq_remove_handler(USB_SERIAL_UART_MAIN_IRQ, current_handler);
-
-		if (usb_serial_rx_isr_on_tdi != false) {
-			irq_remove_handler(USB_SERIAL_UART_TDI_TDO_IRQ, uart_rx_isr);
-			usb_serial_rx_isr_on_tdi = false;
-		}
-
-		uart_deinit(USB_SERIAL_UART_MAIN);
-		current_uart = USB_SERIAL_UART_TDI_TDO;
-	} else if ((use_uart_on_tdi_tdo == false) && (current_uart == USB_SERIAL_UART_TDI_TDO)) {
-#ifdef PLATFORM_HAS_TRACESWO
-		if (traceswo_uart_is_used(USB_SERIAL_UART_MAIN)) {
-			portEXIT_CRITICAL();
-			return;
-		}
-#endif
-
-		irq_handler_t current_handler = irq_get_exclusive_handler(USB_SERIAL_UART_MAIN_IRQ);
-		irq_set_enabled(USB_SERIAL_UART_MAIN_IRQ, false);
-		irq_remove_handler(USB_SERIAL_UART_MAIN_IRQ, current_handler);
-
-		if (usb_serial_rx_isr_on_tdi != false) {
-			irq_remove_handler(USB_SERIAL_UART_TDI_TDO_IRQ, uart_rx_isr);
-			usb_serial_rx_isr_on_tdi = false;
-		}
-
-		uart_deinit(USB_SERIAL_UART_TDI_TDO);
-		current_uart = USB_SERIAL_UART_MAIN;
-	}
-
-	const platform_target_pins_t *target_pins = platform_get_target_pins();
-
-	if (current_uart == USB_SERIAL_UART_MAIN) {
-		gpio_set_function(target_pins->uart_tx, GPIO_FUNC_UART);
-		gpio_set_function(target_pins->uart_rx, GPIO_FUNC_UART);
-
-		irq_handler_t current_handler = irq_get_exclusive_handler(USB_SERIAL_UART_MAIN_IRQ);
-
-		if (current_handler != NULL) {
-			irq_remove_handler(USB_SERIAL_UART_MAIN_IRQ, current_handler);
-		}
-		irq_set_exclusive_handler(USB_SERIAL_UART_MAIN_IRQ, uart_rx_isr);
-		irq_set_enabled(USB_SERIAL_UART_MAIN_IRQ, true);
-	} else {
-		gpio_set_function(target_pins->tdo, GPIO_FUNC_UART);
-		gpio_set_function(target_pins->tdi, GPIO_FUNC_UART);
-
-		if (usb_serial_rx_isr_on_tdi != false) {
-			irq_remove_handler(USB_SERIAL_UART_TDI_TDO_IRQ, uart_rx_isr);
-			usb_serial_rx_isr_on_tdi = false;
-		}
-		irq_add_shared_handler(USB_SERIAL_UART_TDI_TDO_IRQ, uart_rx_isr,
-			PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
-		usb_serial_rx_isr_on_tdi = true;
-		irq_set_enabled(USB_SERIAL_UART_TDI_TDO_IRQ, true);
-	}
-
-	dma_channel_config tx_config = dma_channel_get_default_config(uart_dma_tx_channel);
-	channel_config_set_transfer_data_size(&tx_config, DMA_SIZE_8);
-	channel_config_set_read_increment(&tx_config, true);
-	channel_config_set_write_increment(&tx_config, false);
-
-	channel_config_set_dreq(&tx_config, uart_get_dreq(current_uart, true));
-
-	dma_channel_configure(uart_dma_tx_channel, &tx_config, rp_uart_get_dr_address(current_uart), uart_tx_dma_buf,
-		sizeof(uart_tx_dma_buf), false);
-
-	uart_init(current_uart, line_coding->bit_rate);
-	uart_set_format(current_uart, data_bits, stop_bits, parity);
-
-	uart_rx_int_buf_pos = 0;
-	uart_rx_ongoing = false;
-	uart_tx_ongoing = false;
-
-	if (line_coding->bit_rate >= USB_SERIAL_UART_DMA_RX_BAUDRATE_THRESHOLD) {
-		uart_rx_dma_init(line_coding->bit_rate);
-	} else {
-		uart_rx_int_init();
-	}
-
-	portEXIT_CRITICAL();
-}
-
-static void uart_rx_isr(void)
-{
-	traceISR_ENTER();
-
-	const uint32_t uart_int_status = rp_uart_get_int_status(current_uart);
-	assert(uart_int_status != 0);
-
-	uint32_t notify_bits = 0;
-
-	BaseType_t higher_priority_task_woken = pdFALSE;
-
-	if (uart_rx_use_dma == false) {
-		if (uart_int_status & RP_UART_INT_RX_BITS) {
-			for (uint32_t i = 0; i < (USB_SERIAL_UART_RX_INT_FIFO_LEVEL - 1); i++) {
-				if (rp_uart_is_rx_fifo_empty(current_uart)) {
-					break;
-				}
-
-				((uint8_t *)uart_rx_buf)[uart_rx_int_buf_pos] = rp_uart_read(current_uart);
-				if (++uart_rx_int_buf_pos >= sizeof(uart_rx_buf)) {
-					uart_rx_int_buf_pos = 0;
-				}
-			}
-
-			rp_uart_clear_rx_irq_flag(current_uart);
-			rp_uart_set_rx_irq_enabled(current_uart, false);
-			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_AVAILABLE;
-		}
-
-		if (uart_int_status & RP_UART_INT_RX_TIMEOUT_BITS) {
-			rp_uart_clear_rx_timeout_irq_flag(current_uart);
-			rp_uart_set_rx_timeout_irq_enabled(current_uart, false);
-			notify_bits |= USB_CDC_NOTIF_SERIAL_RX_TIMEOUT;
-		}
-	} else {
-		higher_priority_task_woken = uart_rx_dma_start_receiving();
-		rp_uart_clear_rx_and_rx_timeout_irq_flags(current_uart);
-
-		usb_serial_update_led();
-
-		portYIELD_FROM_ISR(higher_priority_task_woken);
-
+	/* NO_FORCE: never evict the SWO owner; if it currently holds the contested UART
+	 * we will retry from the polling section of target_serial_thread.  The bridge
+	 * handles GPIO + UART-IRQ install/remove during the transition based on the
+	 * binding declared in s_serial_cfg.bindings[]. */
+	if (!uart_bridge_try_claim(&s_serial_ctx, desired_uart, UART_BRIDGE_CLAIM_NO_FORCE)) {
 		return;
 	}
 
-	xTaskNotifyFromISR(usb_uart_task, notify_bits, eSetBits, &higher_priority_task_woken);
-	portYIELD_FROM_ISR(higher_priority_task_woken);
-}
-
-static void uart_dma_handler(void)
-{
-	traceISR_ENTER();
-
-	BaseType_t higher_priority_task_woken = pdFALSE;
-
-#ifdef PLATFORM_HAS_TRACESWO
-	if (((uart_dma_tx_channel < 0) || (dma_channel_get_irq0_status((uint)uart_dma_tx_channel) == false)) && ((uart_dma_rx_channel < 0) || (dma_channel_get_irq0_status((uint)uart_dma_rx_channel) == false)) && (traceswo_rx_dma_irq0_pending() == false)) {
-		return;
-	}
-#else
-	if (((uart_dma_tx_channel < 0) || (dma_channel_get_irq0_status((uint)uart_dma_tx_channel) == false)) && ((uart_dma_rx_channel < 0) || (dma_channel_get_irq0_status((uint)uart_dma_rx_channel) == false))) {
-		return;
-	}
-#endif
-
-	const bool tx_pending =
-		(uart_dma_tx_channel >= 0) && (dma_channel_get_irq0_status((uint)uart_dma_tx_channel) == true);
-	const bool rx_pending =
-		(uart_dma_rx_channel >= 0) && (dma_channel_get_irq0_status((uint)uart_dma_rx_channel) == true);
-
-	if (tx_pending) {
-		dma_channel_set_irq0_enabled((uint)uart_dma_tx_channel, false);
-		dma_channel_acknowledge_irq0((uint)uart_dma_tx_channel);
-
-		xTaskNotifyFromISR(usb_uart_task, USB_CDC_NOTIF_SERIAL_TX_COMPLETE, eSetBits, &higher_priority_task_woken);
-	}
-
-	if (rx_pending) {
-		dma_channel_set_irq0_enabled((uint)uart_dma_rx_channel, false);
-		uart_rx_dma_buffer_full_mask |= (1UL << uart_rx_dma_current_buffer);
-
-		if (++uart_rx_dma_current_buffer >= USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS) {
-			uart_rx_dma_current_buffer = 0;
-		}
-		xTaskNotifyFromISR(usb_uart_task, USB_CDC_NOTIF_SERIAL_RX_AVAILABLE, eSetBits, &higher_priority_task_woken);
-	}
-
-#ifdef PLATFORM_HAS_TRACESWO
-	const BaseType_t higher_priority_task_woken_trace = traceswo_rx_dma_handler();
-
-	portYIELD_FROM_ISR(higher_priority_task_woken || higher_priority_task_woken_trace);
-#else
-	portYIELD_FROM_ISR(higher_priority_task_woken);
-#endif
+	uart_bridge_configure_uart(&s_serial_ctx, line_coding->bit_rate, data_bits, stop_bits, parity);
 }
 
 static void target_serial_thread(void *params)
 {
 	(void)params;
 
-	uint32_t notification_value = 0;
-
-	uart_rx_dma_timeout_timer = xTimerCreate("SERIAL_UART_RX", pdMS_TO_TICKS(USB_SERIAL_UART_DMA_RX_MAX_TIMEOUT),
-		pdFALSE, NULL, uart_rx_dma_timeout_callback);
-
-	uart_dma_tx_channel = dma_claim_unused_channel(true);
-	uart_dma_rx_channel = dma_claim_unused_channel(true);
-	uart_dma_rx_ctrl_channel = dma_claim_unused_channel(true);
-
-	memset(&uart_dma_rx_ctrl_block_info, 0, sizeof(uart_dma_rx_ctrl_block_info));
-	for (uint32_t i = 0; i < USB_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS; i++) {
-		uart_dma_rx_ctrl_block_info[i].address = (uart_rx_buf[i]);
+	if (usb_uart_task == NULL) {
+		usb_uart_task = xTaskGetCurrentTaskHandle();
 	}
 
-	irq_add_shared_handler(USB_SERIAL_TRACESWO_DMA_IRQ, uart_dma_handler,
-		PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
-	irq_set_enabled(USB_SERIAL_TRACESWO_DMA_IRQ, true);
+	uart_bridge_init(&s_serial_ctx, &s_serial_cfg, usb_uart_task);
 
+	uint32_t notification_value = 0;
 	uint32_t wait_time = USB_SERIAL_TASK_NOTIFY_WAIT_PERIOD;
 
 	while (1) {
@@ -642,65 +295,68 @@ static void target_serial_thread(void *params)
 			if (notification_value & USB_CDC_NOTIF_LINE_CODING_UPDATE) {
 				cdc_line_coding_t line_coding = {0};
 				tud_cdc_n_get_line_coding(USB_CDC_TARGET_SERIAL, &line_coding);
-
-				uart_update_config(&line_coding);
+				serial_update_config(&line_coding);
 			}
 
 			if (notification_value & USB_CDC_NOTIF_SERIAL_RX_AVAILABLE) {
-				if (uart_rx_use_dma == false) {
-					uart_rx_int_process();
+				if (s_serial_ctx.rx_use_dma == false) {
+					uart_bridge_rx_int_process(&s_serial_ctx);
 				} else {
-					uart_rx_dma_process_buffers();
+					uart_bridge_rx_dma_process_buffers(&s_serial_ctx);
 				}
 			}
 
-			if ((notification_value & USB_CDC_NOTIF_SERIAL_RX_TIMEOUT) && (uart_rx_ongoing != false)) {
-				if (uart_rx_use_dma == false) {
-					uart_rx_int_finish();
+			if ((notification_value & USB_CDC_NOTIF_SERIAL_RX_TIMEOUT) && (s_serial_ctx.rx_ongoing != false)) {
+				if (s_serial_ctx.rx_use_dma == false) {
+					uart_bridge_rx_int_finish(&s_serial_ctx);
 				} else {
-					uart_rx_dma_finish_receiving();
+					uart_bridge_rx_dma_finish_receiving(&s_serial_ctx);
 				}
 			}
 
 			if (notification_value & USB_CDC_NOTIF_SERIAL_TX_COMPLETE) {
-				uart_tx_dma_send();
+				uart_bridge_tx_dma_send(&s_serial_ctx);
 			}
 
-			if ((notification_value & USB_CDC_NOTIF_USB_RX_AVAILABLE) && (uart_tx_ongoing == false)) {
+			if ((notification_value & USB_CDC_NOTIF_USB_RX_AVAILABLE) && (s_serial_ctx.tx_ongoing == false)) {
 #ifdef ENABLE_RTT
 				if (rtt_enabled) {
 					rtt_serial_receive_callback();
 				} else {
-					uart_tx_dma_send();
+					uart_bridge_tx_dma_send(&s_serial_ctx);
 				}
 #else
-				uart_tx_dma_send();
+				uart_bridge_tx_dma_send(&s_serial_ctx);
 #endif
 			}
 		}
 
-		if (uart_tx_dma_finished) {
-			if (uart_tx_dma_check_uart_finished()) {
+		if (s_serial_ctx.tx_dma_finished) {
+			if (uart_bridge_tx_dma_check_finished(&s_serial_ctx)) {
 				wait_time = USB_SERIAL_TASK_NOTIFY_WAIT_PERIOD;
 
-				uart_tx_ongoing = false;
-				uart_tx_dma_finished = false;
+				s_serial_ctx.tx_ongoing = false;
+				s_serial_ctx.tx_dma_finished = false;
 			} else {
 				wait_time = USB_SERIAL_UART_DMA_TX_CHECK_FINISHED_PERIOD;
 			}
 		}
 
-		if (((use_uart_on_tdi_tdo != false) && (current_uart == USB_SERIAL_UART_MAIN)) ||
-			((use_uart_on_tdi_tdo == false) && (current_uart == USB_SERIAL_UART_TDI_TDO))) {
+		uart_inst_t *const desired_uart =
+			use_uart_on_tdi_tdo ? USB_SERIAL_UART_TDI_TDO : USB_SERIAL_UART_MAIN;
+		if (s_serial_ctx.uart != desired_uart) {
 			cdc_line_coding_t line_coding = {0};
 			tud_cdc_n_get_line_coding(USB_CDC_TARGET_SERIAL, &line_coding);
-
-			uart_update_config(&line_coding);
+			serial_update_config(&line_coding);
 		}
 
 		usb_serial_update_led();
 	}
 }
+
+/**********************************************************************************************************************
+ * Public Functions
+ **********************************************************************************************************************/
 
 bool usb_serial_get_dtr(void)
 {
@@ -712,7 +368,7 @@ void usb_serial_update_led(void)
 	if (tud_cdc_n_connected(USB_CDC_TARGET_SERIAL) == false) {
 		platform_set_serial_state(false);
 	} else {
-		platform_set_serial_state(uart_rx_ongoing || uart_tx_ongoing);
+		platform_set_serial_state(s_serial_ctx.rx_ongoing || s_serial_ctx.tx_ongoing);
 	}
 }
 
@@ -765,24 +421,18 @@ bool usb_serial_uart_on_tdi_tdo_is_used(void)
 	return use_uart_on_tdi_tdo;
 }
 
-void usb_serial_uart_release(uart_inst_t *uart_to_release)
-{
-	if (uart_to_release == current_uart) {
-		if (current_uart == USB_SERIAL_UART_TDI_TDO) {
-			use_uart_on_tdi_tdo = false;
-		} else {
-			use_uart_on_tdi_tdo = true;
-		}
-
-		cdc_line_coding_t line_coding = {0};
-		tud_cdc_n_get_line_coding(USB_CDC_TARGET_SERIAL, &line_coding);
-
-		uart_update_config(&line_coding);
-	}
-}
-
 void usb_serial_init(void)
 {
+	/* Materialise the board-specific pin numbers into the bindings before the bridge
+	 * task can call \ref uart_bridge_try_claim.  The bindings array is treated as
+	 * read-only by the bridge after this point. */
+	const platform_target_pins_t *const target_pins = platform_get_target_pins();
+
+	s_serial_bindings[SERIAL_BINDING_MAIN].pins[UART_BRIDGE_BINDING_PIN_TX].gpio = (int)target_pins->uart_tx;
+	s_serial_bindings[SERIAL_BINDING_MAIN].pins[UART_BRIDGE_BINDING_PIN_RX].gpio = (int)target_pins->uart_rx;
+	s_serial_bindings[SERIAL_BINDING_TDI_TDO].pins[UART_BRIDGE_BINDING_PIN_TX].gpio = (int)target_pins->tdo;
+	s_serial_bindings[SERIAL_BINDING_TDI_TDO].pins[UART_BRIDGE_BINDING_PIN_RX].gpio = (int)target_pins->tdi;
+
 #if configUSE_CORE_AFFINITY
 	const BaseType_t result = xTaskCreateAffinitySet(target_serial_thread, "target_uart", USB_SERIAL_TASK_STACK_SIZE,
 		NULL, PLATFORM_PRIORITY_NORMAL, USB_SERIAL_TASK_CORE_AFFINITY, &usb_uart_task);

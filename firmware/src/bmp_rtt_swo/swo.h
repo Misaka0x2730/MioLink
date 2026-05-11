@@ -107,21 +107,4 @@ bool traceswo_decode(const void *buf, uint16_t len, bool flush, bool drop_if_no_
  */
 void traceswo_task_init(void);
 
-/**
- * \brief DMA IRQ0 handler fragment for SWO RX; call from shared DMA ISR.
- *
- * \return Whether a higher-priority task was woken.
- */
-BaseType_t traceswo_rx_dma_handler(void);
-
-/**
- * \brief Whether SWO RX DMA has IRQ0 pending (for gating \c DMA_IRQ_0 dispatch).
- */
-bool traceswo_rx_dma_irq0_pending(void);
-
-/**
- * \brief Whether \a uart_instance is currently owned by the SWO path.
- */
-bool traceswo_uart_is_used(uart_inst_t *uart_instance);
-
 #endif /* MIOLINK_SWO_H */
