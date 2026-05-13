@@ -456,6 +456,14 @@ uint32_t adiv5_swd_raw_access(adiv5_debug_port_s *dp, const uint8_t rnw, const u
 		raise_exception(EXCEPTION_ERROR, "SWD parity error");
 	}
 
+	/*
+	 * After a successful AP DRW write, drain the AP write buffer with a
+	 * RDBUFF read.
+	 */
+	if (!rnw && addr == ADIV5_AP_DRW) {
+		adiv5_swd_raw_access(dp, ADIV5_LOW_READ, ADIV5_DP_RDBUFF, 0);
+	}
+
 	return response;
 }
 

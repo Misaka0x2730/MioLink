@@ -22,6 +22,7 @@ target_sources(miolink_firmware INTERFACE
 )
 
 target_link_libraries(miolink_firmware INTERFACE
+    uart_bridge
     bmp_platform
     bmp_general
     bmp_rtt_swo

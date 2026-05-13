@@ -72,9 +72,10 @@ target_sources(blackmagic INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/blackmagic/src/timing.c
 )
 
-# BlackMagic target sources (exclude adiv5_swd, swdptap_generic)
+# BlackMagic target sources (exclude adiv5_swd, adiv5_jtag, swdptap_generic — local overrides in bmp_general)
 file(GLOB blackmagic_targets CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/blackmagic/src/target/*.c")
 list(FILTER blackmagic_targets EXCLUDE REGEX ".*adiv5_swd\\.c$")
+list(FILTER blackmagic_targets EXCLUDE REGEX ".*adiv5_jtag\\.c$")
 list(FILTER blackmagic_targets EXCLUDE REGEX ".*swdptap_generic\\.c$")
 target_sources(blackmagic INTERFACE ${blackmagic_targets})
 

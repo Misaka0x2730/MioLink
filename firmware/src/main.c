@@ -29,6 +29,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "uart_bridge.h"
 #include "usb_serial.h"
 #include "usb.h"
 
@@ -52,7 +53,7 @@
 #include "morse.h"
 
 #define GDB_TASK_CORE_AFFINITY (0x02) /* Core 1 only */
-#define GDB_TASK_STACK_SIZE    (2048)
+#define GDB_TASK_STACK_SIZE    (2936)
 
 TaskHandle_t gdb_task = NULL;
 
@@ -88,6 +89,10 @@ _Noreturn static void gdb_thread(void *params)
 	(void)params;
 
 	platform_init();
+
+	/* Create the bridge mutex before any task that uses uart_bridge is allowed
+	 * to run. xSemaphoreCreateMutex must not be called from a critical section. */
+	uart_bridge_common_init();
 
 	vTaskSuspendAll();
 

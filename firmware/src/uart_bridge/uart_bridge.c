@@ -88,9 +88,8 @@ static bool s_dma_irq_installed = false;
 /**
  * \brief Bridge structural-operations mutex.
  *
- * Created lazily by \ref uart_bridge_init under a brief \c portENTER_CRITICAL guard,
- * so the very first call from any task safely publishes the handle to all subsequent
- * callers on both cores. \c NULL until that first call returns.
+ * Created once by \ref uart_bridge_common_init before the scheduler starts (or before
+ * any task that calls into the bridge is created).  \c NULL until that call returns.
  */
 static SemaphoreHandle_t s_bridge_mutex = NULL;
 
@@ -98,7 +97,6 @@ static SemaphoreHandle_t s_bridge_mutex = NULL;
  * Private Functions Prototypes
  **********************************************************************************************************************/
 
-static void uart_bridge_ensure_mutex(void);
 static void uart_bridge_lock(void);
 static void uart_bridge_unlock(void);
 static void uart_bridge_register_ctx(uart_bridge_ctx_t *ctx);
@@ -119,23 +117,6 @@ static void uart_bridge_dma_irq0_handler(void);
 /**********************************************************************************************************************
  * Private Functions
  **********************************************************************************************************************/
-
-/**
- * \brief Lazily create \ref s_bridge_mutex under a short cross-core spinlock so the
- *        first task that calls \ref uart_bridge_init publishes the handle exactly once.
- *
- * \c xSemaphoreCreateMutex does not block and its heap allocation path is safe to
- * call inside \c portENTER_CRITICAL on RP2040 (heap_4 uses a spinlock-protected
- * block list that is itself guarded by \c portENTER_CRITICAL internally).
- */
-static void uart_bridge_ensure_mutex(void)
-{
-	portENTER_CRITICAL();
-	if (s_bridge_mutex == NULL) {
-		s_bridge_mutex = xSemaphoreCreateMutex();
-	}
-	portEXIT_CRITICAL();
-}
 
 /**
  * \brief Acquire the bridge structural-operations mutex.
@@ -400,6 +381,13 @@ static void uart_bridge_dma_irq0_handler(void)
  * Public Functions
  **********************************************************************************************************************/
 
+void uart_bridge_common_init(void)
+{
+	assert(s_bridge_mutex == NULL);
+	s_bridge_mutex = xSemaphoreCreateMutex();
+	assert(s_bridge_mutex != NULL);
+}
+
 void uart_bridge_init(uart_bridge_ctx_t *ctx, const uart_bridge_config_t *cfg, TaskHandle_t owner_task)
 {
 	assert(ctx != NULL);
@@ -444,8 +432,6 @@ void uart_bridge_init(uart_bridge_ctx_t *ctx, const uart_bridge_config_t *cfg, T
 	ctx->rx_timeout_timer =
 		xTimerCreate(cfg->timer_name, timer_period_ticks, pdFALSE, ctx, uart_bridge_rx_timeout_callback);
 	assert(ctx->rx_timeout_timer != NULL);
-
-	uart_bridge_ensure_mutex();
 
 	/* s_registered[] and s_dma_irq_installed are read by uart_bridge_dma_irq0_handler
 	 * from ISR context, so the publish of a new entry plus the (one-shot) handler

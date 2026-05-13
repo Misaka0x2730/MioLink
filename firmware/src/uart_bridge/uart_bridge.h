@@ -303,6 +303,16 @@ struct uart_bridge_ctx {
  **********************************************************************************************************************/
 
 /**
+ * \brief One-time global initialisation of the bridge subsystem.
+ *
+ * Creates the bridge structural-operations mutex via \c xSemaphoreCreateMutex.
+ * Must be called exactly once, from a single-threaded context before the scheduler
+ * starts or before any task that invokes the bridge API is allowed to run.
+ * Must not be called from inside a critical section or from an ISR.
+ */
+void uart_bridge_common_init(void);
+
+/**
  * \brief One-time initialisation of a bridge channel.
  *
  * Stores \a cfg and \a owner_task in \a ctx, leaves \c ctx->uart unbound (no UART

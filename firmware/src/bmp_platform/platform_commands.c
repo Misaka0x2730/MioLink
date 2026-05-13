@@ -40,7 +40,8 @@ static bool cmd_rtos_tasksinfo(target_s *target, int argc, const char **argv);
 const command_s platform_cmd_list[] = {
 	{"uart_on_tdi_tdo", cmd_uart_on_tdi_tdo, "Use UART pins on TDI and TDO (only in SWD mode): [enable|disable]"},
 	{"rtos_heapinfo", cmd_rtos_heapinfo, "Print free FreeRTOS heap size"},
-	{"rtos_tasksinfo", cmd_rtos_tasksinfo, "Print info about running tasks"}, {NULL, NULL, NULL}};
+	{"rtos_tasksinfo", cmd_rtos_tasksinfo, "Print info about running tasks"},
+	{NULL, NULL, NULL}};
 
 bool cmd_uart_on_tdi_tdo(target_s *target, int argc, const char **argv)
 {
