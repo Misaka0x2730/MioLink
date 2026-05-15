@@ -8,6 +8,9 @@ Use these templates when creating new `.h` and `.c` files in `firmware/`.
 - Add Doxygen comments for functions, types, global variables, file-scope variables, macros, and macro definitions.
 - Put each function Doxygen block next to the prototype/declaration. Public function comments belong before header prototypes; private `static` function comments belong before source-file prototypes.
 - Do not duplicate the same Doxygen block above the implementation if the prototype already has it.
+- Any Doxygen comment that contains `\brief` must use the multi-line block form, even when the brief is the only tag. Single-line `/** \brief ... */` comments are not allowed. Trailing `/**< ... */` comments on the same line as a field, macro, or variable declaration remain allowed and are not required to be expanded.
+- Function and function-like macro comments must document every parameter and the return value (when the function returns a value). Do not omit `\param` for any parameter, and do not omit `\return` for non-`void` returns.
+- Every `\param` entry must declare the parameter direction with `\param[in]`, `\param[out]`, or `\param[in,out]`. Bare `\param name` without a direction is not allowed.
 
 ## Doxygen Snippets
 
@@ -41,10 +44,23 @@ Function prototype:
 /**
  * \brief Brief function description.
  *
- * \param value Brief parameter description.
+ * \param[in] value Brief input parameter description.
+ * \param[out] result Brief output parameter description.
  * \return Brief return value description.
  */
-bool <function_name>(uint32_t value);
+bool <function_name>(uint32_t value, uint32_t *result);
+```
+
+Function-like macro:
+
+```c
+/**
+ * \brief Brief macro description.
+ *
+ * \param[in] value Brief input parameter description.
+ * \return Brief return value description.
+ */
+#define <MACRO_NAME>(value) (/* expression */)
 ```
 
 ## Choosing A Header
@@ -151,6 +167,10 @@ Omit any section whose content would be empty.
 
 /**********************************************************************************************************************
  * Private Types
+ **********************************************************************************************************************/
+
+/**********************************************************************************************************************
+ * External Data
  **********************************************************************************************************************/
 
 /**********************************************************************************************************************

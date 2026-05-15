@@ -21,16 +21,18 @@
 #define MIOLINK_VERSION_H
 
 /**********************************************************************************************************************
- * Includes
+ * Public Includes
  **********************************************************************************************************************/
 
 #include "git_version.h"
 
 /**********************************************************************************************************************
- * Global Definitions
+ * Public Definitions
  **********************************************************************************************************************/
 
-/** \brief Human-readable firmware string: MioLink, Black Magic, and FreeRTOS versions. */
+/**
+ * \brief Human-readable firmware string: MioLink, Black Magic, and FreeRTOS versions.
+ */
 #define FIRMWARE_VERSION GIT_MIOLINK_VERSION ", BMP " GIT_BMP_VERSION ", FreeRTOS " GIT_FREERTOS_VERSION
 
 #endif /* MIOLINK_VERSION_H */

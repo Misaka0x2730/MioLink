@@ -17,23 +17,19 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef MIOLINK_BOARDS_PINOUT_PICO_H
-#define MIOLINK_BOARDS_PINOUT_PICO_H
+#ifndef MIOLINK_PLATFORM_CONFIG_PERIPH_H
+#define MIOLINK_PLATFORM_CONFIG_PERIPH_H
 
 /**********************************************************************************************************************
  * Public Definitions
  **********************************************************************************************************************/
 
-#define PICO_LED_ACT_PIN (25) /**< Activity LED GPIO (on-board user LED). */
+#define TARGET_SERIAL_UART_MAIN    (uart1) /**< Primary target UART instance. */
+#define TARGET_SERIAL_UART_TDI_TDO (uart0) /**< Alternate UART on TDI/TDO when muxed. */
 
-#define PICO_TARGET_TCK_PIN (10) /**< JTAG/SWD clock pin. */
-#define PICO_TARGET_TDO_PIN (13) /**< JTAG TDO / SWO input pin. */
-#define PICO_TARGET_TDI_PIN (12) /**< JTAG TDI pin. */
-#define PICO_TARGET_TMS_PIN (11) /**< JTAG TMS / SWD SWDIO pin. */
+#define TRACESWO_UART (uart0) /**< UART used for asynchronous SWO capture. */
 
-#define PICO_TARGET_UART_TX_PIN (8) /**< Target UART TX pin. */
-#define PICO_TARGET_UART_RX_PIN (9) /**< Target UART RX pin. */
+#define TAP_PIO_SWD  (pio0) /**< PIO block instance for SWD operations. */
+#define TAP_PIO_JTAG (pio0) /**< PIO block instance for JTAG operations. */
 
-#define PICO_TARGET_NRST_PIN (7) /**< Target reset (nRST) GPIO. */
-
-#endif /* MIOLINK_BOARDS_PINOUT_PICO_H */
+#endif /* MIOLINK_PLATFORM_CONFIG_PERIPH_H */

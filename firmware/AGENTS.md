@@ -92,11 +92,69 @@ If hardware validation is not possible, say exactly what was built and what rema
 
 ## Style
 
-- Follow `firmware/.clang-format`: LLVM base, Linux braces, 4-space indent, 120-column limit, `PointerAlignment: Right`, `SortIncludes: false`.
+- Follow `firmware/.clang-format`: LLVM base, Linux braces, 120-column limit, `PointerAlignment: Right`, `SortIncludes: false`.
+- Indent with **spaces only — never tabs**. One indent level is exactly 4 spaces (`IndentWidth: 4`, `UseTab: Never`). Continuation lines also use 4 spaces (`ContinuationIndentWidth: 4`).
+- Hard line-length limit is 120 columns. This applies to code, comments (including Doxygen blocks), and string literals; wrap or split where needed instead of overflowing.
 - Follow `firmware/.clang-tidy` where practical; it targets local `src` code and intentionally disables some embedded-unfriendly checks.
 - Preserve existing license headers. Much of the code is GPL-derived from Black Magic; config/vendor files may use MIT or other upstream licenses.
 - When creating new firmware `.h` or `.c` files, use the headers and section skeletons in `firmware/FILE_TEMPLATES.md`.
 - Prefer existing local naming: lower_snake_case functions/variables, UPPER_CASE macros, `MIOLINK_*` header guards.
+- Use `#if defined(MACRO)` / `#if !defined(MACRO)` instead of `#ifdef MACRO` / `#ifndef MACRO`. Exception: keep the conventional `#ifndef`/`#define` pattern for header include guards.
+- Order `#include` directives so that system headers (angle-bracket form, e.g. `#include <stdlib.h>`, `#include <stdint.h>`) come **last** in the include list. Separate the trailing system-header block from the preceding includes (project headers, vendored headers, SDK headers) with exactly one blank line. Example:
+  ```c
+  #include "platform.h"
+  #include "usb_cdc.h"
+  #include "FreeRTOS.h"
+
+  #include <stdint.h>
+  #include <string.h>
+  ```
+  Not allowed:
+  ```c
+  #include <stdint.h>
+  #include "platform.h"
+  #include <string.h>
+  #include "usb_cdc.h"
+  ```
+- Object-like `#define` constants must wrap their replacement value in parentheses. This applies to numeric literals, single-identifier aliases, and any compound expression. The only exceptions are macros defined without a replacement value (pure feature flags such as `BOARD_AUTO`), header include guards, and function-like macros where each parameter is individually parenthesised in its use site as usual. Example:
+  ```c
+  #define MIOLINK_REVA_TARGET_TCK_PIN     (24)
+  #define PICO_W_DETECT_CYW43_CS_PIN      (CYW43_DEFAULT_PIN_WL_CS)
+  #define PICO_FLASH_SIZE_BYTES           (2 * 1024 * 1024)
+  #define PICO_BOOT_STAGE2_CHOOSE_W25Q080 (1)
+  ```
+  Not allowed:
+  ```c
+  #define MIOLINK_REVA_TARGET_TCK_PIN     24
+  #define PICO_W_DETECT_CYW43_CS_PIN      CYW43_DEFAULT_PIN_WL_CS
+  #define PICO_FLASH_SIZE_BYTES           2 * 1024 * 1024
+  #define PICO_BOOT_STAGE2_CHOOSE_W25Q080 1
+  ```
+- In compound boolean expressions (combined with `&&`, `||`, or other logical/bitwise operators), every individual sub-expression must be wrapped in its own parentheses, even when C operator precedence would not require it. This applies to `if`, `while`, `for`, `do/while`, ternaries, `return` expressions, and assignments. Example:
+  ```c
+  if ((usb_get_config() != USB_CONFIG_STATE_CONFIGURED) ||
+      (gdb_serial_get_dtr() == GDB_SERIAL_DTR_DEASSERTED)) {
+      ...
+  }
+  ```
+  Not allowed:
+  ```c
+  if (usb_get_config() != USB_CONFIG_STATE_CONFIGURED ||
+      gdb_serial_get_dtr() == GDB_SERIAL_DTR_DEASSERTED) {
+      ...
+  }
+  ```
+- Always wrap the body of every control-flow statement in braces, even when the body is a single statement. This applies to `if`, `else`, `else if`, `while`, `for`, and `do/while`. Single-statement bodies without braces are not allowed. Example:
+  ```c
+  if (channel != 0U) {
+      return len;
+  }
+  ```
+  Not allowed:
+  ```c
+  if (channel != 0U)
+      return len;
+  ```
 - Keep comments useful for hardware timing, concurrency, USB descriptors, and board-specific behavior. Avoid narrating obvious C statements.
 
 ## C Documentation And Initialization
@@ -107,6 +165,20 @@ If hardware validation is not possible, say exactly what was built and what rema
   - Public functions: immediately before the prototype in the header.
   - Private `static` functions: immediately before the prototype in the `Private Functions Prototypes` section.
   - Do not duplicate the same Doxygen block above the implementation when a documented prototype already exists.
+- Any Doxygen comment that contains `\brief` must use the multi-line block form, even when the brief is the only tag. Single-line `/** \brief ... */` comments are not allowed.
+  - Not allowed:
+    ```c
+    /** \brief Ring of DMA RX staging buffers receiving target UART bytes. */
+    ```
+  - Required:
+    ```c
+    /**
+     * \brief Ring of DMA RX staging buffers receiving target UART bytes.
+     */
+    ```
+  - Short trailing `/**< ... */` comments on the same line as a field, macro, or variable declaration are still allowed and do not need to be expanded.
+- Doxygen blocks for functions and function-like macros must document every parameter and the return value (when the function returns a value). Do not omit `\param` for any parameter, and do not omit `\return` for non-`void` returns.
+- Every `\param` entry must declare the parameter direction with `\param[in]`, `\param[out]`, or `\param[in,out]`. Bare `\param name` without a direction is not allowed.
 
 ## Embedded Constraints
 

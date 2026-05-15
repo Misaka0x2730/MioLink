@@ -1,5 +1,7 @@
 /*
- * This file is part of the Black Magic Debug project.
+ * This file was originally part of Black Magic Debug project.
+ *
+ * Modified for MioLink project.
  *
  * Copyright (C) 2022 1BitSquared <info@1bitsquared.com>
  * Written by Rachel Mant <git@dragonmux.network>
@@ -23,14 +25,26 @@
 #define MIOLINK_USB_H
 
 /**********************************************************************************************************************
- * Includes
+ * Public Includes
  **********************************************************************************************************************/
 
 #include <stdint.h>
 #include <stdbool.h>
 
 /**********************************************************************************************************************
- * Global Functions Prototypes
+ * Public Types
+ **********************************************************************************************************************/
+
+/**
+ * \brief USB device configuration state reported by \ref usb_get_config.
+ */
+typedef enum usb_config_state {
+    USB_CONFIG_STATE_UNCONFIGURED = 0, /**< Device is not configured by the host. */
+    USB_CONFIG_STATE_CONFIGURED = 1,   /**< Device is in its single active configuration. */
+} usb_config_state_e;
+
+/**********************************************************************************************************************
+ * Public Functions Prototypes
  **********************************************************************************************************************/
 
 /**
@@ -39,9 +53,13 @@
 void blackmagic_usb_init(void);
 
 /**
- * \brief Return the current USB configuration value (device configuration descriptor index).
+ * \brief Return the current USB device configuration state.
  *
- * \return Active configuration number, or \c 0 if not configured.
+ * The return type is \c uint16_t to match the upstream Black Magic prototype
+ * (see \c platforms/common/usb.h), but the value is always one of
+ * \ref usb_config_state_e and callers should compare against the enum constants.
+ *
+ * \return One of \ref usb_config_state_e values.
  */
 uint16_t usb_get_config(void);
 

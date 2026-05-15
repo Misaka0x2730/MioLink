@@ -1,5 +1,7 @@
 /*
- * This file is part of the Black Magic Debug project.
+ * This file was originally part of Black Magic Debug project.
+ *
+ * Modified for MioLink project.
  *
  * Copyright (C) 2015  Black Sphere Technologies Ltd.
  * Copyright (C) 2017-2021 Uwe Bonnes <bon@elektron.ikp.physik.tu-darmstadt.de>
@@ -23,13 +25,28 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "pico/unique_id.h"
 
+/**********************************************************************************************************************
+ * Private Includes
+ **********************************************************************************************************************/
+
+#include "pico/unique_id.h"
 #include "serialno.h"
 
-char serial_no[DFU_SERIAL_LENGTH];
+/**********************************************************************************************************************
+ * Public Data
+ **********************************************************************************************************************/
 
+char serial_no[DFU_SERIAL_LENGTH] = {0}; /**< USB / DFU serial number string filled by \c read_serial_number(). */
+
+/**********************************************************************************************************************
+ * Public Functions
+ **********************************************************************************************************************/
+
+/**
+ * \brief Populate \c serial_no from the RP2040 unique board ID.
+ */
 void read_serial_number(void)
 {
-	pico_get_unique_board_id_string(serial_no, sizeof(serial_no));
+    pico_get_unique_board_id_string(serial_no, sizeof(serial_no));
 }

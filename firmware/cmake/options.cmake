@@ -13,10 +13,17 @@ set(PICO_BOARD "auto" CACHE STRING
 # FreeRTOS Options
 # ============================================================================
 
-set(CONFIG_NUMBER_OF_CORES "2" CACHE STRING
+# Default to single-core for Debug builds, dual-core otherwise
+if(BUILD_TYPE STREQUAL "DEBUG")
+    set(CONFIG_NUMBER_OF_CORES_DEFAULT "1")
+else()
+    set(CONFIG_NUMBER_OF_CORES_DEFAULT "2")
+endif()
+
+set(CONFIG_NUMBER_OF_CORES "${CONFIG_NUMBER_OF_CORES_DEFAULT}" CACHE STRING
     "Number of MCU cores to use
     Valid values: 1 (single core), 2 (dual core)
-    Default: 2"
+    Default: 1 for Debug builds, 2 otherwise"
 )
 
 # Validate CONFIG_NUMBER_OF_CORES
@@ -44,6 +51,34 @@ option(CONFIG_ENABLE_RTT "Enable Segger RTT trace output in debug builds" ON)
 option(CONFIG_ENABLE_SYSVIEW "Enable Segger SystemView trace in single-core debug builds" ON)
 
 # ============================================================================
+# GDB Interface Options
+# ============================================================================
+
+set(CONFIG_GDB_IF_BUFFER_SIZE "1024" CACHE STRING
+    "Size in bytes of each GDB CDC staging buffer (inbound and outbound)
+    Default: 1024"
+)
+
+# Validate CONFIG_GDB_IF_BUFFER_SIZE
+if(CONFIG_GDB_IF_BUFFER_SIZE LESS 64 OR CONFIG_GDB_IF_BUFFER_SIZE GREATER 65536)
+    message(FATAL_ERROR "CONFIG_GDB_IF_BUFFER_SIZE must be between 64 and 65536, got: ${CONFIG_GDB_IF_BUFFER_SIZE}")
+endif()
+
+# ============================================================================
+# SWO Trace Options
+# ============================================================================
+
+set(CONFIG_SWO_DECODE_BUFFER_SIZE "1024" CACHE STRING
+    "Size in bytes of the ITM/SWO decoder staging buffer
+    Default: 1024"
+)
+
+# Validate CONFIG_SWO_DECODE_BUFFER_SIZE
+if(CONFIG_SWO_DECODE_BUFFER_SIZE LESS 64 OR CONFIG_SWO_DECODE_BUFFER_SIZE GREATER 65536)
+    message(FATAL_ERROR "CONFIG_SWO_DECODE_BUFFER_SIZE must be between 64 and 65536, got: ${CONFIG_SWO_DECODE_BUFFER_SIZE}")
+endif()
+
+# ============================================================================
 # Print Configuration Summary
 # ============================================================================
 
@@ -53,4 +88,6 @@ message(STATUS "  Cores: ${CONFIG_NUMBER_OF_CORES}")
 message(STATUS "  FreeRTOS tick: ${CONFIG_FREERTOS_TICK_RATE_HZ} Hz")
 message(STATUS "  RTT enabled: ${CONFIG_ENABLE_RTT}")
 message(STATUS "  SystemView enabled: ${CONFIG_ENABLE_SYSVIEW}")
+message(STATUS "  GDB IF buffer size: ${CONFIG_GDB_IF_BUFFER_SIZE} bytes")
+message(STATUS "  SWO decode buffer size: ${CONFIG_SWO_DECODE_BUFFER_SIZE} bytes")
 message(STATUS "============================")

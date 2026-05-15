@@ -1,5 +1,7 @@
 /*
- * This file is part of the Black Magic Debug project.
+ * This file was originally part of Black Magic Debug project.
+ *
+ * Modified for MioLink project.
  *
  * Copyright (C) 2011  Black Sphere Technologies Ltd.
  * Written by Gareth McMullin <gareth@blacksphere.co.nz>
@@ -19,93 +21,134 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/**********************************************************************************************************************
+ * Private Includes
+ **********************************************************************************************************************/
+
 #include "general.h"
-
 #include "platform.h"
-
 #include "FreeRTOS.h"
 #include "task.h"
-
 #include "command.h"
 #include "target_internal.h"
 #include "gdb_packet.h"
-
 #include "swo.h"
-#include "usb_serial.h"
+#include "target_serial.h"
 
+/**********************************************************************************************************************
+ * Private Functions Prototypes
+ **********************************************************************************************************************/
+
+/**
+ * \brief \c monitor uart_on_tdi_tdo command handler. Toggles routing target serial through TDI/TDO pins.
+ *
+ * \param[in,out] target Active target (unused).
+ * \param[in]     argc   Argument count from the command line.
+ * \param[in]     argv   Argument vector.
+ * \return Always \c true (command consumed).
+ */
 static bool cmd_uart_on_tdi_tdo(target_s *target, int argc, const char **argv);
+
+/**
+ * \brief \c monitor rtos_heapinfo command handler. Prints free FreeRTOS heap to the GDB output channel.
+ *
+ * \param[in,out] target Active target (unused).
+ * \param[in]     argc   Argument count (unused).
+ * \param[in]     argv   Argument vector (unused).
+ * \return Always \c true.
+ */
 static bool cmd_rtos_heapinfo(target_s *target, int argc, const char **argv);
+
+/**
+ * \brief \c monitor rtos_tasksinfo command handler. Prints running FreeRTOS tasks and their stack high-water marks.
+ *
+ * \param[in,out] target Active target (unused).
+ * \param[in]     argc   Argument count (unused).
+ * \param[in]     argv   Argument vector (unused).
+ * \return Always \c true.
+ */
 static bool cmd_rtos_tasksinfo(target_s *target, int argc, const char **argv);
 
+/**********************************************************************************************************************
+ * Public Data
+ **********************************************************************************************************************/
+
+/**
+ * \brief Black Magic platform-specific monitor command table; consumed by upstream \c command.c.
+ */
 const command_s platform_cmd_list[] = {
-	{"uart_on_tdi_tdo", cmd_uart_on_tdi_tdo, "Use UART pins on TDI and TDO (only in SWD mode): [enable|disable]"},
-	{"rtos_heapinfo", cmd_rtos_heapinfo, "Print free FreeRTOS heap size"},
-	{"rtos_tasksinfo", cmd_rtos_tasksinfo, "Print info about running tasks"},
-	{NULL, NULL, NULL}};
+    {"uart_on_tdi_tdo", cmd_uart_on_tdi_tdo, "Use UART pins on TDI and TDO (only in SWD mode): [enable|disable]"},
+    {"rtos_heapinfo", cmd_rtos_heapinfo, "Print free FreeRTOS heap size"},
+    {"rtos_tasksinfo", cmd_rtos_tasksinfo, "Print info about running tasks"}, {NULL, NULL, NULL}};
 
-bool cmd_uart_on_tdi_tdo(target_s *target, int argc, const char **argv)
+/**********************************************************************************************************************
+ * Private Functions
+ **********************************************************************************************************************/
+
+static bool cmd_uart_on_tdi_tdo(target_s *target, int argc, const char **argv)
 {
-	(void)target;
+    (void)target;
 
-	bool print_status = false;
-	bool uart_on_tdi_tdo = false;
+    bool print_status = false;
+    bool uart_on_tdi_tdo = false;
 
-	if (argc == 1) {
-		print_status = true;
-	} else if (argc == 2) {
-		if (swo_current_mode != swo_none) {
-			print_status = true;
-			gdb_out("You should disable TRACESWO before activating UART on TDI and TDO!\n");
-		} else if (parse_enable_or_disable(argv[1], &uart_on_tdi_tdo)) {
-			print_status = true;
-			usb_serial_use_uart_on_tdi_tdo(uart_on_tdi_tdo);
-		}
-	} else
-		gdb_out("Unrecognized command format\n");
+    if (argc == 1) {
+        print_status = true;
+    } else if (argc == 2) {
+        if (swo_current_mode != swo_none) {
+            print_status = true;
+            gdb_out("You should disable TRACESWO before activating UART on TDI and TDO!\n");
+        } else if (parse_enable_or_disable(argv[1], &uart_on_tdi_tdo)) {
+            print_status = true;
+            target_serial_use_uart_on_tdi_tdo(uart_on_tdi_tdo);
+        }
+    } else {
+        gdb_out("Unrecognized command format\n");
+    }
 
-	if (print_status) {
-		gdb_outf("UART pins on TDI and TDO (only in SWD mode): %s\n",
-			usb_serial_uart_on_tdi_tdo_is_used() ? "enabled" : "disabled");
-	}
+    if (print_status) {
+        gdb_outf("UART pins on TDI and TDO (only in SWD mode): %s\n",
+            target_serial_uart_on_tdi_tdo_is_used() ? "enabled" : "disabled");
+    }
 
-	return true;
+    return true;
 }
 
-bool cmd_rtos_heapinfo(target_s *target, int argc, const char **argv)
+static bool cmd_rtos_heapinfo(target_s *target, int argc, const char **argv)
 {
-	(void)target;
-	(void)argc;
-	(void)argv;
+    (void)target;
+    (void)argc;
+    (void)argv;
 
-	const size_t free_heap = xPortGetFreeHeapSize();
-	gdb_outf("Free heap (bytes): %d\n", free_heap);
+    const size_t free_heap = xPortGetFreeHeapSize();
+    gdb_outf("Free heap (bytes): %d\n", free_heap);
 
-	return true;
+    return true;
 }
 
-bool cmd_rtos_tasksinfo(target_s *target, int argc, const char **argv)
+static bool cmd_rtos_tasksinfo(target_s *target, int argc, const char **argv)
 {
-	(void)target;
-	(void)argc;
-	(void)argv;
+    (void)target;
+    (void)argc;
+    (void)argv;
 
-	UBaseType_t tasks_number = uxTaskGetNumberOfTasks();
-	TaskStatus_t task_status[10] = {0};
+    UBaseType_t tasks_number = uxTaskGetNumberOfTasks();
+    TaskStatus_t task_status[10] = {0};
 
-	if (tasks_number > 0) {
-		if (uxTaskGetSystemState(task_status, sizeof(task_status) / sizeof(task_status[0]), NULL) == tasks_number) {
-			gdb_outf("Total number of tasks: %lu\n", tasks_number);
-			gdb_out("Name:                            Min free stack (bytes):\n");
-			for (uint32_t i = 0; i < tasks_number; i++) {
-				gdb_outf("%-" MACRO_VALUE_STR(configMAX_TASK_NAME_LEN) "s %-5lu\n", task_status[i].pcTaskName,
-					task_status[i].usStackHighWaterMark * sizeof(StackType_t));
-			}
-		} else {
-			gdb_out("Failed to read tasks info\n");
-		}
-	} else {
-		gdb_out("Incorrect tasks number\n");
-	}
+    if (tasks_number > 0) {
+        if (uxTaskGetSystemState(task_status, sizeof(task_status) / sizeof(task_status[0]), NULL) == tasks_number) {
+            gdb_outf("Total number of tasks: %lu\n", tasks_number);
+            gdb_out("Name:                            Min free stack (bytes):\n");
+            for (uint32_t i = 0; i < tasks_number; i++) {
+                gdb_outf("%-" MACRO_VALUE_STR(configMAX_TASK_NAME_LEN) "s %-5lu\n", task_status[i].pcTaskName,
+                    task_status[i].usStackHighWaterMark * sizeof(StackType_t));
+            }
+        } else {
+            gdb_out("Failed to read tasks info\n");
+        }
+    } else {
+        gdb_out("Incorrect tasks number\n");
+    }
 
-	return true;
+    return true;
 }

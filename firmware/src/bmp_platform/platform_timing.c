@@ -1,5 +1,7 @@
 /*
- * This file is part of the Black Magic Debug project.
+ * This file was originally part of Black Magic Debug project.
+ *
+ * Modified for MioLink project.
  *
  * Copyright (C) 2015 Gareth McMullin <gareth@blacksphere.co.nz>
  * Copyright (C) 2023 1BitSquared <info@1bitsquared.com>
@@ -19,144 +21,208 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "general.h"
 
+/**********************************************************************************************************************
+ * Private Includes
+ **********************************************************************************************************************/
+
+#include "general.h"
 #include "hardware/pio.h"
 #include "hardware/clocks.h"
-
 #include "platform.h"
 #include "platform_timing.h"
-
 #include "FreeRTOS.h"
 #include "timers.h"
-
 #include "tap_pio.h"
 #include "usb.h"
-
 #include "morse.h"
 
-bool running_status = false;
-uint32_t target_interface_frequency = PLATFORM_DEFAULT_FREQUENCY;
+/**********************************************************************************************************************
+ * Private Definitions
+ **********************************************************************************************************************/
 
-static volatile uint32_t time_ms = 0;
+#define MONITOR_TICKS_LIMIT       (3) /**< VTref health check period, in system ticks. */
+#define MONITOR_ERROR_COUNT_LIMIT (5) /**< Consecutive VTref faults required to trip TPWR shutdown. */
 
-static size_t morse_tick = 0;
-static uint8_t monitor_ticks = 0;
-static uint8_t monitor_error_count = 0;
+/**********************************************************************************************************************
+ * Public Data
+ **********************************************************************************************************************/
 
+bool running_status = false; /**< Whether a target is currently being driven by GDB. */
+uint32_t target_interface_frequency = PLATFORM_DEFAULT_FREQUENCY; /**< Cached effective TAP/SWD clock (Hz). */
+
+/**********************************************************************************************************************
+ * Private Data
+ **********************************************************************************************************************/
+
+static volatile uint32_t time_ms = 0; /**< Free-running millisecond counter, advanced by the system tick timer. */
+
+static size_t morse_tick = 0;           /**< Tick counter to time morse status updates. */
+static uint8_t monitor_ticks = 0;       /**< Tick counter for periodic VTref health checks. */
+static uint8_t monitor_error_count = 0; /**< VTref fault count; triggers TPWR shutdown when it exceeds \c MONITOR_ERROR_COUNT_LIMIT. */
+
+/**********************************************************************************************************************
+ * Private Functions Prototypes
+ **********************************************************************************************************************/
+
+/**
+ * \brief Pull pending USB configuration changes and emit / clear matching morse status messages.
+ */
 static void usb_config_morse_msg_update(void);
+
+/**
+ * \brief FreeRTOS software-timer callback: advances \c time_ms and drives morse / VTref monitor.
+ *
+ * \param[in] xTimer Timer handle that fired (unused).
+ */
 static void timing_application_timer_cb(TimerHandle_t xTimer);
+
+/**
+ * \brief Compute the peripheral clock used to derive PIO state-machine dividers (\c clk_sys / 8).
+ *
+ * \return Peripheral clock frequency in Hz.
+ */
+static uint32_t platform_get_interface_periph_clk(void);
+
+/**********************************************************************************************************************
+ * Private Functions
+ **********************************************************************************************************************/
 
 static void usb_config_morse_msg_update(void)
 {
-	if (usb_config_is_updated()) {
-		if (usb_get_config() == 0)
-			morse("NO USB HOST.", true);
-		else
-			morse(NULL, false);
+    if (usb_config_is_updated()) {
+        if (usb_get_config() != USB_CONFIG_STATE_CONFIGURED) {
+            morse("NO USB HOST.", true);
+        } else {
+            morse(NULL, false);
+        }
 
-		usb_config_clear_updated();
-	}
+        usb_config_clear_updated();
+    }
 }
 
 static void timing_application_timer_cb(TimerHandle_t xTimer)
 {
-	(void)xTimer;
+    (void)xTimer;
 
-	time_ms += SYSTICKMS;
-	if (morse_tick >= MORSECNT) {
-		if (running_status) {
-			platform_toggle_idle_state();
-		}
-		usb_config_morse_msg_update();
-		SET_ERROR_STATE(morse_update());
-		morse_tick = 0;
-	} else {
-		++morse_tick;
-	}
+    time_ms += SYSTICKMS;
+    if (morse_tick >= MORSECNT) {
+        if (running_status) {
+            platform_toggle_idle_state();
+        }
+        usb_config_morse_msg_update();
+        SET_ERROR_STATE(morse_update());
+        morse_tick = 0;
+    } else {
+        ++morse_tick;
+    }
 
-	/* First check if target power is presently enabled */
-	if (platform_target_get_power()) {
-		/* If we're on the 3rd tick (30 ms), check the power fault pin */
-		if (++monitor_ticks == 3) {
-			monitor_ticks = 0;
+    /* First check if target power is presently enabled */
+    if (platform_target_get_power()) {
+        /* If we're on the 3rd tick (30 ms), check the power fault pin */
+        if (++monitor_ticks == MONITOR_TICKS_LIMIT) {
+            monitor_ticks = 0;
 
-			/* Now compare the reference against the known good range */
-			if (platform_target_is_power_ok() == false) {
-				monitor_error_count++;
-			} else if (monitor_error_count) {
-				monitor_error_count--;
-			}
+            /* Now compare the reference against the known good range */
+            if (platform_target_is_power_ok() == false) {
+                monitor_error_count++;
+            } else if (monitor_error_count) {
+                monitor_error_count--;
+            }
 
-			/* Something's wrong, and it is not a glitch, so turn tpwr off and set the morse blink pattern */
-			if (monitor_error_count > 5) {
-				monitor_error_count = 0;
+            /* Something's wrong, and it is not a glitch, so turn tpwr off and set the morse blink pattern */
+            if (monitor_error_count > MONITOR_ERROR_COUNT_LIMIT) {
+                monitor_error_count = 0;
 
-				platform_target_set_power(false);
-				morse("TPWR ERROR", true);
-			}
-		}
-	} else {
-		monitor_ticks = 0;
-	}
-}
-
-void platform_timing_init(void)
-{
-	TimerHandle_t application_timer =
-		xTimerCreate("app_timer", pdMS_TO_TICKS(SYSTICKMS), true, NULL, timing_application_timer_cb);
-	assert(application_timer != NULL);
-	xTimerStart(application_timer, 0);
-}
-
-void platform_delay(uint32_t ms)
-{
-	vTaskDelay(pdMS_TO_TICKS(ms));
-}
-
-uint32_t platform_time_ms(void)
-{
-	return time_ms;
-}
-
-void platform_update_sys_freq(void)
-{
-	set_sys_clock_hz(configCPU_CLOCK_HZ, true);
+                platform_target_set_power(false);
+                morse("TPWR ERROR", true);
+            }
+        }
+    } else {
+        monitor_ticks = 0;
+    }
 }
 
 static uint32_t platform_get_interface_periph_clk(void)
 {
-	return clock_get_hz(clk_sys) / 8;
+    return clock_get_hz(clk_sys) / 8;
 }
 
+/**********************************************************************************************************************
+ * Public Functions
+ **********************************************************************************************************************/
+
+void platform_timing_init(void)
+{
+    TimerHandle_t application_timer =
+        xTimerCreate("app_timer", pdMS_TO_TICKS(SYSTICKMS), true, NULL, timing_application_timer_cb);
+    assert(application_timer != NULL);
+    xTimerStart(application_timer, 0);
+}
+
+/**
+ * \brief Block the calling task for the requested number of milliseconds.
+ *
+ * \param[in] ms Number of milliseconds to wait.
+ */
+void platform_delay(uint32_t ms)
+{
+    vTaskDelay(pdMS_TO_TICKS(ms));
+}
+
+/**
+ * \brief Current free-running millisecond counter value.
+ *
+ * \return Milliseconds since boot.
+ */
+uint32_t platform_time_ms(void)
+{
+    return time_ms;
+}
+
+/**
+ * \brief Program the SWD and JTAG PIO state machines to the closest divider for \a freq.
+ *
+ * \param[in] freq Requested interface frequency in Hz.
+ */
 void platform_max_frequency_set(uint32_t freq)
 {
-	for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
-		tap_pio_set_sm_freq(TAP_PIO_SWD, i, freq, platform_get_interface_periph_clk());
-	}
+    for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
+        tap_pio_set_sm_freq(TAP_PIO_SWD, i, freq, platform_get_interface_periph_clk());
+    }
 
-	for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
-		target_interface_frequency = tap_pio_set_sm_freq(TAP_PIO_JTAG, i, freq, platform_get_interface_periph_clk());
-	}
+    for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
+        target_interface_frequency = tap_pio_set_sm_freq(TAP_PIO_JTAG, i, freq, platform_get_interface_periph_clk());
+    }
 }
 
+/**
+ * \brief Effective interface frequency that the JTAG/SWD PIO last accepted.
+ *
+ * \return Frequency in Hz.
+ */
 uint32_t platform_max_frequency_get(void)
 {
-	return target_interface_frequency;
+    return target_interface_frequency;
 }
 
 uint32_t platform_timeout_time_left(const platform_timeout_s *const timeout)
 {
-	/* Cache the current time for the whole calculation */
-	const uint32_t counter = platform_time_ms();
+    /* Cache the current time for the whole calculation */
+    const uint32_t counter = platform_time_ms();
 
-	if ((counter & UINT32_C(0x80000000)) && !(timeout->time & UINT32_C(0x80000000))) {
-		return UINT32_MAX - counter + timeout->time + 1;
-	}
+    if ((counter & UINT32_C(0x80000000)) && (!(timeout->time & UINT32_C(0x80000000)))) {
+        return UINT32_MAX - counter + timeout->time + 1;
+    }
 
-	if (timeout->time > counter) {
-		return timeout->time - counter;
-	}
+    if (timeout->time > counter) {
+        return timeout->time - counter;
+    }
 
-	return 0;
+    return 0;
+}
+
+void platform_update_sys_freq(void)
+{
+    set_sys_clock_hz(configCPU_CLOCK_HZ, true);
 }

@@ -1,5 +1,7 @@
 /*
- * This file is part of the Black Magic Debug project.
+ * This file was originally part of Black Magic Debug project.
+ *
+ * Modified for MioLink project.
  *
  * Copyright (C) 2012  Black Sphere Technologies Ltd.
  * Written by Gareth McMullin <gareth@blacksphere.co.nz>
@@ -23,81 +25,82 @@
 #define MIOLINK_SWO_H
 
 /**********************************************************************************************************************
- * Includes
+ * Public Includes
  **********************************************************************************************************************/
+
+#include "hardware/uart.h"
+#include "FreeRTOS.h"
 
 #include <stdlib.h>
 
-#include "hardware/uart.h"
-
-#include "FreeRTOS.h"
-
 /**********************************************************************************************************************
- * Global Definitions
+ * Public Definitions
  **********************************************************************************************************************/
 
-#define TRACESWO_UART     (uart0)                      /**< UART used for asynchronous SWO capture. */
-#define TRACESWO_UART_IRQ (UART_IRQ_NUM(TRACESWO_UART)) /**< IRQ line for \ref TRACESWO_UART. */
-
-#define TRACESWO_BUF_SIZE (1024) /**< Decode / staging buffer sizing hook (see implementation). */
-
-/** \brief Default baud when the host does not specify a SWO line rate. */
-#define SWO_DEFAULT_BAUD 2250000U
+/**
+ * \brief Default baud when the host does not specify a SWO line rate.
+ */
+#define SWO_DEFAULT_BAUD (2250000U)
 
 /**********************************************************************************************************************
- * Global Types
+ * Public Types
  **********************************************************************************************************************/
 
 /**
  * \brief Physical encoding selected for the SWO front-end.
  */
 typedef enum swo_coding {
-	swo_none,
-	swo_nrz_uart,
+    swo_none,     /**< SWO is disabled. */
+    swo_nrz_uart, /**< NRZ UART encoding (only mode supported on RP2040). */
 } swo_coding_e;
 
-/** \brief Active SWO mode after the last \c swo_init / \c swo_deinit. */
-extern swo_coding_e swo_current_mode;
+/**********************************************************************************************************************
+ * Public Data
+ **********************************************************************************************************************/
+
+extern swo_coding_e swo_current_mode; /**< Active SWO mode after the last \c swo_init / \c swo_deinit. */
 
 /**********************************************************************************************************************
- * Global Functions Prototypes
+ * Public Functions Prototypes
  **********************************************************************************************************************/
 
 /**
  * \brief Configure UART SWO capture: pins, baud, optional DMA, ITM channel mask.
  *
- * \param swo_mode            Must be \c swo_nrz_uart on this platform.
- * \param baudrate            Line speed; \c 0 selects \ref SWO_DEFAULT_BAUD.
- * \param itm_stream_bitmask  Non-zero to enable decoding for selected ITM stimulus ports.
+ * \param[in] swo_mode            Must be \c swo_nrz_uart on this platform.
+ * \param[in] baudrate            Line speed; \c 0 selects \ref SWO_DEFAULT_BAUD.
+ * \param[in] itm_stream_bitmask  Non-zero to enable decoding for selected ITM stimulus ports.
  */
 void swo_init(swo_coding_e swo_mode, uint32_t baudrate, uint32_t itm_stream_bitmask);
 
 /**
  * \brief Tear down SWO UART and DMA; optionally release buffers.
  *
- * \param deallocate Platform-specific deep cleanup flag.
+ * \param[in] deallocate Platform-specific deep cleanup flag.
  */
 void swo_deinit(bool deallocate);
 
 /**
  * \brief Current SWO UART baud rate.
+ *
+ * \return Active SWO baud rate, in bits per second, or \c 0 when SWO is not running.
  */
 uint32_t swo_get_baudrate(void);
 
 /**
  * \brief Limit which ITM stimulus ports are decoded and forwarded.
  *
- * \param mask Bitmask passed from the monitor command handler.
+ * \param[in] mask Bitmask passed from the monitor command handler.
  */
 void traceswo_setmask(uint32_t mask);
 
 /**
  * \brief Decode ITM/SWO from \a buf and emit on USB.
  *
- * \param buf               Raw UART RX bytes.
- * \param len               Length of \a buf.
- * \param flush             Flush decoders / end of frame.
- * \param drop_if_no_space  Drop data if USB TX is full.
+ * \param[in] buf               Raw UART RX bytes.
+ * \param[in] len               Length of \a buf.
+ * \param[in] flush             Flush decoders / end of frame.
+ * \param[in] drop_if_no_space  Drop data if USB TX is full.
  * \return \c false if output was dropped or stalled.
  */
 bool traceswo_decode(const void *buf, uint16_t len, bool flush, bool drop_if_no_space);

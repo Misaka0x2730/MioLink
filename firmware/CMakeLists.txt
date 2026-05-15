@@ -60,6 +60,8 @@ target_compile_definitions(MioLink PRIVATE
     PICO_STDIO_SHORT_CIRCUIT_CLIB_FUNCS=0
     CONFIG_NUMBER_OF_CORES=${CONFIG_NUMBER_OF_CORES}
     CONFIG_FREERTOS_TICK_RATE_HZ=${CONFIG_FREERTOS_TICK_RATE_HZ}
+    CONFIG_GDB_IF_BUFFER_SIZE=${CONFIG_GDB_IF_BUFFER_SIZE}
+    CONFIG_SWO_DECODE_BUFFER_SIZE=${CONFIG_SWO_DECODE_BUFFER_SIZE}
 )
 
 # ============================================================================
@@ -110,6 +112,11 @@ target_link_libraries(MioLink PRIVATE
     boards
 )
 
+# Link platform configuration headers
+target_link_libraries(MioLink PRIVATE
+    platform_config
+)
+
 # Link MioLink firmware aggregate
 target_link_libraries(MioLink PRIVATE
     miolink_firmware
@@ -135,7 +142,6 @@ target_link_libraries(MioLink PRIVATE
 target_link_libraries(MioLink PRIVATE
     tinyusb_config
     tinyusb_device
-    tinyusb_board
     tinyusb_additions
 )
 

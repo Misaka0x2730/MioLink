@@ -4,10 +4,13 @@
 ; origin directive allows modifying the PIO program without affecting the C code.
 ; 7 sub-programs are implemented here:
 
-; swd_in - a program that reads bits from the TMS pin;
-; swd_in_parity - a program that reads bits from the TMS pin and returns the TMS pin to an output state at the end;
-; swd_out - a program that outputs bits to the TMS pin;
-; swd_adiv5_req - a program that sends a standard 8-bit ADIv5 request and reads the ACK.
+; pico_swd_start - start of the program, just wait for the next command;
+; pico_swd_seq_out_turnaround - turnaround from input to output before out sequence;
+; pico_swd_seq_out - TMS out sequence;
+; pico_swd_seq_in_turnaround - turnaround from output to input before in sequence;
+; pico_swd_seq_in - TMS in sequence;
+; pico_swd_adiv5_check_ack - check ADIv5 acknowledge and discard TX FIFO content if ACK is incorrect;
+; pico_swd_turnaround_float_to_drive - separate turnaround from input to output without sequence after.
 
 ; Pin mapping for all programs:
 ; IN - TMS
@@ -109,5 +112,5 @@ clear_tx_fifo:
 .side_set 1 opt
 
 set pindirs, 1 side 1 [3]                   ; set TMS direction to output and a rising edge on TCK
-out pc, 32 side 0     [3]                   ; a falling edge on TCK, 1 = 0b01, so TMS_DIR is 1, TCK is 0
+out pc, 32 side 0     [3]                   ; a falling edge on TCK
                                             ; wrap to the program start

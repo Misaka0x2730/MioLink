@@ -17,37 +17,30 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef MIOLINK_BOARDS_MIOLINK_PICO_H
-#define MIOLINK_BOARDS_MIOLINK_PICO_H
+#ifndef MIOLINK_GDB_IF_EX_H
+#define MIOLINK_GDB_IF_EX_H
 
 /**********************************************************************************************************************
  * Public Includes
  **********************************************************************************************************************/
 
-#include "pinout/miolink_pico_pinout.h"
+#include "usb_cdc.h"
+
+#include <stdbool.h>
 
 /**********************************************************************************************************************
- * Public Definitions
+ * Public Functions Prototypes
  **********************************************************************************************************************/
 
-pico_board_cmake_set(PICO_PLATFORM, rp2040)
+/**
+ * \brief GDB CDC: query whether the host has asserted DTR.
+ *
+ * Local extension to the upstream Black Magic \c gdb_if.h interface; implemented
+ * alongside \c gdb_if_putchar / \c gdb_if_getchar in \c gdb_if.c.
+ *
+ * \return \ref USB_CDC_DTR_ASSERTED when DTR is active (port "open" from the host perspective),
+ *         \ref USB_CDC_DTR_DEASSERTED otherwise.
+ */
+bool gdb_serial_get_dtr(void);
 
-#define BOARD_MIOLINK_PICO /**< Selects the MioLink_Pico (Pico-based) board build. */
-
-#define PICO_BOOT_STAGE2_CHOOSE_W25Q080 (1) /**< Selects W25Q080-compatible boot stage 2. */
-
-#if !defined(PICO_FLASH_SPI_CLKDIV)
-#define PICO_FLASH_SPI_CLKDIV (2) /**< Flash SPI clock divider. */
-#endif
-
-pico_board_cmake_set_default(PICO_FLASH_SIZE_BYTES, (2 * 1024 * 1024))
-
-#if !defined(PICO_FLASH_SIZE_BYTES)
-#define PICO_FLASH_SIZE_BYTES (2 * 1024 * 1024) /**< Default flash size in bytes. */
-#endif
-
-#if !defined(PICO_RP2040_B0_SUPPORTED)
-#define PICO_RP2040_B0_SUPPORTED (0) /**< Disables RP2040 B0 silicon workarounds; all supported boards have B1+. */
-#endif
-
-#endif /* MIOLINK_BOARDS_MIOLINK_PICO_H */
+#endif /* MIOLINK_GDB_IF_EX_H */

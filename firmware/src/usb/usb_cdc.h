@@ -1,8 +1,7 @@
 /*
- * This file is part of the Black Magic Debug project.
+ * This file is part of the MioLink project.
  *
- * Copyright (C) 2022 1BitSquared <info@1bitsquared.com>
- * Written by Dmitry Rezvanov <git@dragonmux.network>
+ * Copyright (C) 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,29 +21,18 @@
 #define MIOLINK_USB_CDC_H
 
 /**********************************************************************************************************************
- * Includes
+ * Public Includes
  **********************************************************************************************************************/
+
+#include "FreeRTOS.h"
+#include "task.h"
+#include "tusb.h"
 
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "tusb.h"
-
 /**********************************************************************************************************************
- * Global Types
- **********************************************************************************************************************/
-
-/**
- * \brief Logical CDC interface index for composite USB (GDB, target UART, …).
- */
-typedef enum {
-	USB_CDC_GDB = 0,
-	USB_CDC_TARGET_SERIAL,
-	USB_CDC_NUM = CFG_TUD_CDC,
-} usb_cdc_t;
-
-/**********************************************************************************************************************
- * Global Definitions
+ * Public Definitions
  **********************************************************************************************************************/
 
 #define USB_CDC_NOTIF_USB_RX_AVAILABLE    (0x01) /**< Host→device USB OUT data available (task notify bit). */
@@ -54,5 +42,50 @@ typedef enum {
 #define USB_CDC_NOTIF_SERIAL_RX_TIMEOUT   (0x10) /**< Target UART RX idle timeout. */
 #define USB_CDC_NOTIF_SERIAL_TX_COMPLETE  (0x20) /**< Target UART TX DMA finished. */
 #define USB_CDC_NOTIF_DUMMY               (0x80) /**< Placeholder / internal notify bit. */
+
+/**
+ * \brief \ref gdb_serial_get_dtr / \ref target_serial_get_dtr return value when the host has asserted DTR
+ *        (port "open").
+ */
+#define USB_CDC_DTR_ASSERTED (true)
+
+/**
+ * \brief \ref gdb_serial_get_dtr / \ref target_serial_get_dtr return value when the host has not asserted DTR
+ *        (port "closed").
+ */
+#define USB_CDC_DTR_DEASSERTED (false)
+
+/**********************************************************************************************************************
+ * Public Types
+ **********************************************************************************************************************/
+
+/**
+ * \brief Logical CDC interface index for composite USB (GDB, target UART, …).
+ */
+typedef enum {
+    USB_CDC_GDB = 0,
+    USB_CDC_TARGET_SERIAL,
+    USB_CDC_NUM = CFG_TUD_CDC,
+} usb_cdc_t;
+
+/**********************************************************************************************************************
+ * Public Functions Prototypes
+ **********************************************************************************************************************/
+
+/**
+ * \brief Register a FreeRTOS task as the listener for CDC events on a given interface.
+ *
+ * Registration must be visible by the time the USB task delivers a TinyUSB callback for the
+ * interface. In practice, call this either before \ref blackmagic_usb_init for the interface,
+ * or with the FreeRTOS scheduler suspended across init and registration so the USB task cannot
+ * run in between. Only one listener per interface is tracked; a second call overwrites the
+ * previous binding. The mask filters which \c USB_CDC_NOTIF_* bits reach the task — bits
+ * absent from the mask are silently dropped at the callback site.
+ *
+ * \param[in] cdc         Target CDC interface.
+ * \param[in] task        FreeRTOS task to notify; \c NULL disables the slot.
+ * \param[in] accept_mask Bitmask of \c USB_CDC_NOTIF_* bits the task is willing to receive.
+ */
+void usb_cdc_register_listener(usb_cdc_t cdc, TaskHandle_t task, uint32_t accept_mask);
 
 #endif /* MIOLINK_USB_CDC_H */

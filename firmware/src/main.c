@@ -1,5 +1,7 @@
 /*
- * This file is part of the Black Magic Debug project.
+ * This file was originally part of Black Magic Debug project.
+ *
+ * Modified for MioLink project.
  *
  * Copyright (C) 2011  Black Sphere Technologies Ltd.
  * Written by Gareth McMullin <gareth@blacksphere.co.nz>
@@ -21,6 +23,10 @@
 
 /* Provides main entry point. Initialise subsystems and enter GDB protocol loop. */
 
+/**********************************************************************************************************************
+ * Private Includes
+ **********************************************************************************************************************/
+
 #include "general.h"
 #include "platform.h"
 
@@ -30,14 +36,15 @@
 #include "task.h"
 
 #include "uart_bridge.h"
-#include "usb_serial.h"
+#include "target_serial.h"
 #include "usb.h"
+#include "usb_cdc.h"
 
-#ifdef ENABLE_RTT
+#if defined(ENABLE_RTT)
 #include "rtt.h"
 #endif
 
-#ifdef PLATFORM_HAS_TRACESWO
+#if defined(PLATFORM_HAS_TRACESWO)
 #include "swo.h"
 #endif
 
@@ -52,95 +59,129 @@
 #include "gdb_packet.h"
 #include "morse.h"
 
-#define GDB_TASK_CORE_AFFINITY (0x02) /* Core 1 only */
-#define GDB_TASK_STACK_SIZE    (2936)
+/**********************************************************************************************************************
+ * Private Data
+ **********************************************************************************************************************/
 
-TaskHandle_t gdb_task = NULL;
+static TaskHandle_t gdb_task = NULL; /**< Handle of the GDB worker task. */
+
+/**********************************************************************************************************************
+ * Private Functions Prototypes
+ **********************************************************************************************************************/
+
+/**
+ * \brief Run one iteration of GDB protocol handling: drive target while running, then process one packet.
+ */
+static void bmp_poll_loop(void);
+
+/**
+ * \brief GDB worker task entry — initialises USB/serial/SWO subsystems and loops over the protocol.
+ *
+ * \param[in] params Unused FreeRTOS task parameter.
+ */
+_Noreturn static void gdb_thread(void *params);
+
+/**********************************************************************************************************************
+ * Private Functions
+ **********************************************************************************************************************/
 
 static void bmp_poll_loop(void)
 {
-	SET_IDLE_STATE(false);
-	while (gdb_target_running && cur_target) {
-		gdb_poll_target();
+    SET_IDLE_STATE(false);
+    while ((gdb_target_running) && (cur_target)) {
+        gdb_poll_target();
 
-		// Check again, as `gdb_poll_target()` may
-		// alter these variables.
-		if (!gdb_target_running || !cur_target)
-			break;
-		char c = gdb_if_getchar_to(0);
-		if (c == '\x03' || c == '\x04')
-			target_halt_request(cur_target);
-#ifdef ENABLE_RTT
-		if (rtt_enabled)
-			poll_rtt(cur_target);
+        // Check again, as `gdb_poll_target()` may
+        // alter these variables.
+        if ((!gdb_target_running) || (!cur_target)) {
+            break;
+        }
+        char c = gdb_if_getchar_to(0);
+        if ((c == '\x03') || (c == '\x04')) {
+            target_halt_request(cur_target);
+        }
+#if defined(ENABLE_RTT)
+        if (rtt_enabled) {
+            poll_rtt(cur_target);
+        }
 #endif
-	}
+    }
 
-	SET_IDLE_STATE(true);
-	const gdb_packet_s *const packet = gdb_packet_receive();
-	// If port closed and target detached, stay idle
-	if (packet->data[0] != '\x04' || cur_target)
-		SET_IDLE_STATE(false);
-	gdb_main(packet);
+    SET_IDLE_STATE(true);
+    const gdb_packet_s *const packet = gdb_packet_receive();
+    // If port closed and target detached, stay idle
+    if ((packet->data[0] != '\x04') || (cur_target)) {
+        SET_IDLE_STATE(false);
+    }
+    gdb_main(packet);
 }
 
 _Noreturn static void gdb_thread(void *params)
 {
-	(void)params;
+    (void)params;
 
-	platform_init();
+    platform_init();
 
-	/* Create the bridge mutex before any task that uses uart_bridge is allowed
-	 * to run. xSemaphoreCreateMutex must not be called from a critical section. */
-	uart_bridge_common_init();
+    /* Create the bridge mutex before any task that uses uart_bridge is allowed
+     * to run. xSemaphoreCreateMutex must not be called from a critical section. */
+    uart_bridge_common_init();
 
-	vTaskSuspendAll();
+    vTaskSuspendAll();
 
-	blackmagic_usb_init();
-	usb_serial_init();
-	traceswo_task_init();
+    usb_cdc_register_listener(USB_CDC_GDB, xTaskGetCurrentTaskHandle(), USB_CDC_NOTIF_USB_RX_AVAILABLE);
 
-	xTaskResumeAll();
+    blackmagic_usb_init();
+    target_serial_init();
+    traceswo_task_init();
 
-	while (1) {
-		TRY (EXCEPTION_ALL) {
-			bmp_poll_loop();
-		}
-		CATCH () {
-		default:
-			gdb_put_packet_error(0xffU);
-			target_list_free();
-			gdb_outf("Uncaught exception: %s\n", exception_frame.msg);
-			morse("TARGET LOST.", true);
-		}
-	}
+    xTaskResumeAll();
+
+    while (1) {
+        TRY (EXCEPTION_ALL) {
+            bmp_poll_loop();
+        }
+        CATCH () {
+        default:
+            gdb_put_packet_error(0xffU);
+            target_list_free();
+            gdb_outf("Uncaught exception: %s\n", exception_frame.msg);
+            morse("TARGET LOST.", true);
+        }
+    }
 }
 
+/**********************************************************************************************************************
+ * Public Functions
+ **********************************************************************************************************************/
+
+/**
+ * \brief Firmware entry point. Brings up debug aids, creates the GDB task, and starts the scheduler.
+ */
 void main(void)
 {
 #if ENABLE_DEBUG
-	SEGGER_RTT_Init();
+    SEGGER_RTT_Init();
 #endif
 
 #if ENABLE_SYSVIEW_TRACE
-	traceSTART();
+    traceSTART();
 #endif
 
-	platform_update_sys_freq();
+    platform_update_sys_freq();
 
-	multicore_reset_core1();
+    multicore_reset_core1();
 
 #if configUSE_CORE_AFFINITY
-	const BaseType_t result = xTaskCreateAffinitySet(
-		gdb_thread, "target_gdb", GDB_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_LOW, GDB_TASK_CORE_AFFINITY, &gdb_task);
+    const BaseType_t result = xTaskCreateAffinitySet(
+        gdb_thread, "target_gdb", GDB_TASK_STACK_SIZE, NULL, GDB_TASK_PRIORITY, GDB_TASK_CORE_AFFINITY, &gdb_task);
 #else
-	const BaseType_t result =
-		xTaskCreate(gdb_thread, "target_gdb", GDB_TASK_STACK_SIZE, NULL, PLATFORM_PRIORITY_LOW, &gdb_task);
+    const BaseType_t result =
+        xTaskCreate(gdb_thread, "target_gdb", GDB_TASK_STACK_SIZE, NULL, GDB_TASK_PRIORITY, &gdb_task);
 #endif
 
-	assert(result == pdPASS);
+    assert(result == pdPASS);
 
-	vTaskStartScheduler();
+    vTaskStartScheduler();
 
-	assert(false);
+    assert(false);
 }
