@@ -20,6 +20,11 @@ else()
     set(PICO_DEOPTIMIZED_DEBUG 0)
 endif()
 
+# Run RP2040 at the fastest officially supported system clock (200 MHz).
+# Must be set before pico_sdk_init() so hardware_clocks picks the matching PLL setup
+# from src/rp2_common/hardware_clocks/include/hardware/clocks.h.
+set(PICO_USE_FASTEST_SUPPORTED_CLOCK 1)
+
 # ============================================================================
 # Import external libraries (includes Pico SDK) and define project
 # ============================================================================

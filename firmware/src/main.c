@@ -167,8 +167,6 @@ void main(void)
     traceSTART();
 #endif
 
-    platform_update_sys_freq();
-
     multicore_reset_core1();
 
 #if configUSE_CORE_AFFINITY

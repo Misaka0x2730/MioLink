@@ -137,11 +137,6 @@ extern bool debug_bmp; /**< Verbose BMP logging when \c ENABLE_DEBUG is on. */
 bool platform_target_is_power_ok(void);
 
 /**
- * \brief Re-read system clock and refresh timing-dependent probe settings.
- */
-void platform_update_sys_freq(void);
-
-/**
  * \brief Cached device type from board ID GPIOs / compile-time selection.
  */
 platform_device_type_t platform_hwtype(void);

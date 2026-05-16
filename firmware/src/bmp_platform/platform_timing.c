@@ -221,8 +221,3 @@ uint32_t platform_timeout_time_left(const platform_timeout_s *const timeout)
 
     return 0;
 }
-
-void platform_update_sys_freq(void)
-{
-    set_sys_clock_hz(configCPU_CLOCK_HZ, true);
-}

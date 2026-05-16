@@ -28,6 +28,10 @@
 #ifndef MIOLINK_FREERTOS_CONFIG_H
 #define MIOLINK_FREERTOS_CONFIG_H
 
+/* Pull SYS_CLK_HZ from the Pico SDK so configCPU_CLOCK_HZ tracks the SDK clock setup
+ * (e.g. 200 MHz when PICO_USE_FASTEST_SUPPORTED_CLOCK=1, 125 MHz otherwise). */
+#include "hardware/platform_defs.h"
+
 /*-----------------------------------------------------------
  * Application specific definitions.
  *
@@ -48,7 +52,7 @@
 #define configTICK_RATE_HZ       ((TickType_t)CONFIG_FREERTOS_TICK_RATE_HZ)
 #define configMAX_PRIORITIES     5
 #define configMINIMAL_STACK_SIZE ((configSTACK_DEPTH_TYPE)128)
-#define configCPU_CLOCK_HZ       (125000000UL)
+#define configCPU_CLOCK_HZ       ((unsigned long)SYS_CLK_HZ)
 #define configUSE_16_BIT_TICKS   0
 
 #define configIDLE_SHOULD_YIELD 0
