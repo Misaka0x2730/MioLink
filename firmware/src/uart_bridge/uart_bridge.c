@@ -51,6 +51,26 @@
  */
 #define UART_BRIDGE_DMA_IRQ_INDEX (0u)
 
+/**
+ * \brief Pre-increment an RX DMA buffer index in place and wrap it back to zero
+ *        when it reaches \a count.
+ *
+ * Encapsulates the "++idx; if (idx >= count) idx = 0;" rotation used by the
+ * bridge's RX DMA paths (current-buffer and next-buffer-to-send counters).
+ * Both arguments are evaluated more than once and must therefore be free of
+ * side effects, apart from the intended pre-increment on \a idx that the macro
+ * performs internally.
+ *
+ * \param[in,out] idx   Ring-buffer index l-value to advance.
+ * \param[in]     count Number of slots in the ring (exclusive upper bound).
+ */
+#define UART_BRIDGE_RX_BUFFER_ADVANCE(idx, count) \
+    do {                                          \
+        if (++(idx) >= (count)) {                 \
+            (idx) = 0;                            \
+        }                                         \
+    } while (0)
+
 /**********************************************************************************************************************
  * Private Types
  **********************************************************************************************************************/
@@ -521,10 +541,11 @@ static void uart_bridge_dma_irq_handler(void)
             (dma_irqn_get_channel_status(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->rx_dma_channel))) {
             dma_irqn_acknowledge_channel(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->rx_dma_channel);
 
-            ctx->rx_dma_buffer_full_mask |= (1UL << ctx->rx_dma_current_buffer);
-            if (++ctx->rx_dma_current_buffer >= ctx->cfg->rx_buffer_count) {
-                ctx->rx_dma_current_buffer = 0;
-            }
+            /* Atomic OR because the owner task that clears bits via Atomic_AND_u32
+             * in uart_bridge_rx_dma_process_buffers runs on a different core than the
+             * DMA dispatcher (see SMP / core-affinity note in uart_bridge_init). */
+            Atomic_OR_u32(&ctx->rx_dma_buffer_full_mask, 1UL << ctx->rx_dma_current_buffer);
+            UART_BRIDGE_RX_BUFFER_ADVANCE(ctx->rx_dma_current_buffer, ctx->cfg->rx_buffer_count);
 
             xTaskNotifyFromISR(ctx->owner_task, ctx->cfg->notif_rx_available, eSetBits, &higher_priority_task_woken);
         }
@@ -610,18 +631,19 @@ void uart_bridge_init(uart_bridge_ctx_t *ctx, const uart_bridge_config_t *cfg, T
      * installation must be atomic with respect to that ISR. The bridge mutex would
      * not suffice on its own; portENTER_CRITICAL is the right primitive here.
      *
-     * SMP / core-affinity invariant: irq_set_exclusive_handler / irq_set_enabled below
+     * SMP / core-affinity note: irq_set_exclusive_handler / irq_set_enabled below
      * apply only to the core that executes this function (the Pico SDK NVIC API is
-     * per-core).  Owner modules currently bind every UART-bridge channel to a task
-     * affined to core 0 (see TARGET_SERIAL_TASK_CORE_AFFINITY and TRACESWO_TASK_CORE_AFFINITY
-     * in platform_threads.h), and uart_bridge_init is invoked from
-     * \c target_serial_init / \c traceswo_task_init which themselves run on the GDB
-     * task before the scheduler is resumed.  The DMA dispatcher therefore ends up
-     * running on whichever core executes the first uart_bridge_init call.  The
-     * non-atomic ctx->rx_dma_buffer_full_mask |= in the dispatcher is only safe
-     * because the owner's Atomic_AND_u32 (in uart_bridge_rx_dma_process_buffers)
-     * runs on the same core as the IRQ — preserving this invariant is required if
-     * owner-task affinities or NVIC enable ordering ever change. */
+     * per-core).  uart_bridge_init is invoked from \c target_serial_init /
+     * \c traceswo_task_init, both of which run in the GDB task context (currently
+     * pinned to core 1 via GDB_TASK_CORE_AFFINITY), while the owner tasks themselves
+     * (target_serial, traceswo) are pinned to core 0 via TARGET_SERIAL_TASK_CORE_AFFINITY /
+     * TRACESWO_TASK_CORE_AFFINITY.  The DMA dispatcher therefore runs on a different
+     * core than the owner tasks, so any update to shared state from the dispatcher
+     * must remain SMP-safe with respect to the owner (e.g. \c rx_dma_buffer_full_mask
+     * is touched with \c Atomic_OR_u32 in the dispatcher and \c Atomic_AND_u32 in
+     * \c uart_bridge_rx_dma_process_buffers).  Owner code only touches peripheral
+     * registers (UART IMSC, DMA INTE / abort / ack), which are global and safe from
+     * any core; it does not flip per-core NVIC enables for the UART or DMA IRQ lines. */
     portENTER_CRITICAL();
     uart_bridge_register_ctx(ctx);
 
@@ -809,9 +831,7 @@ void uart_bridge_rx_dma_process_buffers(uart_bridge_ctx_t *ctx)
 
         if (result == UART_BRIDGE_SINK_OK) {
             Atomic_AND_u32(&ctx->rx_dma_buffer_full_mask, ~buffer_bit);
-            if (++ctx->rx_dma_next_buffer_to_send >= ctx->cfg->rx_buffer_count) {
-                ctx->rx_dma_next_buffer_to_send = 0;
-            }
+            UART_BRIDGE_RX_BUFFER_ADVANCE(ctx->rx_dma_next_buffer_to_send, ctx->cfg->rx_buffer_count);
         } else if (result == UART_BRIDGE_SINK_RETRY) {
             xTimerReset(ctx->rx_timeout_timer, 0);
             vTaskDelay(pdMS_TO_TICKS(1));
@@ -831,9 +851,7 @@ void uart_bridge_rx_dma_finish_receiving(uart_bridge_ctx_t *ctx)
 
     const uint32_t current_buffer = ctx->rx_dma_current_buffer;
 
-    if (++ctx->rx_dma_current_buffer >= ctx->cfg->rx_buffer_count) {
-        ctx->rx_dma_current_buffer = 0;
-    }
+    UART_BRIDGE_RX_BUFFER_ADVANCE(ctx->rx_dma_current_buffer, ctx->cfg->rx_buffer_count);
 
     ctx->rx_ongoing = false;
 
@@ -862,9 +880,7 @@ void uart_bridge_rx_dma_finish_receiving(uart_bridge_ctx_t *ctx)
         ctx->cfg->rx_sink(ctx, buf, ctx->cfg->rx_buffer_size, UART_BRIDGE_SINK_NO_FLUSH, UART_BRIDGE_SINK_ALLOW_DROP);
 
         Atomic_AND_u32(&ctx->rx_dma_buffer_full_mask, ~buffer_bit);
-        if (++ctx->rx_dma_next_buffer_to_send >= ctx->cfg->rx_buffer_count) {
-            ctx->rx_dma_next_buffer_to_send = 0;
-        }
+        UART_BRIDGE_RX_BUFFER_ADVANCE(ctx->rx_dma_next_buffer_to_send, ctx->cfg->rx_buffer_count);
     }
 
     if ((current_buffer + 1U) >= ctx->cfg->rx_buffer_count) {
