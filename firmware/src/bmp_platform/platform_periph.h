@@ -17,12 +17,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef MIOLINK_PLATFORM_CONFIG_PERIPH_H
-#define MIOLINK_PLATFORM_CONFIG_PERIPH_H
+#ifndef MIOLINK_PLATFORM_PERIPH_H
+#define MIOLINK_PLATFORM_PERIPH_H
 
 /**********************************************************************************************************************
  * Public Definitions
  **********************************************************************************************************************/
+
+#define PIN_NOT_CONNECTED (0xFF) /**< GPIO number sentinel for unpopulated pins */
 
 #define TARGET_SERIAL_UART_MAIN    (uart1) /**< Primary target UART instance. */
 #define TARGET_SERIAL_UART_TDI_TDO (uart0) /**< Alternate UART on TDI/TDO when muxed. */
@@ -32,4 +34,4 @@
 #define TAP_PIO_SWD  (pio0) /**< PIO block instance for SWD operations. */
 #define TAP_PIO_JTAG (pio0) /**< PIO block instance for JTAG operations. */
 
-#endif /* MIOLINK_PLATFORM_CONFIG_PERIPH_H */
+#endif /* MIOLINK_PLATFORM_PERIPH_H */

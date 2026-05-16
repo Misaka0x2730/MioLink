@@ -34,10 +34,12 @@
  * Public Definitions
  **********************************************************************************************************************/
 
+/* BOARD_AUTO selects runtime board auto-detection at boot. It is set as a CMake variable here and
+ * propagated to a compiler -D flag in firmware/CMakeLists.txt so that platform.h sees BOARD_AUTO
+ * regardless of include order. */
 pico_board_cmake_set(PICO_PLATFORM, rp2040)
 pico_board_cmake_set(PICO_CYW43_SUPPORTED, 1)
-
-#define BOARD_AUTO /**< Selects runtime board auto-detection at boot. */
+pico_board_cmake_set(BOARD_AUTO, 1)
 
 #define PICO_W_DETECT_CYW43_CS_PIN  (CYW43_DEFAULT_PIN_WL_CS) /**< GPIO sampled to discriminate Pico vs Pico W. */
 #define PICO_W_DETECT_ADC_CHANNEL   (3)                       /**< ADC channel used for Pico W detection. */

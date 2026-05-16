@@ -54,3 +54,19 @@ For files under `firmware/`, also read and follow `firmware/AGENTS.md`.
 - `firmware/AGENTS.md` contains firmware-scoped rules.
 - `CLAUDE.md` is a thin Claude Code adapter that imports shared rules.
 - `.cursor/rules/*.mdc` files are Cursor adapters that reference the same shared rules.
+
+## Task Boundaries
+
+- Treat each user request as a scoped task.
+- Do not perform opportunistic refactors, dependency updates, formatting sweeps, or cleanup outside the requested area.
+- If a broader issue is discovered, mention it in the final report instead of changing it automatically.
+
+## Final Response Expectations
+
+For every completed firmware task, report:
+
+- files changed;
+- build/check commands run;
+- result of each command;
+- hardware paths not tested;
+- any user changes intentionally left untouched.

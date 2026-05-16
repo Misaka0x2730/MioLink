@@ -227,3 +227,13 @@ If hardware validation is not possible, say exactly what was built and what rema
 - Local replacements/adapters live in `firmware/src/bmp_general`, `firmware/src/bmp_platform`, `firmware/src/bmp_tap`, and `firmware/src/bmp_rtt_swo`.
 - `firmware/external/external.cmake` intentionally excludes upstream `adiv5_swd.c` and `swdptap_generic.c` and uses local RP2040/PIO implementations instead.
 - Keep `GDB_PACKET_BUFFER_SIZE`, platform macros, and `BMP_TARGET_*` feature definitions consistent with Black Magic expectations.
+
+## When Unsure
+
+- Prefer asking the user before changing hardware-facing behavior, build options, linker layout, USB descriptors, pin mappings, or vendored integration.
+- If a requested change can be implemented in several ways, choose the smallest local change that preserves existing architecture.
+- If validation cannot be completed locally, still make the code change, run available static/build checks, and clearly report the missing validation.
+
+## Scope Discipline
+
+- Do not fix unrelated warnings, formatting, Doxygen gaps, clang-tidy findings, or TODOs while working on a requested change. Mention them separately if they are relevant.

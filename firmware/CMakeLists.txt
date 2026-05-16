@@ -64,6 +64,21 @@ target_compile_definitions(MioLink PRIVATE
     CONFIG_SWO_DECODE_BUFFER_SIZE=${CONFIG_SWO_DECODE_BUFFER_SIZE}
 )
 
+# Propagate BOARD_* selectors from the active board header (see boards/*.h pico_board_cmake_set(BOARD_*, 1))
+# to compiler -D flags. Without this, platform.h would have to rely on include order to see these macros,
+# which is unsafe because platform.h is pulled in transitively from BMP headers before pico.h.
+set(MIOLINK_BOARD_SELECTORS
+    BOARD_AUTO
+    BOARD_MIOLINK
+    BOARD_MIOLINK_PICO
+)
+
+foreach(BOARD_SELECTOR IN LISTS MIOLINK_BOARD_SELECTORS)
+    if(${BOARD_SELECTOR})
+        target_compile_definitions(MioLink PRIVATE ${BOARD_SELECTOR}=${${BOARD_SELECTOR}})
+    endif()
+endforeach()
+
 # ============================================================================
 # Generate header files
 # ============================================================================
@@ -110,11 +125,6 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/src)
 # Link boards library
 target_link_libraries(MioLink PRIVATE
     boards
-)
-
-# Link platform configuration headers
-target_link_libraries(MioLink PRIVATE
-    platform_config
 )
 
 # Link MioLink firmware aggregate

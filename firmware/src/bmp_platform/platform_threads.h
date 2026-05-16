@@ -17,8 +17,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef MIOLINK_PLATFORM_CONFIG_THREADS_H
-#define MIOLINK_PLATFORM_CONFIG_THREADS_H
+#ifndef MIOLINK_PLATFORM_THREADS_H
+#define MIOLINK_PLATFORM_THREADS_H
 
 /**********************************************************************************************************************
  * Public Definitions
@@ -43,4 +43,4 @@
 #define TARGET_SERIAL_TASK_STACK_SIZE (512)  /**< USB-UART bridge task stack size, in stack words. */
 #define USB_TASK_STACK_SIZE           (512)  /**< USB task stack size, in stack words. */
 
-#endif /* MIOLINK_PLATFORM_CONFIG_THREADS_H */
+#endif /* MIOLINK_PLATFORM_THREADS_H */

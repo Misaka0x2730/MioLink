@@ -614,7 +614,7 @@ void uart_bridge_init(uart_bridge_ctx_t *ctx, const uart_bridge_config_t *cfg, T
      * apply only to the core that executes this function (the Pico SDK NVIC API is
      * per-core).  Owner modules currently bind every UART-bridge channel to a task
      * affined to core 0 (see TARGET_SERIAL_TASK_CORE_AFFINITY and TRACESWO_TASK_CORE_AFFINITY
-     * in platform_config_threads.h), and uart_bridge_init is invoked from
+     * in platform_threads.h), and uart_bridge_init is invoked from
      * \c target_serial_init / \c traceswo_task_init which themselves run on the GDB
      * task before the scheduler is resumed.  The DMA dispatcher therefore ends up
      * running on whichever core executes the first uart_bridge_init call.  The
