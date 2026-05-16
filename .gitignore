@@ -1,6 +1,7 @@
 # IDE settings
 .idea/
 .vscode/
+.cursor/debug-*.log
 
 # KiCad files
 *.kicad_prl
