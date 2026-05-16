@@ -134,23 +134,30 @@ The following tools are required to build this project:
 - arm-none-eabi-gcc
 
 ## Board selection
-By default, the firmware is built with `-DPICO_BOARD=auto`, which enables runtime detection of the board type (MioLink rev. A/B, MioLink_Pico, Pico, or Pico W).  
-If you want to build for a specific board, pass `-DPICO_BOARD=<board>` to the `cmake` command.
+The firmware is built with the `-DPICO_BOARD=<board>` option passed to `cmake`, which selects the target board.  
+By default, `-DPICO_BOARD=auto` is used: a single firmware image is built that detects the board at runtime (MioLink rev. A/B, MioLink_Pico, Pico, or Pico W) using hardware strap pins and CYW43/ADC probing.  
+If you want an image limited to a single board, pass `-DPICO_BOARD=<board>` with a specific board name. In this case, only the code and drivers for the selected board are included, and runtime detection is disabled.
 
 The following board options are available:
 
 Board | Description
-:----:|:----------:
+:--------------:|:----------:
 `auto` | Default. Runtime board detection, supports all boards with a single firmware.
 `miolink` | MioLink (rev. A and rev. B).
 `miolink_pico` | MioLink_Pico breakout board.
+`pico` | Raspberry Pi Pico.
+`pico_w` | Raspberry Pi Pico W.
 
-Any Pico SDK board (e.g. `pico`, `pico_w`, `weact_studio_rp2040_2mb`) can also be used.  
-When a specific board is selected, only the code and drivers for that board are included.
+Any other Pico SDK board (e.g. `weact_studio_rp2040_2mb`) can also be passed by name.
 
-Example:
+Example (runtime detection, default):
 ```
-cmake -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=miolink ..
+cmake -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=auto ..
+```
+
+Example (specific board):
+```
+cmake -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=weact_studio_rp2040_2mb ..
 ```
 
 ## Build on Windows
