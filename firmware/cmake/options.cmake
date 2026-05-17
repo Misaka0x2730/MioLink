@@ -4,9 +4,9 @@
 # Platform Options
 # ============================================================================
 
-set(PICO_BOARD "auto" CACHE STRING 
+set(PICO_BOARD "auto" CACHE STRING
     "Pico SDK target board
-    Options: auto, miolink, miolink_pico, pico, pico_w, weact_studio_rp2040_2mb
+    Options: auto, miolink, miolink_pico, pico, pico_w, pico2, pico2_w, weact_studio_rp2040_2mb and others supported by the Pico SDK
     Default: auto (auto-detect at runtime)")
 
 # ============================================================================

@@ -32,6 +32,16 @@
  * (e.g. 200 MHz when PICO_USE_FASTEST_SUPPORTED_CLOCK=1, 125 MHz otherwise). */
 #include "hardware/platform_defs.h"
 
+#if defined(PICO_RP2350)
+/* ARM_NTZ port settings: Cortex-M33 secure-only, no TrustZone. */
+#define configENABLE_FPU                     (1)
+#define configENABLE_MPU                     (0)
+#define configENABLE_TRUSTZONE               (0)
+#define configRUN_FREERTOS_SECURE_ONLY       (1)
+/* M33 NVIC: 4-bit priority */
+#define configMAX_SYSCALL_INTERRUPT_PRIORITY (16)
+#endif
+
 /*-----------------------------------------------------------
  * Application specific definitions.
  *
@@ -110,11 +120,11 @@
 #define configUSE_PASSIVE_IDLE_HOOK   0
 
 #if (CONFIG_NUMBER_OF_CORES > 2)
-#error "RP2040 has only 2 cores"
+#error "RP2040 and RP2350 each have only 2 cores"
 #endif
 
 #if (configNUMBER_OF_CORES > 1)
-/* RP2040 specific */
+/* RP2040/RP2350 specific */
 #define configSUPPORT_PICO_SYNC_INTEROP 1
 #define configSUPPORT_PICO_TIME_INTEROP 1
 

@@ -2,16 +2,6 @@
 find_package(Git QUIET)
 
 # ============================================================================
-# Pico SDK setting up
-# ============================================================================
-
-# Set Pico SDK path
-set(PICO_SDK_PATH ${CMAKE_CURRENT_LIST_DIR}/pico-sdk)
-
-# Pico SDK import
-include(${CMAKE_CURRENT_LIST_DIR}/pico-sdk/external/pico_sdk_import.cmake)
-
-# ============================================================================
 # FreeRTOS-Kernel setting up
 # ============================================================================
 
@@ -104,6 +94,12 @@ target_sources(segger_rtt INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/SEGGER/RTT/RTT/SEGGER_RTT.c
     ${CMAKE_CURRENT_LIST_DIR}/SEGGER/RTT/RTT/SEGGER_RTT_printf.c
 )
+
+if(PICO_PLATFORM MATCHES "^rp2350")
+    target_sources(segger_rtt INTERFACE 
+        ${CMAKE_CURRENT_LIST_DIR}/SEGGER/RTT/RTT/SEGGER_RTT_ASM_ARMv7M.S
+    )
+endif()
 
 # Link Segger RTT configuration library
 target_link_libraries(segger_rtt INTERFACE

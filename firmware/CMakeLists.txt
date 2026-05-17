@@ -23,14 +23,16 @@ endif()
 # Run RP2040 at the fastest officially supported system clock (200 MHz).
 # Must be set before pico_sdk_init() so hardware_clocks picks the matching PLL setup
 # from src/rp2_common/hardware_clocks/include/hardware/clocks.h.
+# Note: this option is RP2040-only; on RP2350 the SDK ignores it and uses the default 150 MHz.
 set(PICO_USE_FASTEST_SUPPORTED_CLOCK 1)
 
 # ============================================================================
-# Import external libraries (includes Pico SDK) and define project
+# Import Pico SDK (must run before project() so the toolchain is picked up)
+# and define the project
 # ============================================================================
 
-# Import external libraries (includes Pico SDK)
-include(${CMAKE_CURRENT_LIST_DIR}/external/external.cmake)
+# Import Pico SDK
+include(${CMAKE_CURRENT_LIST_DIR}/external/pico_sdk.cmake)
 
 # Project definition
 project(MioLink C CXX ASM)
@@ -47,6 +49,9 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/boards)
 
 # Initialize Pico SDK (must be after project)
 pico_sdk_init()
+
+# Import the remaining vendored libraries (FreeRTOS, TinyUSB, Black Magic, SEGGER).
+include(${CMAKE_CURRENT_LIST_DIR}/external/external.cmake)
 
 # ============================================================================
 # Create main executable target and configure common executable parameters
@@ -115,10 +120,17 @@ target_include_directories(MioLink PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 # Generate linker scripts
 # ============================================================================
 
-# Generate linker script
+# Generate linker scripts
 set(PICO_FLASH_SIZE_BYTES_STRING "${PICO_FLASH_SIZE_BYTES}")
-configure_file(${CMAKE_CURRENT_LIST_DIR}/linker/memmap_release.ld.in ${CMAKE_CURRENT_BINARY_DIR}/memmap_release.ld)
-configure_file(${CMAKE_CURRENT_LIST_DIR}/linker/memmap_debug.ld.in ${CMAKE_CURRENT_BINARY_DIR}/memmap_debug.ld)
+if(PICO_PLATFORM MATCHES "^rp2350")
+    set(MIOLINK_MEMMAP_RELEASE_TEMPLATE ${CMAKE_CURRENT_LIST_DIR}/linker/memmap_rp2350_release.ld.in)
+    set(MIOLINK_MEMMAP_DEBUG_TEMPLATE   ${CMAKE_CURRENT_LIST_DIR}/linker/memmap_rp2350_debug.ld.in)
+else()
+    set(MIOLINK_MEMMAP_RELEASE_TEMPLATE ${CMAKE_CURRENT_LIST_DIR}/linker/memmap_rp2040_release.ld.in)
+    set(MIOLINK_MEMMAP_DEBUG_TEMPLATE   ${CMAKE_CURRENT_LIST_DIR}/linker/memmap_rp2040_debug.ld.in)
+endif()
+configure_file(${MIOLINK_MEMMAP_RELEASE_TEMPLATE} ${CMAKE_CURRENT_BINARY_DIR}/memmap_release.ld)
+configure_file(${MIOLINK_MEMMAP_DEBUG_TEMPLATE}   ${CMAKE_CURRENT_BINARY_DIR}/memmap_debug.ld)
 
 # ============================================================================
 # Link other libraries
