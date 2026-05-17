@@ -264,6 +264,7 @@ void platform_update_hwtype(void)
 
             adc_init();
             adc_gpio_init(ADC_BASE_PIN + PICO_W_DETECT_ADC_CHANNEL);
+            gpio_pull_up(ADC_BASE_PIN + PICO_W_DETECT_ADC_CHANNEL);
             adc_select_input(PICO_W_DETECT_ADC_CHANNEL);
 
             /* Drop the first measurement to flush the ADC pipeline. */
@@ -272,6 +273,7 @@ void platform_update_hwtype(void)
 
             gpio_init(PICO_W_DETECT_CYW43_CS_PIN);
             gpio_init(ADC_BASE_PIN + PICO_W_DETECT_ADC_CHANNEL);
+            gpio_disable_pulls(ADC_BASE_PIN + PICO_W_DETECT_ADC_CHANNEL);
 
             if (adc_result < PICO_W_DETECT_ADC_THRESHOLD) {
                 cyw43_arch_init();

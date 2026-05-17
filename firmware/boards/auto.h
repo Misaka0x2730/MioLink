@@ -41,9 +41,9 @@ pico_board_cmake_set(PICO_PLATFORM, rp2040)
 pico_board_cmake_set(PICO_CYW43_SUPPORTED, 1)
 pico_board_cmake_set(BOARD_AUTO, 1)
 
-#define PICO_W_DETECT_CYW43_CS_PIN  (CYW43_DEFAULT_PIN_WL_CS) /**< GPIO sampled to discriminate Pico vs Pico W. */
-#define PICO_W_DETECT_ADC_CHANNEL   (3)                       /**< ADC channel used for Pico W detection. */
-#define PICO_W_DETECT_ADC_THRESHOLD (0x100)                   /**< ADC threshold for inferring CYW43 presence. */
+#define PICO_W_DETECT_CYW43_CS_PIN  (CYW43_DEFAULT_PIN_WL_CS)      /**< GPIO sampled to discriminate Pico vs Pico W. */
+#define PICO_W_DETECT_ADC_CHANNEL   (PICO_VSYS_PIN - ADC_BASE_PIN) /**< ADC channel used for Pico W detection. */
+#define PICO_W_DETECT_ADC_THRESHOLD (0x600)                        /**< ADC threshold for inferring CYW43 presence. */
 
 #define PICO_BOOT_STAGE2_CHOOSE_W25Q080 (1) /**< Selects W25Q080-compatible boot stage 2. */
 
