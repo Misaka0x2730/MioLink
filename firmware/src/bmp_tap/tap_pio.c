@@ -26,7 +26,9 @@
 #include "hardware/dma.h"
 #include "hardware/pio.h"
 #include "dma_ex.h"
+
 #include "platform.h"
+
 #include "tap_pio.h"
 
 /**********************************************************************************************************************

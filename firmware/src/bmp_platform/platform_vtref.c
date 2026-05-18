@@ -31,8 +31,8 @@
 #include "hardware/adc.h"
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
-#include "dma_ex.h"
 #include "hardware/irq.h"
+#include "dma_ex.h"
 
 #include "platform.h"
 

@@ -28,9 +28,12 @@
  **********************************************************************************************************************/
 
 #include "general.h"
+
 #include "hardware/pio.h"
+
 #include "platform.h"
 #include "platform_swdtap.h"
+
 #include "tap_pio.h"
 #include "swd.h"
 #include "maths_utils.h"

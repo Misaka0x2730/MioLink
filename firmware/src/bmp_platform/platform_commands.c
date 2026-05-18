@@ -26,9 +26,12 @@
  **********************************************************************************************************************/
 
 #include "general.h"
+
 #include "platform.h"
+
 #include "FreeRTOS.h"
 #include "task.h"
+
 #include "command.h"
 #include "target_internal.h"
 #include "gdb_packet.h"

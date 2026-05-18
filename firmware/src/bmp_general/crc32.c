@@ -26,8 +26,10 @@
  **********************************************************************************************************************/
 
 #include "general.h"
+
 #include "hardware/dma.h"
 #include "dma_ex.h"
+
 #include "target.h"
 #include "gdb_if.h"
 

@@ -26,6 +26,7 @@
  **********************************************************************************************************************/
 
 #include "general.h"
+
 #include "hardware/gpio.h"
 #include "hardware/timer.h"
 #include "pico/bootrom.h"
@@ -36,8 +37,10 @@
 
 #include "platform.h"
 #include "platform_timing.h"
+
 #include "FreeRTOS.h"
 #include "task.h"
+
 #include "serialno.h"
 
 /**********************************************************************************************************************

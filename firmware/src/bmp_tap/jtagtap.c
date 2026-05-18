@@ -30,7 +30,9 @@
  **********************************************************************************************************************/
 
 #include "general.h"
+
 #include "platform.h"
+
 #include "tap_pio.h"
 #include "jtagtap.h"
 #include "adiv5.h"

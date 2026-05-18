@@ -32,8 +32,11 @@
  **********************************************************************************************************************/
 
 #include "general.h"
+
 #include "hardware/sync.h"
+
 #include "tusb.h"
+
 #include "usb.h"
 #include "usb_cdc.h"
 #include "target_serial.h"

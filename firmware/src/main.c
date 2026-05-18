@@ -28,9 +28,10 @@
  **********************************************************************************************************************/
 
 #include "general.h"
-#include "platform.h"
 
 #include "pico/multicore.h"
+
+#include "platform.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -39,6 +40,12 @@
 #include "target_serial.h"
 #include "usb.h"
 #include "usb_cdc.h"
+#include "gdb_if.h"
+#include "gdb_main.h"
+#include "target.h"
+#include "exception.h"
+#include "gdb_packet.h"
+#include "morse.h"
 
 #if defined(ENABLE_RTT)
 #include "rtt.h"
@@ -51,13 +58,6 @@
 #if ENABLE_DEBUG
 #include "SEGGER_RTT.h"
 #endif
-
-#include "gdb_if.h"
-#include "gdb_main.h"
-#include "target.h"
-#include "exception.h"
-#include "gdb_packet.h"
-#include "morse.h"
 
 /**********************************************************************************************************************
  * Private Data

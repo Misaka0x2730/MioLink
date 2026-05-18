@@ -28,12 +28,16 @@
  **********************************************************************************************************************/
 
 #include "general.h"
+
 #include "hardware/uart.h"
 #include "uart_ex.h"
+
 #include "platform.h"
+
 #include "FreeRTOS.h"
 #include "task.h"
 #include "tusb.h"
+
 #include "uart_bridge.h"
 #include "usb_cdc.h"
 #include "swo.h"

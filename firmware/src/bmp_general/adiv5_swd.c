@@ -32,10 +32,12 @@
  **********************************************************************************************************************/
 
 #include "general.h"
+
+#include "platform_swdtap.h"
+
 #include "exception.h"
 #include "adiv5.h"
 #include "swd.h"
-#include "platform_swdtap.h"
 #include "target.h"
 #include "target_internal.h"
 

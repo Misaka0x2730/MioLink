@@ -28,16 +28,14 @@
 #include "general.h"
 
 #include "platform.h"
+#include "version.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
-
 #include "tusb.h"
 
-#include "version.h"
 #include "usb.h"
 #include "usb_cdc.h"
-
 #include "serialno.h"
 
 /**********************************************************************************************************************

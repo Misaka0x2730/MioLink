@@ -27,12 +27,16 @@
  **********************************************************************************************************************/
 
 #include "general.h"
+
 #include "hardware/pio.h"
 #include "hardware/clocks.h"
+
 #include "platform.h"
 #include "platform_timing.h"
+
 #include "FreeRTOS.h"
 #include "timers.h"
+
 #include "tap_pio.h"
 #include "usb.h"
 #include "morse.h"

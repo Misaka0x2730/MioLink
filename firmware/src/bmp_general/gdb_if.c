@@ -32,11 +32,14 @@
  **********************************************************************************************************************/
 
 #include "general.h"
+
 #include "platform.h"
 #include "platform_timing.h"
+
 #include "FreeRTOS.h"
 #include "task.h"
 #include "tusb.h"
+
 #include "usb_cdc.h"
 #include "usb.h"
 #include "gdb_if.h"
