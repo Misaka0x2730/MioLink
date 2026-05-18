@@ -88,7 +88,7 @@ typedef enum trace_binding {
 /**
  * \brief Ring of DMA RX buffers receiving raw SWO bytes from the UART.
  */
-static uint8_t rx_buf[TRACESWO_RX_DMA_NUMBER_OF_BUFFERS][TRACESWO_RX_DMA_BUFFER_SIZE] = {0};
+static uint8_t uart_rx_buf[TRACESWO_RX_DMA_NUMBER_OF_BUFFERS][TRACESWO_RX_DMA_BUFFER_SIZE] = {0};
 
 /**
  * \brief Control-block list for the chained RX DMA.
@@ -96,7 +96,7 @@ static uint8_t rx_buf[TRACESWO_RX_DMA_NUMBER_OF_BUFFERS][TRACESWO_RX_DMA_BUFFER_
  * Alignment matches the ring-wrap window (count * sizeof(uint32_t)) used by
  * \c channel_config_set_ring inside the bridge.
  */
-static uint8_t *rx_dma_ctrl_block_info[TRACESWO_RX_DMA_NUMBER_OF_BUFFERS + 1]
+static uint8_t *uart_dma_rx_ctrl_block_info[TRACESWO_RX_DMA_NUMBER_OF_BUFFERS + 1]
     __attribute__((aligned(TRACESWO_RX_DMA_NUMBER_OF_BUFFERS * sizeof(uint32_t)))) = {0};
 
 static uart_bridge_ctx_t s_trace_ctx = {0}; /**< UART-bridge context for the SWO RX path. */
@@ -182,10 +182,10 @@ static uart_bridge_binding_t s_trace_bindings[TRACE_BINDING_COUNT] = {
 };
 
 static const uart_bridge_config_t s_trace_cfg = {
-    .rx_buffers_base = (uint8_t *)rx_buf,
+    .rx_buffers_base = (uint8_t *)uart_rx_buf,
     .rx_buffer_size = TRACESWO_RX_DMA_BUFFER_SIZE,
     .rx_buffer_count = TRACESWO_RX_DMA_NUMBER_OF_BUFFERS,
-    .rx_ctrl_block_info = rx_dma_ctrl_block_info,
+    .rx_ctrl_block_info = uart_dma_rx_ctrl_block_info,
     .rx_drop_threshold = TRACESWO_RX_DMA_DROP_BUFFER_THRESHOLD,
     .rx_int_fifo_level = TRACESWO_UART_RX_INT_FIFO_LEVEL,
     .rx_dma_baudrate_threshold = TRACESWO_RX_DMA_BAUDRATE_THRESHOLD,
@@ -320,8 +320,6 @@ void swo_init(swo_coding_e swo_mode, uint32_t baudrate, uint32_t itm_stream_bitm
     }
 
     uart_bridge_configure_uart(&s_trace_ctx, baudrate, 8, 1, UART_PARITY_NONE);
-
-    memset(rx_buf, 0x00, sizeof(rx_buf));
 
     traceswo_setmask(itm_stream_bitmask);
     traceswo_decoding = itm_stream_bitmask != 0;

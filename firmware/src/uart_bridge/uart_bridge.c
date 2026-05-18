@@ -741,6 +741,11 @@ void uart_bridge_configure_uart(
     ctx->tx_dma_finished = false;
     portEXIT_CRITICAL();
 
+    /* Wipe the RX buffer pool before re-enabling hardware so the owner never observes
+     * leftovers from a previous configuration. Safe here: DMA is aborted and no IRQ source
+     * is armed yet. */
+    memset(ctx->cfg->rx_buffers_base, 0, ctx->cfg->rx_buffer_size * ctx->cfg->rx_buffer_count);
+
     uart_init(ctx->uart, baudrate);
     uart_set_format(ctx->uart, data_bits, stop_bits, parity);
 
