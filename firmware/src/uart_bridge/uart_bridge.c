@@ -52,17 +52,15 @@
 #define UART_BRIDGE_DMA_IRQ_INDEX (0u)
 
 /**
- * \brief Pre-increment an RX DMA buffer index in place and wrap it back to zero
- *        when it reaches \a count.
+ * \brief Pre-increment a wrap-around ring index in place and reset it to zero when it reaches \a count.
  *
- * Encapsulates the "++idx; if (idx >= count) idx = 0;" rotation used by the
- * bridge's RX DMA paths (current-buffer and next-buffer-to-send counters).
- * Both arguments are evaluated more than once and must therefore be free of
- * side effects, apart from the intended pre-increment on \a idx that the macro
- * performs internally.
+ * Encapsulates the "++idx; if (idx >= count) idx = 0;" rotation used by the bridge's RX paths —
+ * both the DMA buffer-slot counters (current-buffer / next-buffer-to-send) and the INT-mode flat
+ * byte position into the RX buffer pool. Both arguments are evaluated more than once and must
+ * therefore be free of side effects, apart from the intended pre-increment on \a idx.
  *
- * \param[in,out] idx   Ring-buffer index l-value to advance.
- * \param[in]     count Number of slots in the ring (exclusive upper bound).
+ * \param[in,out] idx   Ring index l-value to advance.
+ * \param[in]     count Wrap modulus (exclusive upper bound).
  */
 #define UART_BRIDGE_RX_BUFFER_ADVANCE(idx, count) \
     do {                                          \
@@ -795,10 +793,8 @@ void uart_bridge_rx_int_finish(uart_bridge_ctx_t *ctx)
     }
 
     while (uart_is_readable(ctx->uart)) {
-        ctx->cfg->rx_buffers_base[ctx->rx_int_buf_pos++] = uart_ex_read(ctx->uart);
-        if (ctx->rx_int_buf_pos >= total_size) {
-            ctx->rx_int_buf_pos = 0;
-        }
+        ctx->cfg->rx_buffers_base[ctx->rx_int_buf_pos] = uart_ex_read(ctx->uart);
+        UART_BRIDGE_RX_BUFFER_ADVANCE(ctx->rx_int_buf_pos, total_size);
     }
 
     if (ctx->rx_int_buf_pos > 0) {
@@ -954,9 +950,7 @@ static void uart_bridge_uart_isr_handler(uart_bridge_ctx_t *ctx)
                 }
 
                 ctx->cfg->rx_buffers_base[ctx->rx_int_buf_pos] = uart_ex_read(ctx->uart);
-                if (++ctx->rx_int_buf_pos >= total_size) {
-                    ctx->rx_int_buf_pos = 0;
-                }
+                UART_BRIDGE_RX_BUFFER_ADVANCE(ctx->rx_int_buf_pos, total_size);
             }
 
             uart_ex_clear_rx_irq_flag(ctx->uart);
