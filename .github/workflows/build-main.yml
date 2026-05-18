@@ -1,4 +1,4 @@
-name: Pre-release
+name: Build Main
 
 on:
   push:
@@ -51,7 +51,7 @@ jobs:
         name: MioLink_${{ matrix.board }}
         path: ./firmware/build/MioLink_dev_${{ github.sha }}_${{ matrix.board }}.uf2
 
-  pre-release:
+  publish:
     needs: build
     runs-on: ubuntu-latest
 
