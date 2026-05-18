@@ -213,7 +213,7 @@ If hardware validation is not possible, say exactly what was built and what rema
 
 ## Embedded Constraints
 
-- FreeRTOS heap is small (`configTOTAL_HEAP_SIZE` is 24 KiB). Avoid new dynamic allocation in hot paths, protocol loops, and ISRs.
+- FreeRTOS heap is small (`configTOTAL_HEAP_SIZE` is 27 KiB). Avoid new dynamic allocation in hot paths, protocol loops, and ISRs.
 - Stack sizes are intentionally tight. If increasing stack or heap use, justify it and consider `monitor rtos_tasksinfo` / `monitor rtos_heapinfo`.
 - Use FreeRTOS `FromISR` APIs from interrupts and preserve `BaseType_t higher_priority_task_woken` / yield behavior.
 - Respect task affinity:

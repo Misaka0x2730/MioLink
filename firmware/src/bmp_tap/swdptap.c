@@ -265,7 +265,7 @@ static uint8_t swdtap_prepare_pio_seq(
                 buffer[pos++] = data_value;
             } else {
                 buffer[pos++] = data;
-                buffer[pos++] = parity_value ? (1 << 0) : 0;
+                buffer[pos++] = parity_value ? (1UL << 0) : 0UL;
             }
         }
     } else if (!in) {

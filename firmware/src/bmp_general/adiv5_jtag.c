@@ -42,15 +42,15 @@
  * Private Definitions
  **********************************************************************************************************************/
 
-#define JTAG_ACK_WAIT        0x01U /**< ADIv5 JTAG-DP ACK: target busy, retry. */
-#define JTAG_ADIv5_ACK_OK    0x02U /**< ADIv5 JTAG-DPv0 ACK: transaction OK. */
-#define JTAG_ADIv6_ACK_FAULT 0x02U /**< ADIv6 JTAG-DPv1 ACK: target fault. */
-#define JTAG_ADIv6_ACK_OK    0x04U /**< ADIv6 JTAG-DPv1 ACK: transaction OK. */
+#define JTAG_ACK_WAIT        (0x01U) /**< ADIv5 JTAG-DP ACK: target busy, retry. */
+#define JTAG_ADIv5_ACK_OK    (0x02U) /**< ADIv5 JTAG-DPv0 ACK: transaction OK. */
+#define JTAG_ADIv6_ACK_FAULT (0x02U) /**< ADIv6 JTAG-DPv1 ACK: target fault. */
+#define JTAG_ADIv6_ACK_OK    (0x04U) /**< ADIv6 JTAG-DPv1 ACK: transaction OK. */
 
 /* 35-bit registers that control the ADIv5 DP */
-#define IR_ABORT 0x8U /**< JTAG IR value selecting the ABORT 35-bit DR. */
-#define IR_DPACC 0xaU /**< JTAG IR value selecting the DPACC 35-bit DR (DP-bank access). */
-#define IR_APACC 0xbU /**< JTAG IR value selecting the APACC 35-bit DR (AP-bank access). */
+#define IR_ABORT (0x8U) /**< JTAG IR value selecting the ABORT 35-bit DR. */
+#define IR_DPACC (0xaU) /**< JTAG IR value selecting the DPACC 35-bit DR (DP-bank access). */
+#define IR_APACC (0xbU) /**< JTAG IR value selecting the APACC 35-bit DR (AP-bank access). */
 
 /**********************************************************************************************************************
  * Public Functions
