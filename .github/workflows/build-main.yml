@@ -44,13 +44,13 @@ jobs:
 
     - name: Rename binary
       working-directory: ./firmware/build
-      run: mv MioLink.uf2 MioLink_dev_${{ github.sha }}_${{ matrix.board }}.uf2
+      run: mv MioLink.uf2 MioLink_${{ github.sha }}_${{ matrix.board }}.uf2
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: MioLink_${{ matrix.board }}
-        path: ./firmware/build/MioLink_dev_${{ github.sha }}_${{ matrix.board }}.uf2
+        path: ./firmware/build/MioLink_${{ github.sha }}_${{ matrix.board }}.uf2
 
   publish:
     needs: build
@@ -67,7 +67,7 @@ jobs:
     - uses: "marvinpinto/action-automatic-releases@latest"
       with:
         repo_token: "${{ secrets.GITHUB_TOKEN }}"
-        automatic_release_tag: "dev"
+        automatic_release_tag: "main-ci-build"
         prerelease: true
-        title: "Development Build"
+        title: "Main CI Build"
         files: ./artifacts/*.uf2
