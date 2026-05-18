@@ -39,6 +39,8 @@ pico_board_cmake_set(PICO_CYW43_SUPPORTED, 1)
 
 #define BOARD_AUTO_RP2040
 
+#define PICO_VSYS_PIN               (29) /**< GPIO wired to VSYS divider on Pico/Pico W */
+
 #define PICO_W_DETECT_CYW43_CS_PIN  (CYW43_DEFAULT_PIN_WL_CS)      /**< GPIO sampled to discriminate Pico vs Pico W. */
 #define PICO_W_DETECT_ADC_CHANNEL   (PICO_VSYS_PIN - ADC_BASE_PIN) /**< ADC channel used for Pico W detection. */
 #define PICO_W_DETECT_ADC_THRESHOLD (0x600)                        /**< ADC threshold for inferring CYW43 presence. */
