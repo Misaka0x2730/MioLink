@@ -30,11 +30,9 @@
  * Public Definitions
  **********************************************************************************************************************/
 
-/* BOARD_MIOLINK_PICO selects the MioLink_Pico (Pico-based) board build. It is set as a CMake variable here
- * and propagated to a compiler -D flag in firmware/CMakeLists.txt so that platform.h sees BOARD_MIOLINK_PICO
- * regardless of include order. */
 pico_board_cmake_set(PICO_PLATFORM, rp2040)
-pico_board_cmake_set(BOARD_MIOLINK_PICO, 1)
+
+#define BOARD_MIOLINK_PICO
 
 #define PICO_BOOT_STAGE2_CHOOSE_W25Q080 (1) /**< Selects W25Q080-compatible boot stage 2. */
 

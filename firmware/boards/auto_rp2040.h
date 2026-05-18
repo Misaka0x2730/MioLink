@@ -34,12 +34,10 @@
  * Public Definitions
  **********************************************************************************************************************/
 
-/* BOARD_AUTO_RP2040 selects runtime board auto-detection at boot for RP2040 boards. It is set as a
- * CMake variable here and propagated to a compiler -D flag in firmware/CMakeLists.txt so that
- * platform.h sees BOARD_AUTO_RP2040 regardless of include order. */
 pico_board_cmake_set(PICO_PLATFORM, rp2040)
 pico_board_cmake_set(PICO_CYW43_SUPPORTED, 1)
-pico_board_cmake_set(BOARD_AUTO_RP2040, 1)
+
+#define BOARD_AUTO_RP2040
 
 #define PICO_W_DETECT_CYW43_CS_PIN  (CYW43_DEFAULT_PIN_WL_CS)      /**< GPIO sampled to discriminate Pico vs Pico W. */
 #define PICO_W_DETECT_ADC_CHANNEL   (PICO_VSYS_PIN - ADC_BASE_PIN) /**< ADC channel used for Pico W detection. */
