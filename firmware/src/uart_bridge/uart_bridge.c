@@ -80,6 +80,17 @@
  */
 #define UART_BRIDGE_IS_POWER_OF_2(v) (((v) != 0U) && (((v) & ((v) - 1U)) == 0U))
 
+/**
+ * \brief Typical bit-times per UART byte used to convert baud rate into bytes/second.
+ *
+ * Assumes 8N1 framing: 1 start + 8 data + 1 stop = 10 bits per byte. This is the most common
+ * configuration; with parity, 9-bit data, or 2 stop bits the real value is 11 or 12. The bridge
+ * uses this average only to size the RX-idle timeout timer, whose result is subsequently clamped
+ * into \c [rx_dma_min_timeout_ms, rx_dma_max_timeout_ms], so a small under- or overestimate has
+ * no functional impact.
+ */
+#define UART_BRIDGE_FRAME_BITS_AVG (10U)
+
 /**********************************************************************************************************************
  * Private Types
  **********************************************************************************************************************/
@@ -782,7 +793,13 @@ void uart_bridge_configure_uart(
 
         /* Time to fill 2 RX buffers; clamp into [min, max] ms. */
         uint32_t timer_period = (ctx->cfg->rx_buffer_size * 2U * 1000U);
-        timer_period /= (baudrate / 10U); /* 10 bit-times per byte (start + 8 data + stop). */
+        const uint32_t bytes_per_second = baudrate / UART_BRIDGE_FRAME_BITS_AVG;
+        if (bytes_per_second > 0U) {
+            timer_period /= bytes_per_second;
+        }
+        /* If bytes_per_second is 0 (degenerate baudrate < UART_BRIDGE_FRAME_BITS_AVG bit/s),
+         * leave timer_period at the unscaled numerator; the upper clamp below caps it to
+         * rx_dma_max_timeout_ms and avoids the otherwise undefined divide-by-zero. */
         if (timer_period < ctx->cfg->rx_dma_min_timeout_ms) {
             timer_period = ctx->cfg->rx_dma_min_timeout_ms;
         } else if (timer_period > ctx->cfg->rx_dma_max_timeout_ms) {
