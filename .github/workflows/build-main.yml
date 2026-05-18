@@ -16,6 +16,8 @@ jobs:
       matrix:
         board:
           - auto_rp2040
+          - miolink
+          - miolink_pico
           - pico
           - pico_w
           - pico2
