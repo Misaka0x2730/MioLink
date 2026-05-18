@@ -4,10 +4,10 @@
 # Platform Options
 # ============================================================================
 
-set(PICO_BOARD "auto" CACHE STRING
+set(PICO_BOARD "auto_rp2040" CACHE STRING
     "Pico SDK target board
-    Options: auto, miolink, miolink_pico, pico, pico_w, pico2, pico2_w, weact_studio_rp2040_2mb and others supported by the Pico SDK
-    Default: auto (auto-detect at runtime)")
+    Options: auto_rp2040, miolink, miolink_pico, pico, pico_w, pico2, pico2_w, weact_studio_rp2040_2mb and others supported by the Pico SDK
+    Default: auto_rp2040 (auto-detect at runtime on RP2040 boards)")
 
 # ============================================================================
 # FreeRTOS Options

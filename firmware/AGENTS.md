@@ -49,20 +49,20 @@ Core technologies:
 Run from the repository root:
 
 ```sh
-cmake -S firmware -B firmware/build -DCMAKE_BUILD_TYPE=Debug -DPICO_BOARD=auto
+cmake -S firmware -B firmware/build -DCMAKE_BUILD_TYPE=Debug -DPICO_BOARD=auto_rp2040
 cmake --build firmware/build -j
 ```
 
 Useful release build:
 
 ```sh
-cmake -S firmware -B firmware/build-release -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=auto
+cmake -S firmware -B firmware/build-release -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=auto_rp2040
 cmake --build firmware/build-release -j
 ```
 
 Board selection:
 
-- `-DPICO_BOARD=auto`: default runtime detection for MioLink rev A/B, MioLink_Pico, Pico, and Pico W.
+- `-DPICO_BOARD=auto_rp2040`: default runtime detection for MioLink rev A/B, MioLink_Pico, Pico, and Pico W.
 - `-DPICO_BOARD=miolink`: MioLink rev A/B only.
 - `-DPICO_BOARD=miolink_pico`: MioLink_Pico only.
 - Pico SDK boards such as `pico`, `pico_w`, and `weact_studio_rp2040_2mb` are also supported.
@@ -81,9 +81,9 @@ Successful builds produce `MioLink.uf2` in the selected build directory. Flashin
 
 For firmware changes, build at least the configuration most affected by the patch. Prefer these checks when relevant:
 
-- General firmware change: Debug `PICO_BOARD=auto`.
-- Release/linker/size-sensitive change: Release `PICO_BOARD=auto`; review linker memory usage.
-- Board detection or GPIO pinout change: build `auto` plus the specific board (`miolink`, `miolink_pico`, `pico`, or `pico_w`) touched.
+- General firmware change: Debug `PICO_BOARD=auto_rp2040`.
+- Release/linker/size-sensitive change: Release `PICO_BOARD=auto_rp2040`; review linker memory usage.
+- Board detection or GPIO pinout change: build `auto_rp2040` plus the specific board (`miolink`, `miolink_pico`, `pico`, or `pico_w`) touched.
 - FreeRTOS/SysView/core-affinity change: build dual-core and single-core if the code path differs.
 - USB descriptor/TinyUSB change: build and, when hardware is available, enumerate the device and check both CDC ports, DFU runtime, and trace vendor interface.
 - PIO/SWD/JTAG timing change: build and state clearly if no hardware-level SWD/JTAG validation was possible.
@@ -116,7 +116,7 @@ If hardware validation is not possible, say exactly what was built and what rema
   #include <string.h>
   #include "usb_cdc.h"
   ```
-- Object-like `#define` constants must wrap their replacement value in parentheses. This applies to numeric literals, single-identifier aliases, and any compound expression. The only exceptions are macros defined without a replacement value (pure feature flags such as `BOARD_AUTO`), header include guards, and function-like macros where each parameter is individually parenthesised in its use site as usual. Example:
+- Object-like `#define` constants must wrap their replacement value in parentheses. This applies to numeric literals, single-identifier aliases, and any compound expression. The only exceptions are macros defined without a replacement value (pure feature flags such as `BOARD_AUTO_RP2040`), header include guards, and function-like macros where each parameter is individually parenthesised in its use site as usual. Example:
   ```c
   #define MIOLINK_REVA_TARGET_TCK_PIN     (24)
   #define PICO_W_DETECT_CYW43_CS_PIN      (CYW43_DEFAULT_PIN_WL_CS)
@@ -180,6 +180,37 @@ If hardware validation is not possible, say exactly what was built and what rema
 - Doxygen blocks for functions and function-like macros must document every parameter and the return value (when the function returns a value). Do not omit `\param` for any parameter, and do not omit `\return` for non-`void` returns.
 - Every `\param` entry must declare the parameter direction with `\param[in]`, `\param[out]`, or `\param[in,out]`. Bare `\param name` without a direction is not allowed.
 
+## Comment Style
+
+- Keep comments short and focused.
+- Normal implementation comments should usually be 1-3 lines.
+- Do not write long explanatory essays or multi-paragraph rationale blocks inside `.c` or `.h` files.
+- Comments should explain only non-obvious hardware behavior, timing constraints, concurrency assumptions, protocol edge cases, safety-critical decisions, or upstream integration quirks.
+- Do not describe what the code already says. A `\brief` that merely restates the function name or a comment that paraphrases the next statement is noise.
+  - Not allowed:
+    ```c
+    /**
+     * \brief Returns the current VTref voltage.
+     */
+    float platform_get_vtref_voltage(void);
+
+    /* Increment the counter. */
+    counter++;
+    ```
+  - Acceptable (adds information the code does not):
+    ```c
+    /**
+     * \brief Returns the current VTref voltage in volts, sampled by the ADC IRQ on DMA_IRQ_1.
+     */
+    float platform_get_vtref_voltage(void);
+
+    /* Counter wraps at 2^32; callers must compare with modular arithmetic. */
+    counter++;
+    ```
+- Doxygen `\brief` text should be one concise sentence.
+- Function Doxygen blocks should focus on purpose, side effects, and important constraints. Required `\param`/`\return` tags from `C Documentation And Initialization` still apply — this rule narrows the prose, not the tag coverage.
+- For changed code, avoid adding large comment blocks unless the user explicitly asks for detailed inline documentation.
+
 ## Embedded Constraints
 
 - FreeRTOS heap is small (`configTOTAL_HEAP_SIZE` is 24 KiB). Avoid new dynamic allocation in hot paths, protocol loops, and ISRs.
@@ -201,14 +232,14 @@ If hardware validation is not possible, say exactly what was built and what rema
 ## Board and Pinout Rules
 
 - Board headers are Pico SDK board headers. `firmware/CMakeLists.txt` sets `PICO_BOARD_HEADER_DIRS` so local headers in `firmware/boards/` take precedence.
-- Runtime auto-detection is controlled by `BOARD_AUTO`, hardware version strap pins, and Pico W detection via CYW43/ADC probing.
+- Runtime auto-detection is controlled by `BOARD_AUTO_RP2040`, hardware version strap pins, and Pico W detection via CYW43/ADC probing.
 - `platform_get_target_pins()`, `platform_get_led_pins()`, and `platform_get_vtref_info()` are the central runtime pin maps.
 - If adding or changing a board:
   - Add or update `firmware/boards/*.h` and `firmware/boards/pinout/*.h`.
   - Update `firmware/src/bmp_platform/platform_boards.c`.
   - Check SWD PIO program selection in `firmware/src/bmp_tap/swdptap.c`.
   - Check USB identification strings generated by `platform_make_board_ident()`.
-  - Build `PICO_BOARD=auto` and at least one specific board target.
+  - Build `PICO_BOARD=auto_rp2040` and at least one specific board target.
 
 ## USB Rules
 

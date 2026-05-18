@@ -34,6 +34,10 @@ set(PICO_USE_FASTEST_SUPPORTED_CLOCK 1)
 # Import Pico SDK
 include(${CMAKE_CURRENT_LIST_DIR}/external/pico_sdk.cmake)
 
+# ============================================================================
+# Project definition and Pico SDK initialization
+# ============================================================================
+
 # Project definition
 project(MioLink C CXX ASM)
 
@@ -78,7 +82,7 @@ target_compile_definitions(MioLink PRIVATE
 # to compiler -D flags. Without this, platform.h would have to rely on include order to see these macros,
 # which is unsafe because platform.h is pulled in transitively from BMP headers before pico.h.
 set(MIOLINK_BOARD_SELECTORS
-    BOARD_AUTO
+    BOARD_AUTO_RP2040
     BOARD_MIOLINK
     BOARD_MIOLINK_PICO
 )
@@ -95,7 +99,7 @@ endforeach()
 
 # Generate platform_ident_extra_info.h for compile-time extra info
 set(EXTRA_INFO "")
-if(PICO_BOARD STREQUAL "auto")
+if(PICO_BOARD STREQUAL "auto_rp2040")
     set(EXTRA_INFO "${EXTRA_INFO}, auto-detect")
 endif()
 if(BUILD_TYPE STREQUAL "DEBUG")

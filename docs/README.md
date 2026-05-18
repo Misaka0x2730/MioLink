@@ -44,7 +44,9 @@ At this moment, there are two revisions of *MioLink*: rev. A and rev. B.
 You can find information about their differences [here](https://github.com/Misaka0x2730/MioLink/wiki/MioLink-revisions-comparsion).  
 [MioLink_Pico](https://github.com/Misaka0x2730/MioLink/blob/main/hardware/MioLink_Pico/revA/MioLink_Pico_revA.pdf) is a breakout board for Pico and Pico W featuring a power switch and voltage converters.  
 Standard Pico and Pico W boards are also supported.  
-The device type is determined at runtime, so all boards use the same firmware.  
+Pico 2 and Pico 2 W (RP2350), as well as other Pico SDK boards with a compatible pinout (e.g. `weact_studio_rp2040_2mb`), are also supported.  
+For RP2040 boards (MioLink rev. A/B, MioLink_Pico, Pico, Pico W) the device type is determined at runtime, so a single firmware image is shared between them.  
+Runtime auto-detection is not available for RP2350 boards (Pico 2, Pico 2 W) or for other Pico SDK boards built by name; these require a board-specific firmware image built with the corresponding `-DPICO_BOARD=<board>` option.  
 [MioLink_adapter](https://github.com/Misaka0x2730/MioLink/blob/main/hardware/MioLink_adapter/revA/MioLink_adapter_revA.pdf) is an adapter that allows you to connect the probe with target boards that have different types of connectors.  
 You can find all hardware CAD files (designed in KiCad) [here](https://github.com/Misaka0x2730/MioLink/tree/main/hardware).  
 
@@ -135,14 +137,14 @@ The following tools are required to build this project:
 
 ## Board selection
 The firmware is built with the `-DPICO_BOARD=<board>` option passed to `cmake`, which selects the target board.  
-By default, `-DPICO_BOARD=auto` is used: a single firmware image is built that detects the board at runtime (MioLink rev. A/B, MioLink_Pico, Pico, or Pico W) using hardware strap pins and CYW43/ADC probing.  
+By default, `-DPICO_BOARD=auto_rp2040` is used: a single firmware image is built that detects the board at runtime (MioLink rev. A/B, MioLink_Pico, Pico, or Pico W) using hardware strap pins and CYW43/ADC probing.  
 If you want an image limited to a single board, pass `-DPICO_BOARD=<board>` with a specific board name. In this case, only the code and drivers for the selected board are included, and runtime detection is disabled.
 
 The following board options are available:
 
 Board | Description
 :--------------:|:----------:
-`auto` | Default. Runtime board detection for RP2040 boards (MioLink rev. A/B, MioLink_Pico, Pico, Pico W) with a single firmware.
+`auto_rp2040` | Default. Runtime board detection for RP2040 boards (MioLink rev. A/B, MioLink_Pico, Pico, Pico W) with a single firmware.
 `miolink` | MioLink (rev. A and rev. B).
 `miolink_pico` | MioLink_Pico breakout board.
 `pico` | Raspberry Pi Pico (RP2040).
@@ -154,7 +156,7 @@ Any other Pico SDK board (e.g. `weact_studio_rp2040_2mb`) can also be passed by 
 
 Example (runtime detection, default):
 ```raw
-cmake -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=auto ..
+cmake -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=auto_rp2040 ..
 ```
 
 Example (specific board):

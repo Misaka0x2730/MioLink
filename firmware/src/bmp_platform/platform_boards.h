@@ -26,7 +26,7 @@
  * Public Definitions
  **********************************************************************************************************************/
 
-#if defined(BOARD_AUTO)
+#if defined(BOARD_AUTO_RP2040)
 #define PLATFORM_AUTO_DETECT (1) /**< Build targets runtime board detection. */
 #else
 #define PLATFORM_AUTO_DETECT (0) /**< Build targets runtime board detection. */
@@ -50,8 +50,8 @@
 #define PLATFORM_BOARD_MIOLINK_PICO (0) /**< MioLink_Pico board. */
 #endif
 
-#if defined(BOARD_AUTO) && (defined(BOARD_MIOLINK) || defined(BOARD_MIOLINK_PICO))
-#error "Multiple boards defined. Please define only one of BOARD_AUTO, BOARD_MIOLINK and BOARD_MIOLINK_PICO."
+#if defined(BOARD_AUTO_RP2040) && (defined(BOARD_MIOLINK) || defined(BOARD_MIOLINK_PICO))
+#error "Multiple boards defined. Please define only one of BOARD_AUTO_RP2040, BOARD_MIOLINK and BOARD_MIOLINK_PICO."
 #endif
 
 #if defined(BOARD_MIOLINK) && defined(BOARD_MIOLINK_PICO)

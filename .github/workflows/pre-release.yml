@@ -7,8 +7,23 @@ on:
     branches: [ "main" ]
 
 jobs:
-  pre-release:
+  build:
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        board:
+          - auto_rp2040
+          - pico
+          - pico_w
+          - pico2
+          - pico2_w
+          - weact_studio_rp2040_2mb
+          - weact_studio_rp2040_16mb
+          - waveshare_rp2040_zero
+          - waveshare_rp2040_plus_4mb
+          - seeed_xiao_rp2040
 
     steps:
     - uses: actions/checkout@v4
@@ -17,10 +32,10 @@ jobs:
         fetch-depth: 0
 
     - uses: carlosperate/arm-none-eabi-gcc-action@v1
-      
+
     - name: Configure CMake
       working-directory: ./firmware
-      run: cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Release
+      run: cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=${{ matrix.board }}
 
     - name: Build
       working-directory: ./firmware
@@ -28,7 +43,24 @@ jobs:
 
     - name: Rename binary
       working-directory: ./firmware/build
-      run: mv MioLink.uf2 MioLink_dev_${{ github.sha }}.uf2
+      run: mv MioLink.uf2 MioLink_dev_${{ github.sha }}_${{ matrix.board }}.uf2
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: MioLink_${{ matrix.board }}
+        path: ./firmware/build/MioLink_dev_${{ github.sha }}_${{ matrix.board }}.uf2
+
+  pre-release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+        merge-multiple: true
 
     - uses: "marvinpinto/action-automatic-releases@latest"
       with:
@@ -36,4 +68,4 @@ jobs:
         automatic_release_tag: "dev"
         prerelease: true
         title: "Development Build"
-        files: ./firmware/build/*.uf2
+        files: ./artifacts/*.uf2
