@@ -945,6 +945,9 @@ static void uart_bridge_uart_isr_handler(uart_bridge_ctx_t *ctx)
         const uint32_t total_size = ctx->cfg->rx_buffer_size * ctx->cfg->rx_buffer_count;
 
         if (uart_int_status & RP_UART_INT_RX_BITS) {
+            /* Intentionally drain at most (level - 1) bytes to leave at least one byte in the FIFO.
+             * RX_TIMEOUT only asserts while the FIFO is non-empty; the trailing byte ensures it fires
+             * after the burst ends, which is the trigger for rx_int_finish() to sink */
             for (uint32_t i = 0; i < (ctx->cfg->rx_int_fifo_level - 1); i++) {
                 if (!uart_is_readable(ctx->uart)) {
                     break;
