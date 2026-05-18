@@ -36,6 +36,4 @@
 
 #define PICO_TARGET_NRST_PIN (7) /**< Target reset (nRST) GPIO. */
 
-#define PICO_VSYS_PIN (29) /**< GPIO connected to the RP2040's VSYS power input, used for board auto-detection. */
-
 #endif /* MIOLINK_BOARDS_PINOUT_PICO_H */
