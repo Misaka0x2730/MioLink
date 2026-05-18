@@ -27,6 +27,7 @@
 #include "hardware/gpio.h"
 #include "hardware/irq.h"
 #include "hardware/uart.h"
+#include "uart_ex.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -103,12 +104,21 @@
 #define UART_BRIDGE_UART_IRQ_NUM(uart) UART_IRQ_NUM(uart)
 
 /**
+ * \brief Upper bound on \ref uart_bridge_config_t::rx_buffer_count.
+ *
+ * Locked by the width of \ref uart_bridge_ctx_t::rx_dma_buffer_full_mask (one bit per slot,
+ * \c uint32_t mutated through \c Atomic_OR_u32 / \c Atomic_AND_u32). Raising this requires
+ * a wider mask plus a matching atomic primitive.
+ */
+#define UART_BRIDGE_RX_BUFFER_COUNT_MAX (32u)
+
+/**
  * \brief Default value for \ref uart_bridge_config_t::rx_int_fifo_level.
  *
- * Drains roughly half of the RP2040 UART RX FIFO (32 entries) per ISR in INT mode,
- * which balances ISR rate against the headroom left before a hardware overrun.
+ * Triggers at half of the RP2040 UART RX FIFO (16 of 32 bytes), balancing ISR rate against
+ * the headroom left before a hardware overrun.
  */
-#define UART_BRIDGE_DEFAULT_RX_INT_FIFO_LEVEL (16u)
+#define UART_BRIDGE_DEFAULT_RX_INT_FIFO_LEVEL UART_EX_RX_FIFO_LEVEL_1_2
 
 /**
  * \brief Default value for \ref uart_bridge_config_t::rx_dma_baudrate_threshold.
@@ -283,11 +293,11 @@ typedef struct uart_bridge_config {
     uint32_t rx_buffer_count;     /**< Number of RX buffer slots in the pool. */
     uint8_t **rx_ctrl_block_info; /**< Owner's \c (count + 1) array used by the control DMA channel. */
 
-    uint32_t rx_drop_threshold;         /**< Drop policy: drop buffers when this many are pending. */
-    uint32_t rx_int_fifo_level;         /**< INT-mode FIFO trigger level (number of bytes drained per ISR). */
-    uint32_t rx_dma_baudrate_threshold; /**< Choose DMA over INT when baudrate ≥ this value. */
-    uint32_t rx_dma_min_timeout_ms;     /**< Lower clamp for the RX-idle timer period. */
-    uint32_t rx_dma_max_timeout_ms;     /**< Upper clamp for the RX-idle timer period. */
+    uint32_t rx_drop_threshold;                    /**< Drop policy: drop buffers when this many are pending. */
+    uart_ex_rx_fifo_level_e rx_int_fifo_level;     /**< INT-mode RX FIFO trigger level. */
+    uint32_t rx_dma_baudrate_threshold;            /**< Choose DMA over INT when baudrate ≥ this value. */
+    uint32_t rx_dma_min_timeout_ms;                /**< Lower clamp for the RX-idle timer period. */
+    uint32_t rx_dma_max_timeout_ms;                /**< Upper clamp for the RX-idle timer period. */
 
     uint8_t *tx_buffer;                       /**< Owner's static TX DMA buffer; \c NULL disables TX on the channel. */
     uint32_t tx_buffer_size;                  /**< Capacity of \ref tx_buffer in bytes. */

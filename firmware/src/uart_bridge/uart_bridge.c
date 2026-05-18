@@ -69,6 +69,17 @@
         }                                         \
     } while (0)
 
+/**
+ * \brief Compile-time-friendly check that \a v is a non-zero power of two.
+ *
+ * Used to validate \ref uart_bridge_config_t::rx_buffer_count, whose value must be expressible
+ * as a single set bit so the DMA ring-wrap is encodable as \c log2(count * sizeof(pointer)).
+ * \a v is evaluated twice; pass an expression free of side effects.
+ *
+ * \param[in] v Value to test.
+ */
+#define UART_BRIDGE_IS_POWER_OF_2(v) (((v) != 0U) && (((v) & ((v) - 1U)) == 0U))
+
 /**********************************************************************************************************************
  * Private Types
  **********************************************************************************************************************/
@@ -84,6 +95,21 @@ typedef struct {
 /**********************************************************************************************************************
  * Private Data
  **********************************************************************************************************************/
+
+/**
+ * \brief RX FIFO occupancy that asserts \c RXIM for each \ref uart_ex_rx_fifo_level_e.
+ *
+ * Expressed as fractions of \ref UART_EX_FIFO_DEPTH so the relationship to the underlying PL011
+ * FIFO size stays explicit. Stored in flash; consulted from the INT-mode UART ISR to bound the
+ * drain loop one byte below the trigger threshold.
+ */
+static const uint8_t s_rx_fifo_trigger_bytes[UART_EX_RX_FIFO_LEVEL_COUNT] = {
+    [UART_EX_RX_FIFO_LEVEL_1_8] = UART_EX_FIFO_DEPTH / 8U,
+    [UART_EX_RX_FIFO_LEVEL_1_4] = UART_EX_FIFO_DEPTH / 4U,
+    [UART_EX_RX_FIFO_LEVEL_1_2] = UART_EX_FIFO_DEPTH / 2U,
+    [UART_EX_RX_FIFO_LEVEL_3_4] = (UART_EX_FIFO_DEPTH * 3U) / 4U,
+    [UART_EX_RX_FIFO_LEVEL_7_8] = (UART_EX_FIFO_DEPTH * 7U) / 8U,
+};
 
 /**
  * \brief UART ownership table.
@@ -587,11 +613,15 @@ void uart_bridge_init(uart_bridge_ctx_t *ctx, const uart_bridge_config_t *cfg, T
     assert(cfg->rx_buffers_base != NULL);
     assert(cfg->rx_buffer_size > 0);
     assert(cfg->rx_buffer_count > 0);
-    assert(cfg->rx_buffer_count <= 32);
+    assert(cfg->rx_buffer_count <= UART_BRIDGE_RX_BUFFER_COUNT_MAX);
+    /* rx_buffer_count must be a power of 2 so the DMA ring-wrap, encoded as log2 of the
+     * wrap region in bytes, is exact. */
+    assert(UART_BRIDGE_IS_POWER_OF_2(cfg->rx_buffer_count));
     assert(cfg->rx_ctrl_block_info != NULL);
     assert(cfg->rx_sink != NULL);
     assert(cfg->bindings != NULL);
     assert(cfg->bindings_count > 0);
+    assert(cfg->rx_int_fifo_level < UART_EX_RX_FIFO_LEVEL_COUNT);
 
     ctx->cfg = cfg;
     ctx->owner_task = owner_task;
@@ -671,7 +701,9 @@ void uart_bridge_configure_uart(
      *    blocks future IRQ assertions on both cores. */
     uart_ex_set_dma_req_enabled(ctx->uart, false, false);
     uart_ex_set_rx_and_timeout_irq_enabled(ctx->uart, false, false);
-    uart_ex_set_int_fifo_levels(ctx->uart, 0, 0);
+    /* Reset both trigger fields to their lowest valid encoding during teardown; the INT-mode setup
+     * path below reprograms the RX side from cfg, and TX trigger is unused (bridge TX is DMA). */
+    uart_ex_set_int_fifo_levels(ctx->uart, UART_EX_RX_FIFO_LEVEL_1_8, UART_EX_TX_FIFO_LEVEL_1_8);
 
     dma_ex_channel_abort_and_disable_irq((uint32_t)ctx->rx_dma_ctrl_channel, UART_BRIDGE_DMA_IRQ_INDEX);
     dma_ex_channel_abort_and_disable_irq((uint32_t)ctx->rx_dma_channel, UART_BRIDGE_DMA_IRQ_INDEX);
@@ -719,8 +751,12 @@ void uart_bridge_configure_uart(
         channel_config_set_read_increment(&rx_ctrl_config, true);
         channel_config_set_write_increment(&rx_ctrl_config, false);
         channel_config_set_high_priority(&rx_ctrl_config, true);
-        /* Ring read pointer over the rx_ctrl_block_info array (count + sentinel). */
-        channel_config_set_ring(&rx_ctrl_config, false, 7);
+        /* Ring the rx_ctrl_block_info read pointer over the (count slots + sentinel) region. The
+         * hardware encodes the wrap as log2 of the region size in bytes; rx_buffer_count is
+         * asserted to be a power of 2 in uart_bridge_init so __builtin_ctz gives the exact log2. */
+        const uint32_t ring_wrap_bytes =
+            ctx->cfg->rx_buffer_count * (uint32_t)sizeof(ctx->cfg->rx_ctrl_block_info[0]);
+        channel_config_set_ring(&rx_ctrl_config, false, (uint)__builtin_ctz(ring_wrap_bytes));
 
         dma_channel_configure((uint)ctx->rx_dma_ctrl_channel, &rx_ctrl_config,
             dma_ex_get_al2_write_addr_trig((uint32_t)ctx->rx_dma_channel),
@@ -760,8 +796,8 @@ void uart_bridge_configure_uart(
         /* RX INT path. */
         ctx->rx_use_dma = false;
 
-        /* Set RX FIFO trigger level to 1/2 (FIFO holds 32 bytes; 1/2 = level 2). */
-        uart_ex_set_int_fifo_levels(ctx->uart, 2, 0);
+        /* TX side is DMA-driven and never enables TXIM; the trigger field is set to a sentinel only. */
+        uart_ex_set_int_fifo_levels(ctx->uart, ctx->cfg->rx_int_fifo_level, UART_EX_TX_FIFO_LEVEL_1_8);
         uart_ex_set_rx_and_timeout_irq_enabled(ctx->uart, true, true);
     }
 
@@ -941,10 +977,11 @@ static void uart_bridge_uart_isr_handler(uart_bridge_ctx_t *ctx)
         const uint32_t total_size = ctx->cfg->rx_buffer_size * ctx->cfg->rx_buffer_count;
 
         if (uart_int_status & RP_UART_INT_RX_BITS) {
-            /* Intentionally drain at most (level - 1) bytes to leave at least one byte in the FIFO.
+            /* Intentionally drain at most (trigger - 1) bytes to leave at least one byte in the FIFO.
              * RX_TIMEOUT only asserts while the FIFO is non-empty; the trailing byte ensures it fires
              * after the burst ends, which is the trigger for rx_int_finish() to sink */
-            for (uint32_t i = 0; i < (ctx->cfg->rx_int_fifo_level - 1); i++) {
+            const uint8_t fifo_trigger_bytes = s_rx_fifo_trigger_bytes[ctx->cfg->rx_int_fifo_level];
+            for (uint32_t i = 0; i < (uint32_t)(fifo_trigger_bytes - 1U); i++) {
                 if (!uart_is_readable(ctx->uart)) {
                     break;
                 }
