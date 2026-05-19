@@ -74,17 +74,17 @@
 #endif
 
 #define TARGET_SERIAL_UART_DMA_RX_BAUDRATE_THRESHOLD \
-    UART_BRIDGE_DEFAULT_RX_DMA_BAUDRATE_THRESHOLD /**< Below this baud, use IRQ RX path instead of DMA. */
+    (UART_BRIDGE_DEFAULT_RX_DMA_BAUDRATE_THRESHOLD) /**< Below this baud, use IRQ RX path instead of DMA. */
 /** Minimum DMA RX idle timeout, ms. */
-#define TARGET_SERIAL_UART_DMA_RX_MIN_TIMEOUT UART_BRIDGE_DEFAULT_RX_DMA_MIN_TIMEOUT_MS
+#define TARGET_SERIAL_UART_DMA_RX_MIN_TIMEOUT (UART_BRIDGE_DEFAULT_RX_DMA_MIN_TIMEOUT_MS)
 /** Maximum DMA RX idle timeout, ms. */
-#define TARGET_SERIAL_UART_DMA_RX_MAX_TIMEOUT UART_BRIDGE_DEFAULT_RX_DMA_MAX_TIMEOUT_MS
+#define TARGET_SERIAL_UART_DMA_RX_MAX_TIMEOUT (UART_BRIDGE_DEFAULT_RX_DMA_MAX_TIMEOUT_MS)
 
 #define TARGET_SERIAL_UART_DMA_TX_BUFFER_SIZE (256) /**< TX DMA staging buffer size, bytes. */
 #define TARGET_SERIAL_UART_DMA_TX_CHECK_FINISHED_PERIOD_MS \
-    UART_BRIDGE_DEFAULT_TX_DMA_CHECK_FINISHED_PERIOD_MS /**< Polling period for TX-finished check, ms. */
+    (UART_BRIDGE_DEFAULT_TX_DMA_CHECK_FINISHED_PERIOD_MS) /**< Polling period for TX-finished check, ms. */
 
-#define TARGET_SERIAL_TASK_NOTIFY_WAIT_PERIOD portMAX_DELAY /**< FreeRTOS task notify wait period. */
+#define TARGET_SERIAL_TASK_NOTIFY_WAIT_PERIOD (portMAX_DELAY) /**< FreeRTOS task notify wait period. */
 
 /**********************************************************************************************************************
  * Private Types

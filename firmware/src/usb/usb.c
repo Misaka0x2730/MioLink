@@ -87,8 +87,39 @@
 #define ITF_CONFIG_LEN \
     (TUD_CONFIG_DESC_LEN + ((ITF_NUM_CDC / 2) * TUD_CDC_DESC_LEN) + DUMMY_DESC_SIZE + TRACE_DESC_SIZE)
 
-#define BOS_TOTAL_LEN     (TUD_BOS_DESC_LEN + TUD_BOS_MICROSOFT_OS_DESC_LEN) /**< Total BOS descriptor length. */
-#define MS_OS_20_DESC_LEN (10 + 8 + (8 + 20 + 128) * 2)                      /**< Total MS OS 2.0 descriptor length. */
+#define BOS_TOTAL_LEN (TUD_BOS_DESC_LEN + TUD_BOS_MICROSOFT_OS_DESC_LEN) /**< Total BOS descriptor length. */
+
+/**
+ * \brief MS OS 2.0 vendor-specific request code advertised in BOS; host uses it as \c bRequest.
+ */
+#define MS_OS_20_VENDOR_CODE (1)
+
+/**
+ * \brief MS OS 2.0 \c wIndex value for the "get descriptor set" vendor request (per Microsoft spec).
+ */
+#define MS_OS_20_DESCRIPTOR_INDEX (7)
+
+/**
+ * \brief Total MS OS 2.0 descriptor length: set + configuration + per-function subsets.
+ *
+ * Layout: set header (10) + config subset header (8) + N * (function subset header (8) +
+ * compatible ID feature (20) + registry property feature (128)). The trace function subset is
+ * only present when \ref PLATFORM_HAS_TRACESWO is enabled.
+ */
+#if defined(PLATFORM_HAS_TRACESWO)
+#define MS_OS_20_DESC_LEN (10 + 8 + (8 + 20 + 128) * 2)
+#else
+#define MS_OS_20_DESC_LEN (10 + 8 + (8 + 20 + 128))
+#endif
+
+/**
+ * \brief Scratch buffer length in \c uint16_t words for the runtime UTF-16 string descriptor.
+ *
+ * One word holds the \c bLength / \c bDescriptorType header; the remaining words hold characters.
+ * Total size in bytes equals twice this value and must fit the 1-byte USB \c bLength field
+ * (\c <=255 bytes).
+ */
+#define USB_STRING_DESCRIPTOR_BUF_LEN (127)
 
 /**********************************************************************************************************************
  * Private Types
@@ -193,7 +224,7 @@ static char const *string_desc_arr[] = {
 #endif
 };
 
-static uint16_t string_descriptor[127] = {0}; /**< Scratch buffer holding the latest UTF-16 string descriptor. */
+static uint16_t string_descriptor[USB_STRING_DESCRIPTOR_BUF_LEN] = {0}; /**< Latest UTF-16 string descriptor. */
 
 /**
  * \brief Microsoft OS 2.0 descriptor blob enabling WinUSB auto-binding for the trace interface.
@@ -215,308 +246,64 @@ static const uint8_t desc_ms_os_20[] = {
     // Function Subset header: length, type, first interface, reserved, subset length
     U16_TO_U8S_LE(0x0008),
     U16_TO_U8S_LE(MS_OS_20_SUBSET_HEADER_FUNCTION),
-    4,
+    ITF_NUM_DFU,
     0,
     U16_TO_U8S_LE(0x009C),
 
     // MS OS 2.0 Compatible ID descriptor: length, type, compatible ID, sub compatible ID
     U16_TO_U8S_LE(0x0014),
     U16_TO_U8S_LE(MS_OS_20_FEATURE_COMPATBLE_ID),
-    'W',
-    'I',
-    'N',
-    'U',
-    'S',
-    'B',
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00, // sub-compatible
+    'W', 'I', 'N', 'U', 'S', 'B', 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // sub-compatible
 
     // MS OS 2.0 Registry property descriptor: length, type
     U16_TO_U8S_LE(0x0080),
     U16_TO_U8S_LE(MS_OS_20_FEATURE_REG_PROPERTY),
     U16_TO_U8S_LE(0x0001),
     U16_TO_U8S_LE(0x0028), // wPropertyDataType, wPropertyNameLength and PropertyName "DeviceInterfaceGUID" in UTF-16
-    'D',
-    0x00,
-    'e',
-    0x00,
-    'v',
-    0x00,
-    'i',
-    0x00,
-    'c',
-    0x00,
-    'e',
-    0x00,
-    'I',
-    0x00,
-    'n',
-    0x00,
-    't',
-    0x00,
-    'e',
-    0x00,
-    'r',
-    0x00,
-    'f',
-    0x00,
-    'a',
-    0x00,
-    'c',
-    0x00,
-    'e',
-    0x00,
-    'G',
-    0x00,
-    'U',
-    0x00,
-    'I',
-    0x00,
-    'D',
-    0x00,
-    0x00,
-    0x00,
+    'D', 0x00, 'e', 0x00, 'v', 0x00, 'i', 0x00, 'c', 0x00, 'e', 0x00,
+    'I', 0x00, 'n', 0x00, 't', 0x00, 'e', 0x00, 'r', 0x00, 'f', 0x00,
+    'a', 0x00, 'c', 0x00, 'e', 0x00, 'G', 0x00, 'U', 0x00, 'I', 0x00,
+    'D', 0x00, 0x00, 0x00,
     U16_TO_U8S_LE(0x004E), // wPropertyDataLength
-    // Vendor-defined Property Data:{76be5ca1-e304-4b32-be5f-d9369d3d201a}
-    '{',
-    0,
-    '7',
-    0,
-    '6',
-    0,
-    'b',
-    0,
-    'e',
-    0,
-    '5',
-    0,
-    'c',
-    0,
-    'a',
-    0,
-    '1',
-    0,
-    '-',
-    0,
-    'e',
-    0,
-    '3',
-    0,
-    '0',
-    0,
-    '4',
-    0,
-    '-',
-    0,
-    '4',
-    0,
-    'b',
-    0,
-    '3',
-    0,
-    '2',
-    0,
-    '-',
-    0,
-    'b',
-    0,
-    'e',
-    0,
-    '5',
-    0,
-    'f',
-    0,
-    '-',
-    0,
-    'd',
-    0,
-    '9',
-    0,
-    '3',
-    0,
-    '6',
-    0,
-    '9',
-    0,
-    'd',
-    0,
-    '3',
-    0,
-    'd',
-    0,
-    '2',
-    0,
-    '0',
-    0,
-    '1',
-    0,
-    'a',
-    0,
-    '}',
-    0,
-    0,
-    0,
+    // Vendor-defined Property Data: {76be5ca1-e304-4b32-be5f-d9369d3d201a}
+    '{', 0, '7', 0, '6', 0, 'b', 0, 'e', 0, '5', 0, 'c', 0, 'a', 0,
+    '1', 0, '-', 0, 'e', 0, '3', 0, '0', 0, '4', 0, '-', 0, '4', 0,
+    'b', 0, '3', 0, '2', 0, '-', 0, 'b', 0, 'e', 0, '5', 0, 'f', 0,
+    '-', 0, 'd', 0, '9', 0, '3', 0, '6', 0, '9', 0, 'd', 0, '3', 0,
+    'd', 0, '2', 0, '0', 0, '1', 0, 'a', 0, '}', 0, 0, 0,
 
+#if defined(PLATFORM_HAS_TRACESWO)
     // Function Subset header: length, type, first interface, reserved, subset length
     U16_TO_U8S_LE(0x0008),
     U16_TO_U8S_LE(MS_OS_20_SUBSET_HEADER_FUNCTION),
-    5,
+    ITF_NUM_TRACE,
     0,
     U16_TO_U8S_LE(0x009C),
 
     // MS OS 2.0 Compatible ID descriptor: length, type, compatible ID, sub compatible ID
     U16_TO_U8S_LE(0x0014),
     U16_TO_U8S_LE(MS_OS_20_FEATURE_COMPATBLE_ID),
-    'W',
-    'I',
-    'N',
-    'U',
-    'S',
-    'B',
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00,
-    0x00, // sub-compatible
+    'W', 'I', 'N', 'U', 'S', 'B', 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // sub-compatible
 
     // MS OS 2.0 Registry property descriptor: length, type
     U16_TO_U8S_LE(0x0080),
     U16_TO_U8S_LE(MS_OS_20_FEATURE_REG_PROPERTY),
     U16_TO_U8S_LE(0x0001),
     U16_TO_U8S_LE(0x0028), // wPropertyDataType, wPropertyNameLength and PropertyName "DeviceInterfaceGUID" in UTF-16
-    'D',
-    0x00,
-    'e',
-    0x00,
-    'v',
-    0x00,
-    'i',
-    0x00,
-    'c',
-    0x00,
-    'e',
-    0x00,
-    'I',
-    0x00,
-    'n',
-    0x00,
-    't',
-    0x00,
-    'e',
-    0x00,
-    'r',
-    0x00,
-    'f',
-    0x00,
-    'a',
-    0x00,
-    'c',
-    0x00,
-    'e',
-    0x00,
-    'G',
-    0x00,
-    'U',
-    0x00,
-    'I',
-    0x00,
-    'D',
-    0x00,
-    0x00,
-    0x00,
+    'D', 0x00, 'e', 0x00, 'v', 0x00, 'i', 0x00, 'c', 0x00, 'e', 0x00,
+    'I', 0x00, 'n', 0x00, 't', 0x00, 'e', 0x00, 'r', 0x00, 'f', 0x00,
+    'a', 0x00, 'c', 0x00, 'e', 0x00, 'G', 0x00, 'U', 0x00, 'I', 0x00,
+    'D', 0x00, 0x00, 0x00,
     U16_TO_U8S_LE(0x004E), // wPropertyDataLength
     // Vendor-defined Property Data: {76be5ca1-e305-4b32-be5f-d9369d3d201a}
-    '{',
-    0,
-    '7',
-    0,
-    '6',
-    0,
-    'b',
-    0,
-    'e',
-    0,
-    '5',
-    0,
-    'c',
-    0,
-    'a',
-    0,
-    '1',
-    0,
-    '-',
-    0,
-    'e',
-    0,
-    '3',
-    0,
-    '0',
-    0,
-    '5',
-    0,
-    '-',
-    0,
-    '4',
-    0,
-    'b',
-    0,
-    '3',
-    0,
-    '2',
-    0,
-    '-',
-    0,
-    'b',
-    0,
-    'e',
-    0,
-    '5',
-    0,
-    'f',
-    0,
-    '-',
-    0,
-    'd',
-    0,
-    '9',
-    0,
-    '3',
-    0,
-    '6',
-    0,
-    '9',
-    0,
-    'd',
-    0,
-    '3',
-    0,
-    'd',
-    0,
-    '2',
-    0,
-    '0',
-    0,
-    '1',
-    0,
-    'a',
-    0,
-    '}',
-    0,
-    0,
-    0,
+    '{', 0, '7', 0, '6', 0, 'b', 0, 'e', 0, '5', 0, 'c', 0, 'a', 0,
+    '1', 0, '-', 0, 'e', 0, '3', 0, '0', 0, '5', 0, '-', 0, '4', 0,
+    'b', 0, '3', 0, '2', 0, '-', 0, 'b', 0, 'e', 0, '5', 0, 'f', 0,
+    '-', 0, 'd', 0, '9', 0, '3', 0, '6', 0, '9', 0, 'd', 0, '3', 0,
+    'd', 0, '2', 0, '0', 0, '1', 0, 'a', 0, '}', 0, 0, 0,
+#endif
 };
 
 /**
@@ -527,7 +314,7 @@ static uint8_t const desc_bos[] = {
     TUD_BOS_DESCRIPTOR(BOS_TOTAL_LEN, 1),
 
     // Microsoft OS 2.0 descriptor
-    TUD_BOS_MS_OS_20_DESCRIPTOR(MS_OS_20_DESC_LEN, 1)};
+    TUD_BOS_MS_OS_20_DESCRIPTOR(MS_OS_20_DESC_LEN, MS_OS_20_VENDOR_CODE)};
 
 /**
  * \brief Per-interface listener registry; populated by \ref usb_cdc_register_listener.
@@ -676,7 +463,7 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_requ
         return true;
     }
 
-    if ((request->bRequest == 1) && (request->wIndex == 7)) {
+    if ((request->bRequest == MS_OS_20_VENDOR_CODE) && (request->wIndex == MS_OS_20_DESCRIPTOR_INDEX)) {
         // Get Microsoft OS 2.0 compatible descriptor
         return tud_control_xfer(rhport, request, (void *)desc_ms_os_20, sizeof(desc_ms_os_20));
     }

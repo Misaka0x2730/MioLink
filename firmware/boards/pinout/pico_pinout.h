@@ -36,4 +36,9 @@
 
 #define PICO_TARGET_NRST_PIN (7) /**< Target reset (nRST) GPIO. */
 
+/* SWD PIO configuration for Raspberry Pi Pico used as a probe (matches \c pio_swd_pico.pio). */
+#define PICO_SWD_PIO_SET_PIN_COUNT     (1) /**< Pin driven by \c set: TMS only. */
+#define PICO_SWD_PIO_SIDESET_PIN_COUNT (1) /**< Sideset pin count (excluding the optional bit). */
+#define PICO_SWD_PIO_SIDESET_PIN_BASE  (PICO_TARGET_TCK_PIN) /**< First sideset pin: TCK. */
+
 #endif /* MIOLINK_BOARDS_PINOUT_PICO_H */

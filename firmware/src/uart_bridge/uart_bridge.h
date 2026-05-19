@@ -118,7 +118,7 @@
  * Triggers at half of the RP2040 UART RX FIFO (16 of 32 bytes), balancing ISR rate against
  * the headroom left before a hardware overrun.
  */
-#define UART_BRIDGE_DEFAULT_RX_INT_FIFO_LEVEL UART_EX_RX_FIFO_LEVEL_1_2
+#define UART_BRIDGE_DEFAULT_RX_INT_FIFO_LEVEL (UART_EX_RX_FIFO_LEVEL_1_2)
 
 /**
  * \brief Default value for \ref uart_bridge_config_t::rx_dma_baudrate_threshold.

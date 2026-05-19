@@ -63,11 +63,11 @@
 #endif
 
 #define TRACESWO_RX_DMA_BAUDRATE_THRESHOLD \
-    UART_BRIDGE_DEFAULT_RX_DMA_BAUDRATE_THRESHOLD /**< Below this baud, use IRQ path instead of DMA. */
+    (UART_BRIDGE_DEFAULT_RX_DMA_BAUDRATE_THRESHOLD) /**< Below this baud, use IRQ path instead of DMA. */
 /** Lower bound on DMA RX timeout, in ms. */
-#define TRACESWO_RX_DMA_MIN_TIMEOUT UART_BRIDGE_DEFAULT_RX_DMA_MIN_TIMEOUT_MS
+#define TRACESWO_RX_DMA_MIN_TIMEOUT (UART_BRIDGE_DEFAULT_RX_DMA_MIN_TIMEOUT_MS)
 /** Upper bound on DMA RX timeout, in ms. */
-#define TRACESWO_RX_DMA_MAX_TIMEOUT UART_BRIDGE_DEFAULT_RX_DMA_MAX_TIMEOUT_MS
+#define TRACESWO_RX_DMA_MAX_TIMEOUT (UART_BRIDGE_DEFAULT_RX_DMA_MAX_TIMEOUT_MS)
 #define TRACESWO_TASK_NOTIFY_WAIT_PERIOD (portMAX_DELAY) /**< Notification wait period for the trace task. */
 
 #define TRACESWO_VENDOR_INTERFACE (0) /**< TinyUSB vendor interface index used to stream SWO bytes. */

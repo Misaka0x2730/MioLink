@@ -46,6 +46,20 @@
 #define TARGET_JTAG_TICKS_NO_FINAL(ticks) (ticks - 1) /**< Encode \a ticks for PIO sequences without a final TMS bit. */
 #define TARGET_JTAG_TICKS_FINAL(ticks)    (ticks - 2) /**< Encode \a ticks for PIO sequences with a final TMS bit. */
 
+/**
+ * \brief Maximum TMS tick count accepted by \ref jtagtap_tms_seq.
+ *
+ * Bounded by the width of the \c tms_states parameter (\c uint32_t), which holds the TMS bit
+ * pattern packed LSB-first. Independent of the PIO FIFO word width even though both happen to
+ * be 32 on RP2040.
+ */
+#define JTAG_TMS_SEQ_MAX_TICKS (32U)
+
+/**
+ * \brief Number of bits per byte used when packing \c tms_states into the PIO command buffer.
+ */
+#define JTAG_BITS_PER_BYTE (8U)
+
 /**********************************************************************************************************************
  * Private Types
  **********************************************************************************************************************/
@@ -182,8 +196,8 @@ void jtagtap_init(void)
     sm_config_set_out_pins(&prog_config, target_pins->tdi, 1);
     sm_config_set_sideset_pins(&prog_config, target_pins->tck);
     sm_config_set_set_pins(&prog_config, target_pins->tms, 1);
-    sm_config_set_out_shift(&prog_config, true, true, 8);
-    sm_config_set_in_shift(&prog_config, true, true, 8);
+    sm_config_set_out_shift(&prog_config, true, true, JTAG_BITS_PER_BYTE);
+    sm_config_set_in_shift(&prog_config, true, true, JTAG_BITS_PER_BYTE);
 
     pio_sm_init(TAP_PIO_JTAG, TAP_PIO_SM_JTAG_TDI_TDO_SEQ, target_jtag_program.origin, &prog_config);
     pio_sm_set_enabled(TAP_PIO_JTAG, TAP_PIO_SM_JTAG_TDI_TDO_SEQ, false);
@@ -193,8 +207,8 @@ void jtagtap_init(void)
     sm_config_set_out_pins(&prog_config, target_pins->tms, 1);
     sm_config_set_sideset_pins(&prog_config, target_pins->tck);
     sm_config_set_set_pins(&prog_config, target_pins->tdi, 1);
-    sm_config_set_out_shift(&prog_config, true, true, 8);
-    sm_config_set_in_shift(&prog_config, true, true, 8);
+    sm_config_set_out_shift(&prog_config, true, true, JTAG_BITS_PER_BYTE);
+    sm_config_set_in_shift(&prog_config, true, true, JTAG_BITS_PER_BYTE);
 
     pio_sm_init(TAP_PIO_JTAG, TAP_PIO_SM_JTAG_TMS_SEQ, target_jtag_program.origin, &prog_config);
     pio_sm_set_enabled(TAP_PIO_JTAG, TAP_PIO_SM_JTAG_TMS_SEQ, false);
@@ -265,7 +279,7 @@ static bool jtagtap_next(const bool tms, const bool tdi)
 
 static void jtagtap_tms_seq(const uint32_t tms_states, const size_t ticks)
 {
-    assert((ticks > 0) && (ticks <= 32));
+    assert((ticks > 0) && (ticks <= JTAG_TMS_SEQ_MAX_TICKS));
 
     uint8_t pio_buffer[TAP_PIO_DMA_BUF_SIZE] = {0};
     uint8_t data_amount = 0;
@@ -276,13 +290,13 @@ static void jtagtap_tms_seq(const uint32_t tms_states, const size_t ticks)
     pio_buffer[data_amount++] = TARGET_JTAG_SET_INITIAL_1;
     pio_buffer[data_amount++] = TARGET_JTAG_SET_FINAL_NO;
 
-    size_t data_bytes = ticks / 8;
-    if (ticks % 8) {
+    size_t data_bytes = ticks / JTAG_BITS_PER_BYTE;
+    if (ticks % JTAG_BITS_PER_BYTE) {
         data_bytes++;
     }
 
     for (uint8_t i = 0; (i < data_bytes); i++) {
-        pio_buffer[data_amount++] = ((tms_states >> (8 * i)) & 0xFF);
+        pio_buffer[data_amount++] = ((tms_states >> (JTAG_BITS_PER_BYTE * i)) & 0xFF);
     }
 
     tap_pio_dma_send_recv_uint8(TAP_PIO_JTAG, TAP_PIO_SM_JTAG_TMS_SEQ, pio_buffer, NULL, data_amount, data_bytes);
@@ -311,14 +325,14 @@ static void jtagtap_tdi_tdo_seq(
         pio_buffer[data_amount++] = data_in[0];
 
         tap_pio_dma_send_recv_uint8(TAP_PIO_JTAG, TAP_PIO_SM_JTAG_TDI_TDO_SEQ, pio_buffer, data_out, data_amount, 1);
-        data_out[0] >>= 7;
+        data_out[0] >>= (JTAG_BITS_PER_BYTE - 1);
     } else {
         pio_buffer[data_amount++] = TARGET_JTAG_TICKS_FINAL(clock_cycles);
         pio_buffer[data_amount++] = TARGET_JTAG_SET_INITIAL_0;
         pio_buffer[data_amount++] = (final_tms ? TARGET_JTAG_SET_FINAL_1 : TARGET_JTAG_SET_FINAL_0);
 
-        size_t data_bytes = clock_cycles / 8;
-        if (clock_cycles % 8) {
+        size_t data_bytes = clock_cycles / JTAG_BITS_PER_BYTE;
+        if (clock_cycles % JTAG_BITS_PER_BYTE) {
             data_bytes++;
         }
 
@@ -330,8 +344,8 @@ static void jtagtap_tdi_tdo_seq(
         size_t data_out_cnt = tap_pio_dma_send_recv_uint8(
             TAP_PIO_JTAG, TAP_PIO_SM_JTAG_TDI_TDO_SEQ, pio_buffer, data_out, data_amount, data_bytes);
 
-        if ((clock_cycles % 8) != 0) {
-            data_out[data_out_cnt - 1] >>= (8 - (clock_cycles % 8));
+        if ((clock_cycles % JTAG_BITS_PER_BYTE) != 0) {
+            data_out[data_out_cnt - 1] >>= (JTAG_BITS_PER_BYTE - (clock_cycles % JTAG_BITS_PER_BYTE));
         }
     }
 
@@ -364,8 +378,8 @@ static void jtagtap_tdi_seq(const bool final_tms, const uint8_t *const data_in, 
         pio_buffer[data_amount++] = TARGET_JTAG_SET_INITIAL_0;
         pio_buffer[data_amount++] = (final_tms ? TARGET_JTAG_SET_FINAL_1 : TARGET_JTAG_SET_FINAL_0);
 
-        size_t data_bytes = clock_cycles / 8;
-        if (clock_cycles % 8) {
+        size_t data_bytes = clock_cycles / JTAG_BITS_PER_BYTE;
+        if (clock_cycles % JTAG_BITS_PER_BYTE) {
             data_bytes++;
         }
 
@@ -395,8 +409,8 @@ static void jtagtap_cycle(const bool tms, const bool tdi, const size_t clock_cyc
     pio_buffer[data_amount++] = (tms ? TARGET_JTAG_SET_INITIAL_1 : TARGET_JTAG_SET_INITIAL_0);
     pio_buffer[data_amount++] = TARGET_JTAG_SET_FINAL_NO;
 
-    size_t data_bytes = clock_cycles / 8;
-    if (clock_cycles % 8) {
+    size_t data_bytes = clock_cycles / JTAG_BITS_PER_BYTE;
+    if (clock_cycles % JTAG_BITS_PER_BYTE) {
         data_bytes++;
     }
 

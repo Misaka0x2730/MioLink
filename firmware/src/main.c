@@ -132,7 +132,9 @@ _Noreturn static void gdb_thread(void *params)
 
     blackmagic_usb_init();
     target_serial_init();
+#if defined(PLATFORM_HAS_TRACESWO)
     traceswo_task_init();
+#endif
 
     xTaskResumeAll();
 

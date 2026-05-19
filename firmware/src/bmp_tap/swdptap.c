@@ -49,6 +49,39 @@
 
 #define SWDP_ACK_OK (0x01U) /**< Three-bit SWD ACK value indicating OK. */
 
+/**
+ * \brief Sideset optional-bit cost in PIO instruction encoding.
+ *
+ * When a PIO program is declared with \c ".side_set N opt", the SDK API
+ * (\c sm_config_set_sideset) expects \c bit_count = N + 1: the extra bit selects whether the
+ * instruction carries a sideset value or not. All SWD PIO programs in this module use
+ * \c opt sideset, so this constant is added to each board's pin count when configuring the SM.
+ */
+#define SWD_PIO_SIDESET_OPTIONAL_BIT (1U)
+
+#define SWD_REQUEST_BITS         (8U)  /**< SWD request packet length in bits. */
+#define SWD_ACK_BITS             (3U)  /**< SWD acknowledge response length in bits (OK / WAIT / FAULT). */
+#define SWD_DATA_BITS            (32U) /**< SWD data phase length in bits (one 32-bit word). */
+#define SWD_PARITY_BITS          (1U)  /**< Parity bit count appended after the SWD data phase. */
+#define SWD_DATA_AND_PARITY_BITS (SWD_DATA_BITS + SWD_PARITY_BITS) /**< Data + parity tick count. */
+#define SWD_IDLE_DATA            (0U)  /**< TMS pattern driven during idle cycles (line held low). */
+
+/**
+ * \brief TX FIFO words queued after the ADIv5 ACK check for a read transaction.
+ *
+ * Encoded as \c N-1 into the \c check_ack PIO program's X register; on ACK mismatch the program
+ * discards exactly this many TX FIFO words to keep the bus state consistent.
+ */
+#define SWD_ADIV5_READ_DATA_PHASE_WORDS (5U)
+
+/**
+ * \brief TX FIFO words queued after the ADIv5 ACK check for a write transaction.
+ *
+ * Encoded as \c N-1 into the \c check_ack PIO program's X register; on ACK mismatch the program
+ * discards exactly this many TX FIFO words to keep the bus state consistent.
+ */
+#define SWD_ADIV5_WRITE_DATA_PHASE_WORDS (4U)
+
 /**********************************************************************************************************************
  * Private Types
  **********************************************************************************************************************/
@@ -230,7 +263,7 @@ static uint8_t swdtap_prepare_pio_seq(
     uint32_t *buffer, const uint32_t clock_cycles, const uint32_t data, const bool in, const bool parity)
 {
     assert(buffer != NULL);
-    assert((clock_cycles > 0) && (clock_cycles <= 32));
+    assert((clock_cycles > 0) && (clock_cycles <= TAP_PIO_MAX_TICKS_PER_TRANSFER));
 
     const swd_board_program_t *p_board_programs = swdtap_get_board_programs();
     assert(p_board_programs != NULL);
@@ -262,7 +295,7 @@ static uint8_t swdtap_prepare_pio_seq(
         } else {
             const bool parity_value = (calculate_odd_parity(data) != 0);
 
-            if (clock_cycles <= 31) {
+            if (clock_cycles <= (TAP_PIO_MAX_TICKS_PER_TRANSFER - 1)) {
                 uint32_t data_value = data;
                 data_value |= (parity_value ? (1UL << clock_cycles) : 0);
                 buffer[pos++] = data_value;
@@ -280,7 +313,7 @@ static uint8_t swdtap_prepare_pio_seq(
 
 static uint32_t swdptap_seq_in(const size_t clock_cycles)
 {
-    assert((clock_cycles > 0) && (clock_cycles <= 32));
+    assert((clock_cycles > 0) && (clock_cycles <= TAP_PIO_MAX_TICKS_PER_TRANSFER));
 
     uint32_t pio_buffer[TAP_PIO_DMA_BUF_SIZE] = {0};
     const uint8_t data_amount = swdtap_prepare_pio_seq(pio_buffer, clock_cycles, 0, true, false);
@@ -297,7 +330,7 @@ static uint32_t swdptap_seq_in(const size_t clock_cycles)
 static bool swdptap_seq_in_parity(uint32_t *ret, const size_t clock_cycles)
 {
     assert(ret != NULL);
-    assert((clock_cycles > 0) && (clock_cycles <= 32));
+    assert((clock_cycles > 0) && (clock_cycles <= TAP_PIO_MAX_TICKS_PER_TRANSFER));
 
     uint32_t pio_buffer[TAP_PIO_DMA_BUF_SIZE] = {0};
     const uint8_t data_amount = swdtap_prepare_pio_seq(pio_buffer, clock_cycles, 0, true, true);
@@ -306,7 +339,7 @@ static bool swdptap_seq_in_parity(uint32_t *ret, const size_t clock_cycles)
     const uint32_t value = (pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) >> (32U - clock_cycles));
 
     bool parity_read = false;
-    if (clock_cycles == 32) {
+    if (clock_cycles == TAP_PIO_MAX_TICKS_PER_TRANSFER) {
         parity_read = (pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) != 0);
     } else {
         parity_read = ((value & (1UL << clock_cycles)) != 0);
@@ -323,7 +356,7 @@ static bool swdptap_seq_in_parity(uint32_t *ret, const size_t clock_cycles)
 
 static void swdptap_seq_out(const uint32_t tms_states, const size_t clock_cycles)
 {
-    assert((clock_cycles > 0) && (clock_cycles <= 32));
+    assert((clock_cycles > 0) && (clock_cycles <= TAP_PIO_MAX_TICKS_PER_TRANSFER));
 
     uint32_t pio_buffer[TAP_PIO_DMA_BUF_SIZE] = {0};
     const uint8_t data_amount = swdtap_prepare_pio_seq(pio_buffer, clock_cycles, tms_states, false, false);
@@ -336,7 +369,7 @@ static void swdptap_seq_out(const uint32_t tms_states, const size_t clock_cycles
 
 static void swdptap_seq_out_parity(const uint32_t tms_states, const size_t clock_cycles)
 {
-    assert((clock_cycles > 0) && (clock_cycles <= 32));
+    assert((clock_cycles > 0) && (clock_cycles <= TAP_PIO_MAX_TICKS_PER_TRANSFER));
 
     uint32_t pio_buffer[TAP_PIO_DMA_BUF_SIZE] = {0};
     const uint8_t data_amount = swdtap_prepare_pio_seq(pio_buffer, clock_cycles, tms_states, false, true);
@@ -374,31 +407,31 @@ static uint8_t swdtap_adiv5_prepare_pio_seq(
         buffer[pos++] = (uint32_t)(p_board_programs->swd_seq_out->origin);
     }
 
-    buffer[pos++] = 8 - 1;
+    buffer[pos++] = SWD_REQUEST_BITS - 1;
     buffer[pos++] = request;
     buffer[pos++] = (uint32_t)(p_board_programs->swd_seq_in_turnaround->origin);
-    buffer[pos++] = 3 - 1;
+    buffer[pos++] = SWD_ACK_BITS - 1;
 
     if (check_ack) {
         buffer[pos++] = (uint32_t)(p_board_programs->swd_adiv5_check_ack->origin);
-        buffer[pos++] = (SWDP_ACK_OK << 29);
+        buffer[pos++] = (SWDP_ACK_OK << (SWD_DATA_BITS - SWD_ACK_BITS));
 
         if (rnw) {
-            buffer[pos++] = 5 - 1;
+            buffer[pos++] = SWD_ADIV5_READ_DATA_PHASE_WORDS - 1;
         } else {
-            buffer[pos++] = 4 - 1;
+            buffer[pos++] = SWD_ADIV5_WRITE_DATA_PHASE_WORDS - 1;
         }
     }
 
     if (rnw) {
         buffer[pos++] = (uint32_t)(p_board_programs->swd_seq_in->origin);
-        buffer[pos++] = 32 + 1 - 1;
+        buffer[pos++] = SWD_DATA_AND_PARITY_BITS - 1;
         buffer[pos++] = (uint32_t)(p_board_programs->swd_seq_out_turnaround->origin);
         buffer[pos++] = TARGET_SWD_IDLE_CYCLES - 1;
-        buffer[pos++] = 0;
+        buffer[pos++] = SWD_IDLE_DATA;
     } else {
         buffer[pos++] = (uint32_t)(p_board_programs->swd_seq_out_turnaround->origin);
-        buffer[pos++] = 32 + 1 + TARGET_SWD_IDLE_CYCLES - 1;
+        buffer[pos++] = SWD_DATA_AND_PARITY_BITS + TARGET_SWD_IDLE_CYCLES - 1;
         buffer[pos++] = data;
         buffer[pos++] = ((calculate_odd_parity(data) != 0) ? (1 << 0) : 0);
     }
@@ -442,55 +475,14 @@ void swdptap_init(void)
         TAP_PIO_SWD, TAP_PIO_SM_SWD, 0, tms_dir_mask | (1U << target_pins->tck) | (1U << target_pins->tms));
 
     pio_sm_config swd_program_config = pio_get_default_sm_config();
-    uint8_t set_pins_base = PIN_NOT_CONNECTED;
-    uint8_t set_pins_count = 1;
-    uint8_t sideset_pins_base = PIN_NOT_CONNECTED;
-
-    const platform_device_type_t device_type = platform_hwtype();
-    assert(device_type != PLATFORM_DEVICE_TYPE_NOT_SET);
 
     const swd_board_program_t *p_board_programs = swdtap_get_board_programs();
     assert(p_board_programs != NULL);
 
-    switch (device_type) {
-    case PLATFORM_DEVICE_TYPE_MIOLINK:
-        if (platform_hwversion() == PLATFORM_MIOLINK_REV_A) {
-            sm_config_set_sideset(&swd_program_config, 2, true, false);
-
-            set_pins_base = target_pins->tms;
-            set_pins_count = 2;
-            sideset_pins_base = target_pins->tck;
-        } else {
-            sm_config_set_sideset(&swd_program_config, 3, true, false);
-
-            set_pins_base = target_pins->tms;
-            set_pins_count = 1;
-            sideset_pins_base = target_pins->tck;
-        }
-        break;
-
-    case PLATFORM_DEVICE_TYPE_MIOLINK_PICO:
-        sm_config_set_sideset(&swd_program_config, 3, true, false);
-
-        set_pins_base = target_pins->tms;
-        set_pins_count = 1;
-        sideset_pins_base = target_pins->tms_dir;
-        break;
-
-    case PLATFORM_DEVICE_TYPE_PICO:
-    case PLATFORM_DEVICE_TYPE_PICO_W:
-        sm_config_set_sideset(&swd_program_config, 2, true, false);
-
-        set_pins_base = target_pins->tms;
-        set_pins_count = 1;
-        sideset_pins_base = target_pins->tck;
-
+    /* Boards without a level shifter (no TMS_DIR pin) need an internal pull-up on TMS to
+     * keep SWDIO defined when the line is left floating between transactions. */
+    if (target_pins->tms_dir == PIN_NOT_CONNECTED) {
         gpio_set_pulls(target_pins->tms, true, false);
-        break;
-
-    default:
-        assert(false);
-        break;
     }
 
     tap_pio_disable_input_sync(TAP_PIO_SWD, target_pins->tms);
@@ -509,8 +501,11 @@ void swdptap_init(void)
     pio_add_program_at_offset(TAP_PIO_SWD, p_board_programs->swd_turnaround_float_to_drive,
         p_board_programs->swd_turnaround_float_to_drive->origin);
 
-    sm_config_set_set_pins(&swd_program_config, set_pins_base, set_pins_count);
-    sm_config_set_sideset_pins(&swd_program_config, sideset_pins_base);
+    sm_config_set_set_pins(
+        &swd_program_config, target_pins->swd_pio_set_pin_base, target_pins->swd_pio_set_pin_count);
+    sm_config_set_sideset(&swd_program_config,
+        target_pins->swd_pio_sideset_pin_count + SWD_PIO_SIDESET_OPTIONAL_BIT, true, false);
+    sm_config_set_sideset_pins(&swd_program_config, target_pins->swd_pio_sideset_pin_base);
     sm_config_set_in_pins(&swd_program_config, target_pins->tms);
     sm_config_set_out_pins(&swd_program_config, target_pins->tms, 1);
     sm_config_set_out_shift(&swd_program_config, true, true, 32);
@@ -540,8 +535,8 @@ void swdptap_seq_out_buffer(const uint32_t *tms_states, const size_t clock_cycle
     uint32_t pio_buffer[TAP_PIO_DMA_BUF_SIZE] = {0};
     uint8_t data_amount = 0;
 
-    uint32_t data_count = clock_cycles / 32;
-    if ((clock_cycles % 32) != 0) {
+    uint32_t data_count = clock_cycles / TAP_PIO_MAX_TICKS_PER_TRANSFER;
+    if ((clock_cycles % TAP_PIO_MAX_TICKS_PER_TRANSFER) != 0) {
         data_count++;
     }
 

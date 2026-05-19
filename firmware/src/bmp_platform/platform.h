@@ -95,6 +95,11 @@ typedef struct {
     uint8_t uart_rx;  /**< Target UART RX GPIO. */
     uint8_t reset;    /**< Target reset (nRST) GPIO; \ref PIN_NOT_CONNECTED when absent. */
     bool reset_state; /**< Level driven on \c reset to assert it (\c true = drive high to reset). */
+    /* SWD PIO state-machine configuration; consumed by \c swdptap_init. */
+    uint8_t swd_pio_set_pin_base;      /**< First GPIO controlled by PIO \c set (TMS on all current boards). */
+    uint8_t swd_pio_set_pin_count;     /**< Number of consecutive pins driven by PIO \c set. */
+    uint8_t swd_pio_sideset_pin_count; /**< Sideset pin count (excluding the optional bit). */
+    uint8_t swd_pio_sideset_pin_base;  /**< First GPIO carried by PIO sideset. */
 } platform_target_pins_t;
 
 /**
@@ -107,12 +112,12 @@ typedef struct {
 } platform_led_pins_t;
 
 /**
- * \brief Target power (VTref) enable, fault input, and ADC channel for monitoring.
+ * \brief Target power (VTref) enable, fault input, and ADC-capable GPIO for monitoring.
  */
 typedef struct {
-    uint8_t enable_pin;  /**< GPIO enabling the target power switch. */
-    uint8_t fault_pin;   /**< GPIO that reports a power-switch fault (active level is board-specific). */
-    uint8_t adc_channel; /**< ADC channel sampling the target VTref divider. */
+    uint8_t enable_pin; /**< GPIO enabling the target power switch. */
+    uint8_t fault_pin;  /**< GPIO that reports a power-switch fault (active level is board-specific). */
+    uint8_t adc_pin;    /**< ADC-capable GPIO sampling the target VTref divider. */
 } platform_vtref_info_t;
 
 /**********************************************************************************************************************

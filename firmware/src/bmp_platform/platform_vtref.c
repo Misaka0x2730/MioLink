@@ -42,7 +42,11 @@
 
 #define ADC_TARGET_VOLTAGE_BUF_SIZE    (250)   /**< Number of VTref ADC samples buffered per DMA transfer cycle. */
 #define ADC_TARGET_VOLTAGE_SAMPLE_RATE (1000U) /**< VTref ADC sample rate in Hz (1 ksps). */
-#define PLATFORM_TARGET_VOLTAGE_MAX    (99U)   /**< Maximum VTref value (100 mV units) that fits the "X.X V" display format. */
+
+/**
+ * \brief Maximum VTref value (100 mV units) that fits the "X.X V" display format.
+ */
+#define PLATFORM_TARGET_VOLTAGE_MAX (99U)
 
 /**
  * \brief Convert a sum of \ref ADC_TARGET_VOLTAGE_BUF_SIZE 8-bit ADC samples to target voltage in 100 mV units.
@@ -66,7 +70,11 @@
  */
 static int adc_target_voltage_dma_chan = DMA_EX_CHANNEL_UNCLAIMED;
 static uint8_t adc_target_voltage_buf[ADC_TARGET_VOLTAGE_BUF_SIZE] = {0}; /**< Rolling buffer for VTref ADC readings. */
-static volatile uint16_t target_voltage = 0; /**< Latest target voltage in units of 100 mV; written from DMA_IRQ_1, read from task context. */
+
+/**
+ * \brief Latest target voltage in units of 100 mV; written from DMA_IRQ_1, read from task context.
+ */
+static volatile uint16_t target_voltage = 0;
 
 /**********************************************************************************************************************
  * Private Functions Prototypes
@@ -126,8 +134,12 @@ void platform_vtref_init(void)
         if (adc_target_voltage_dma_chan == DMA_EX_CHANNEL_UNCLAIMED) {
             adc_init();
 
-            adc_gpio_init(ADC_BASE_PIN + p_vtref_info->adc_channel);
-            adc_select_input(p_vtref_info->adc_channel);
+            /* adc_gpio_init requires an ADC-capable GPIO; channel 4 (internal temp) is excluded. */
+            assert(p_vtref_info->adc_pin >= ADC_BASE_PIN);
+            assert(p_vtref_info->adc_pin < (ADC_BASE_PIN + NUM_ADC_CHANNELS - 1));
+
+            adc_gpio_init(p_vtref_info->adc_pin);
+            adc_select_input(p_vtref_info->adc_pin - ADC_BASE_PIN);
 
             adc_fifo_setup(true, true, 1, false, true);
 

@@ -34,6 +34,15 @@
 
 #define TAP_PIO_DMA_BUF_SIZE (16) /**< Size of the DMA buffer for PIO operations. */
 
+/**
+ * \brief Maximum number of SWD/JTAG shift ticks carried by one 32-bit PIO FIFO word.
+ *
+ * PIO TX/RX FIFO entries are 32-bit, so one entry drives at most 32 clock cycles. Per-call
+ * \c clock_cycles / \c ticks arguments to the TAP shift helpers are bounded by this value;
+ * longer sequences are split into multiple words by the caller.
+ */
+#define TAP_PIO_MAX_TICKS_PER_TRANSFER (32)
+
 /**********************************************************************************************************************
  * Public Types
  **********************************************************************************************************************/
@@ -134,8 +143,9 @@ void tap_pio_dma_send_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, 
  * \param[in]  data_amount         Number of 32-bit words to DMA to TX; must be greater than 0 and
  *                                 at most \ref TAP_PIO_DMA_BUF_SIZE.
  * \param[in]  data_amount_to_read Maximum number of RX words to store in \a buffer_recv.
- * \return Number of 32-bit words read from the RX FIFO
- *         (may exceed \a data_amount_to_read if \a buffer_recv is \c NULL).
+ * \return Number of 32-bit words read from the RX FIFO. May exceed \a data_amount_to_read because the
+ *         loop keeps draining the RX FIFO while the TX DMA channel is busy; surplus words are discarded
+ *         (not written to \a buffer_recv).
  */
 uint32_t tap_pio_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_t *buffer_send, uint32_t *buffer_recv,
     const uint32_t data_amount, const uint32_t data_amount_to_read);
@@ -161,7 +171,9 @@ void tap_pio_dma_send_uint8(PIO pio, uint32_t sm, const uint8_t *buffer_send, ui
  * \param[out] buffer_recv         Optional buffer for captured RX bytes; may be \c NULL to discard.
  * \param[in]  data_amount         Bytes to DMA to TX; must be greater than 0 and at most \ref TAP_PIO_DMA_BUF_SIZE.
  * \param[in]  data_amount_to_read Maximum number of RX bytes to store in \a buffer_recv.
- * \return Number of RX FIFO reads performed (may exceed \a data_amount_to_read if \a buffer_recv is \c NULL).
+ * \return Number of RX FIFO reads performed. May exceed \a data_amount_to_read because the loop keeps
+ *         draining the RX FIFO while the TX DMA channel is busy; surplus bytes are discarded (not
+ *         written to \a buffer_recv).
  */
 uint32_t tap_pio_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer_send, uint8_t *buffer_recv,
     uint32_t data_amount, uint32_t data_amount_to_read);

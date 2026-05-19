@@ -99,6 +99,10 @@ static const platform_target_pins_t miolink_rev_a_target_pins = {
     .uart_rx = MIOLINK_REVA_TARGET_UART_RX_PIN,
     .reset = MIOLINK_REVA_TARGET_NRST_PIN,
     .reset_state = true,
+    .swd_pio_set_pin_base = MIOLINK_REVA_TARGET_TMS_PIN,
+    .swd_pio_set_pin_count = MIOLINK_REVA_SWD_PIO_SET_PIN_COUNT,
+    .swd_pio_sideset_pin_count = MIOLINK_REVA_SWD_PIO_SIDESET_PIN_COUNT,
+    .swd_pio_sideset_pin_base = MIOLINK_REVA_SWD_PIO_SIDESET_PIN_BASE,
 };
 
 /**
@@ -116,7 +120,7 @@ static const platform_led_pins_t miolink_rev_a_led_pins = {
 static const platform_vtref_info_t miolink_rev_a_vtref_info = {
     .enable_pin = MIOLINK_REVA_TARGET_VOLTAGE_ENABLE_PIN,
     .fault_pin = MIOLINK_REVA_TARGET_VOLTAGE_FAULT_PIN,
-    .adc_channel = MIOLINK_REVA_TARGET_VOLTAGE_ADC_CHANNEL,
+    .adc_pin = MIOLINK_REVA_TARGET_VOLTAGE_ADC_PIN,
 };
 
 /**
@@ -132,6 +136,10 @@ static const platform_target_pins_t miolink_rev_b_target_pins = {
     .uart_rx = MIOLINK_REVB_TARGET_UART_RX_PIN,
     .reset = MIOLINK_REVB_TARGET_NRST_PIN,
     .reset_state = true,
+    .swd_pio_set_pin_base = MIOLINK_REVB_TARGET_TMS_PIN,
+    .swd_pio_set_pin_count = MIOLINK_REVB_SWD_PIO_SET_PIN_COUNT,
+    .swd_pio_sideset_pin_count = MIOLINK_REVB_SWD_PIO_SIDESET_PIN_COUNT,
+    .swd_pio_sideset_pin_base = MIOLINK_REVB_SWD_PIO_SIDESET_PIN_BASE,
 };
 
 /**
@@ -149,7 +157,7 @@ static const platform_led_pins_t miolink_rev_b_led_pins = {
 static const platform_vtref_info_t miolink_rev_b_vtref_info = {
     .enable_pin = MIOLINK_REVB_TARGET_VOLTAGE_ENABLE_PIN,
     .fault_pin = MIOLINK_REVB_TARGET_VOLTAGE_FAULT_PIN,
-    .adc_channel = MIOLINK_REVB_TARGET_VOLTAGE_ADC_CHANNEL,
+    .adc_pin = MIOLINK_REVB_TARGET_VOLTAGE_ADC_PIN,
 };
 #endif
 
@@ -168,6 +176,10 @@ static const platform_target_pins_t miolink_pico_target_pins = {
     .uart_rx = MIOLINK_PICO_TARGET_UART_RX_PIN,
     .reset = MIOLINK_PICO_TARGET_NRST_PIN,
     .reset_state = true,
+    .swd_pio_set_pin_base = MIOLINK_PICO_TARGET_TMS_PIN,
+    .swd_pio_set_pin_count = MIOLINK_PICO_SWD_PIO_SET_PIN_COUNT,
+    .swd_pio_sideset_pin_count = MIOLINK_PICO_SWD_PIO_SIDESET_PIN_COUNT,
+    .swd_pio_sideset_pin_base = MIOLINK_PICO_SWD_PIO_SIDESET_PIN_BASE,
 };
 
 /**
@@ -185,7 +197,7 @@ static const platform_led_pins_t miolink_pico_led_pins = {
 static const platform_vtref_info_t miolink_pico_vtref_info = {
     .enable_pin = MIOLINK_PICO_TARGET_VOLTAGE_ENABLE_PIN,
     .fault_pin = MIOLINK_PICO_TARGET_VOLTAGE_FAULT_PIN,
-    .adc_channel = MIOLINK_PICO_TARGET_VOLTAGE_ADC_CHANNEL,
+    .adc_pin = MIOLINK_PICO_TARGET_VOLTAGE_ADC_PIN,
 };
 #endif
 
@@ -204,6 +216,10 @@ static const platform_target_pins_t pico_target_pins = {
     .uart_rx = PICO_TARGET_UART_RX_PIN,
     .reset = PICO_TARGET_NRST_PIN,
     .reset_state = false,
+    .swd_pio_set_pin_base = PICO_TARGET_TMS_PIN,
+    .swd_pio_set_pin_count = PICO_SWD_PIO_SET_PIN_COUNT,
+    .swd_pio_sideset_pin_count = PICO_SWD_PIO_SIDESET_PIN_COUNT,
+    .swd_pio_sideset_pin_base = PICO_SWD_PIO_SIDESET_PIN_BASE,
 };
 
 /**
@@ -232,6 +248,10 @@ static const platform_target_pins_t pico_w_target_pins = {
     .uart_rx = PICO_W_TARGET_UART_RX_PIN,
     .reset = PICO_W_TARGET_NRST_PIN,
     .reset_state = false,
+    .swd_pio_set_pin_base = PICO_W_TARGET_TMS_PIN,
+    .swd_pio_set_pin_count = PICO_W_SWD_PIO_SET_PIN_COUNT,
+    .swd_pio_sideset_pin_count = PICO_W_SWD_PIO_SIDESET_PIN_COUNT,
+    .swd_pio_sideset_pin_base = PICO_W_SWD_PIO_SIDESET_PIN_BASE,
 };
 
 /**
@@ -271,17 +291,22 @@ void platform_update_hwtype(void)
             gpio_put(PICO_W_DETECT_CYW43_CS_PIN, false);
 
             adc_init();
-            adc_gpio_init(ADC_BASE_PIN + PICO_W_DETECT_ADC_CHANNEL);
-            gpio_pull_up(ADC_BASE_PIN + PICO_W_DETECT_ADC_CHANNEL);
-            adc_select_input(PICO_W_DETECT_ADC_CHANNEL);
+
+            /* adc_gpio_init requires an ADC-capable GPIO; channel 4 (internal temp) is excluded. */
+            assert(PICO_VSYS_PIN >= ADC_BASE_PIN);
+            assert(PICO_VSYS_PIN < (ADC_BASE_PIN + NUM_ADC_CHANNELS - 1));
+
+            adc_gpio_init(PICO_VSYS_PIN);
+            gpio_pull_up(PICO_VSYS_PIN);
+            adc_select_input(PICO_VSYS_PIN - ADC_BASE_PIN);
 
             /* Drop the first measurement to flush the ADC pipeline. */
             (void)adc_read();
             const uint16_t adc_result = adc_read();
 
             gpio_init(PICO_W_DETECT_CYW43_CS_PIN);
-            gpio_init(ADC_BASE_PIN + PICO_W_DETECT_ADC_CHANNEL);
-            gpio_disable_pulls(ADC_BASE_PIN + PICO_W_DETECT_ADC_CHANNEL);
+            gpio_init(PICO_VSYS_PIN);
+            gpio_disable_pulls(PICO_VSYS_PIN);
 
             if (adc_result < PICO_W_DETECT_ADC_THRESHOLD) {
                 cyw43_arch_init();
@@ -414,6 +439,7 @@ const platform_led_pins_t *platform_get_led_pins(void)
 #endif
 
     default:
+        assert(false);
         break;
     }
 
@@ -452,6 +478,7 @@ const platform_vtref_info_t *platform_get_vtref_info(void)
 #endif
 
     default:
+        assert(false);
         break;
     }
 

@@ -24,9 +24,9 @@
  * Public Definitions
  **********************************************************************************************************************/
 
-#define MIOLINK_REVB_TARGET_VOLTAGE_ADC_CHANNEL (3) /**< ADC channel that samples target VTref. */
-#define MIOLINK_REVB_TARGET_VOLTAGE_ENABLE_PIN  (3) /**< GPIO enabling target power switch. */
-#define MIOLINK_REVB_TARGET_VOLTAGE_FAULT_PIN   (1) /**< GPIO that signals power-switch fault. */
+#define MIOLINK_REVB_TARGET_VOLTAGE_ADC_PIN    (29) /**< GPIO (ADC capable) that samples target VTref. */
+#define MIOLINK_REVB_TARGET_VOLTAGE_ENABLE_PIN (3)  /**< GPIO enabling target power switch. */
+#define MIOLINK_REVB_TARGET_VOLTAGE_FAULT_PIN  (1)  /**< GPIO that signals power-switch fault. */
 
 #define MIOLINK_REVB_LED_ACT_PIN (13) /**< Activity LED GPIO. */
 #define MIOLINK_REVB_LED_ERR_PIN (10) /**< Error LED GPIO. */
@@ -42,5 +42,10 @@
 #define MIOLINK_REVB_TARGET_UART_RX_PIN (21) /**< Target UART RX pin. */
 
 #define MIOLINK_REVB_TARGET_NRST_PIN (18) /**< Target reset (nRST) GPIO. */
+
+/* SWD PIO configuration for MioLink rev B (matches \c pio_swd_miolink_rev_b.pio). */
+#define MIOLINK_REVB_SWD_PIO_SET_PIN_COUNT     (1) /**< Pin driven by \c set: TMS only. */
+#define MIOLINK_REVB_SWD_PIO_SIDESET_PIN_COUNT (2) /**< Sideset pin count (excluding the optional bit). */
+#define MIOLINK_REVB_SWD_PIO_SIDESET_PIN_BASE  (MIOLINK_REVB_TARGET_TCK_PIN) /**< First sideset pin: TCK. */
 
 #endif /* MIOLINK_BOARDS_PINOUT_MIOLINK_REV_B_H */
