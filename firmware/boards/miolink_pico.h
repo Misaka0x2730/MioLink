@@ -32,6 +32,12 @@
 
 pico_board_cmake_set(PICO_PLATFORM, rp2040)
 
+/**
+ * \brief Feature flag marking a build pinned to the MioLink_Pico board.
+ *
+ * Defined when \c PICO_BOARD=miolink_pico selects this header. Consumers use it to enable
+ * MioLink_Pico-specific pin maps and USB identification strings.
+ */
 #define BOARD_MIOLINK_PICO
 
 #define PICO_BOOT_STAGE2_CHOOSE_W25Q080 (1) /**< Selects W25Q080-compatible boot stage 2. */

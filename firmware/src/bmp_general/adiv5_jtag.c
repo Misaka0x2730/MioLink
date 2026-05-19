@@ -172,7 +172,7 @@ uint32_t adiv5_jtag_raw_access(
     /* Set the instruction to the correct one for the kind of access needed */
     jtag_dev_write_ir(dp->dev_index, (addr & ADIV5_APnDP) ? IR_APACC : IR_DPACC);
 
-    platform_timeout_s timeout;
+    platform_timeout_s timeout = {0};
     platform_timeout_set(&timeout, 250);
     do {
         uint64_t response = 0;

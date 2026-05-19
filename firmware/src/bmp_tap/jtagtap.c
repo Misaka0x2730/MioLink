@@ -344,6 +344,13 @@ static void jtagtap_tdi_tdo_seq(
         size_t data_out_cnt = tap_pio_dma_send_recv_uint8(
             TAP_PIO_JTAG, TAP_PIO_SM_JTAG_TDI_TDO_SEQ, pio_buffer, data_out, data_amount, data_bytes);
 
+        /* tap_pio_dma_send_recv_uint8 keeps draining the RX FIFO while the TX DMA is busy and
+         * may return more reads than data_bytes; surplus bytes are discarded but counted. Clamp
+         * to data_bytes so the final-byte shift below does not index past data_out. */
+        if (data_out_cnt > data_bytes) {
+            data_out_cnt = data_bytes;
+        }
+
         if ((clock_cycles % JTAG_BITS_PER_BYTE) != 0) {
             data_out[data_out_cnt - 1] >>= (JTAG_BITS_PER_BYTE - (clock_cycles % JTAG_BITS_PER_BYTE));
         }
@@ -414,6 +421,7 @@ static void jtagtap_cycle(const bool tms, const bool tdi, const size_t clock_cyc
         data_bytes++;
     }
 
+    assert((data_amount + data_bytes) <= TAP_PIO_DMA_BUF_SIZE);
     memset(&(pio_buffer[data_amount]), (tdi ? 0xFF : 0), data_bytes);
 
     data_amount += data_bytes;

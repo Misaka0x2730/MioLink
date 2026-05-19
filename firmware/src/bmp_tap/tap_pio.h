@@ -35,6 +35,16 @@
 #define TAP_PIO_DMA_BUF_SIZE (16) /**< Size of the DMA buffer for PIO operations. */
 
 /**
+ * \brief Watchdog timeout, in milliseconds, for a single PIO TAP operation.
+ *
+ * Bounds the busy-wait loops in \ref tap_pio_dma_send_recv_uint8 / \ref tap_pio_dma_send_recv_uint32
+ * and \ref tap_pio_wait_for_tx_stall. A correctly programmed transfer at the lowest supported
+ * SWD/JTAG rates completes well under this bound; expiration indicates a stuck SM or a wrong
+ * \c data_amount_to_read and forces the loop to give up instead of hanging the TAP task.
+ */
+#define TAP_PIO_OPERATION_TIMEOUT_MS (500U)
+
+/**
  * \brief Maximum number of SWD/JTAG shift ticks carried by one 32-bit PIO FIFO word.
  *
  * PIO TX/RX FIFO entries are 32-bit, so one entry drives at most 32 clock cycles. Per-call
@@ -51,9 +61,9 @@
  * \brief State machine index for SWD and JTAG operations.
  */
 typedef enum {
-    TAP_PIO_SM_SWD = 0,
-    TAP_PIO_SM_JTAG_TDI_TDO_SEQ = 0,
-    TAP_PIO_SM_JTAG_TMS_SEQ = 1,
+    TAP_PIO_SM_SWD = 0,              /**< State machine slot for the SWD program. */
+    TAP_PIO_SM_JTAG_TDI_TDO_SEQ = 0, /**< State machine slot for the JTAG TDI/TDO shift program (shared with SWD). */
+    TAP_PIO_SM_JTAG_TMS_SEQ = 1,     /**< State machine slot for the JTAG TMS shift program. */
 } tap_pio_sm_t;
 
 /**********************************************************************************************************************
@@ -74,8 +84,14 @@ static inline void tap_pio_wait_for_tx_stall(PIO pio, uint32_t sm)
     check_sm_param(sm);
 
     pio->fdebug = (1UL << (PIO_FDEBUG_TXSTALL_LSB + sm));
+    const uint32_t timeout_start_ms = platform_time_ms();
     while ((pio->fdebug & (1UL << (PIO_FDEBUG_TXSTALL_LSB + sm))) == 0) {
-        /* spin until PIO reports TX stall */
+        /* spin until PIO reports TX stall, bounded by TAP_PIO_OPERATION_TIMEOUT_MS so a stuck
+         * SM cannot hang the TAP task indefinitely. */
+        if ((platform_time_ms() - timeout_start_ms) >= TAP_PIO_OPERATION_TIMEOUT_MS) {
+            assert(false);
+            break;
+        }
     }
 }
 

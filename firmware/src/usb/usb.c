@@ -45,6 +45,17 @@
 #define USB_VID (0x1d50) /**< OpenMoko / Black Magic shared USB vendor id. */
 #define USB_PID (0x6018) /**< Black Magic product id reused by MioLink. */
 
+/**
+ * \brief Emit the raw byte sequence for a CDC ACM interface association + notification + data endpoints.
+ *
+ * \param[in] _itfnum         First interface number of the CDC pair (control interface).
+ * \param[in] _stridx         String descriptor index used for both the association and the interfaces.
+ * \param[in] _ep_notif       Endpoint address for the control notification (IN) endpoint.
+ * \param[in] _ep_notif_size  Maximum packet size of the notification endpoint.
+ * \param[in] _epout          Bulk OUT endpoint address for CDC data.
+ * \param[in] _epin           Bulk IN endpoint address for CDC data.
+ * \param[in] _epsize         Maximum packet size for both bulk endpoints.
+ */
 #define MAKE_CDC_DESCRIPTOR(_itfnum, _stridx, _ep_notif, _ep_notif_size, _epout, _epin, _epsize)                       \
     /* Interface Associate */                                                                                          \
     8, TUSB_DESC_INTERFACE_ASSOCIATION, _itfnum, 2, TUSB_CLASS_CDC, CDC_COMM_SUBCLASS_ABSTRACT_CONTROL_MODEL,          \
@@ -62,6 +73,12 @@
         7, TUSB_DESC_ENDPOINT, _epout, TUSB_XFER_BULK, U16_TO_U8S_LE(_epsize), 0,             /* Endpoint In */        \
         7, TUSB_DESC_ENDPOINT, _epin, TUSB_XFER_BULK, U16_TO_U8S_LE(_epsize), 0
 
+/**
+ * \brief Emit the raw byte sequence for the DFU runtime interface association + interface.
+ *
+ * \param[in] _itfnum Interface number assigned to the DFU runtime interface.
+ * \param[in] _stridx String descriptor index used for the association and the interface.
+ */
 #define MAKE_DFU_DESCRIPTOR(_itfnum, _stridx)                                                          \
     8, TUSB_DESC_INTERFACE_ASSOCIATION, _itfnum, 1, TUSB_CLASS_APPLICATION_SPECIFIC, 1, 1, _stridx, 9, \
         TUSB_DESC_INTERFACE, _itfnum, 0, 0, TUSB_CLASS_APPLICATION_SPECIFIC, 1, 1, _stridx
@@ -69,6 +86,14 @@
 #define DUMMY_DESC_SIZE (8 + 9) /**< Size of the DFU runtime descriptor block in bytes. */
 
 #if defined(PLATFORM_HAS_TRACESWO)
+/**
+ * \brief Emit the raw byte sequence for the SWO trace vendor interface association + bulk IN endpoint.
+ *
+ * \param[in] _itfnum Interface number assigned to the trace vendor interface.
+ * \param[in] _stridx String descriptor index used for the association and the interface.
+ * \param[in] _epin   Bulk IN endpoint address used to stream SWO trace data to the host.
+ * \param[in] _epsize Maximum packet size of the trace bulk IN endpoint.
+ */
 #define MAKE_TRACE_DESCRIPTOR(_itfnum, _stridx, _epin, _epsize)                                                     \
     8, TUSB_DESC_INTERFACE_ASSOCIATION, _itfnum, 1, TUSB_CLASS_VENDOR_SPECIFIC, 0xFF, 0xFF, _stridx, 9,             \
         TUSB_DESC_INTERFACE, _itfnum, 0, 1, TUSB_CLASS_VENDOR_SPECIFIC, 0xFF, 0xFF, _stridx, 7, TUSB_DESC_ENDPOINT, \
@@ -129,18 +154,18 @@
  * \brief USB interface numbers used by the composite device.
  */
 enum {
-    ITF_NUM_CDC_0 = 0,
-    ITF_NUM_CDC_0_DATA,
-    ITF_NUM_CDC_1,
-    ITF_NUM_CDC_1_DATA,
-    ITF_NUM_CDC,
-    ITF_NUM_DFU = ITF_NUM_CDC,
+    ITF_NUM_CDC_0 = 0,         /**< CDC 0 (GDB) control interface number. */
+    ITF_NUM_CDC_0_DATA,        /**< CDC 0 (GDB) data interface number. */
+    ITF_NUM_CDC_1,             /**< CDC 1 (target UART) control interface number. */
+    ITF_NUM_CDC_1_DATA,        /**< CDC 1 (target UART) data interface number. */
+    ITF_NUM_CDC,               /**< Count of CDC interfaces; first non-CDC interface starts here. */
+    ITF_NUM_DFU = ITF_NUM_CDC, /**< DFU runtime interface number (shares slot with CDC end-marker). */
 
 #if defined(PLATFORM_HAS_TRACESWO)
-    ITF_NUM_TRACE,
+    ITF_NUM_TRACE, /**< SWO trace vendor interface number (only when \ref PLATFORM_HAS_TRACESWO is enabled). */
 #endif
 
-    ITF_NUM_TOTAL
+    ITF_NUM_TOTAL /**< Total number of USB interfaces in the composite device. */
 };
 
 /**
@@ -365,6 +390,7 @@ static void cdc_notify_listener(uint8_t interface, uint32_t bits)
 _Noreturn static void usb_task_thread(void *param)
 {
     (void)param;
+    assert(USB_CDC_NUM == CFG_TUD_CDC);
 
     tusb_init();
 

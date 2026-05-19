@@ -37,7 +37,24 @@
 #ifndef MIOLINK_PLATFORM_PICO_BOARD_CONFIG_H
 #define MIOLINK_PLATFORM_PICO_BOARD_CONFIG_H
 
+/**
+ * \brief No-op stub for the Pico SDK CMake board-scanner marker \c pico_board_cmake_set.
+ *
+ * The marker is parsed by the SDK's CMake board scanner and must expand to nothing in C.
+ *
+ * \param[in] x CMake variable name (ignored in C).
+ * \param[in] y CMake value (ignored in C).
+ */
 #define pico_board_cmake_set(x, y)
+
+/**
+ * \brief No-op stub for the Pico SDK CMake board-scanner marker \c pico_board_cmake_set_default.
+ *
+ * The marker is parsed by the SDK's CMake board scanner and must expand to nothing in C.
+ *
+ * \param[in] x CMake variable name (ignored in C).
+ * \param[in] y CMake default value (ignored in C).
+ */
 #define pico_board_cmake_set_default(x, y)
 
 #include "pico/config_autogen.h"

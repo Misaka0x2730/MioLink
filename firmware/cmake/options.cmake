@@ -6,7 +6,8 @@
 
 set(PICO_BOARD "auto_rp2040" CACHE STRING
     "Pico SDK target board
-    Options: auto_rp2040, miolink, miolink_pico, pico, pico_w, pico2, pico2_w, weact_studio_rp2040_2mb and others supported by the Pico SDK
+    Options: auto_rp2040, miolink, miolink_pico, pico, pico_w, pico2, pico2_w,
+             weact_studio_rp2040_2mb and others supported by the Pico SDK
     Default: auto_rp2040 (auto-detect at runtime on RP2040 boards)")
 
 # ============================================================================
@@ -39,7 +40,8 @@ set(CONFIG_FREERTOS_TICK_RATE_HZ "1000" CACHE STRING
 
 # Validate CONFIG_FREERTOS_TICK_RATE_HZ
 if(CONFIG_FREERTOS_TICK_RATE_HZ LESS 100 OR CONFIG_FREERTOS_TICK_RATE_HZ GREATER 10000)
-    message(FATAL_ERROR "CONFIG_FREERTOS_TICK_RATE_HZ must be between 100 and 10000, got: ${CONFIG_FREERTOS_TICK_RATE_HZ}")
+    message(FATAL_ERROR
+        "CONFIG_FREERTOS_TICK_RATE_HZ must be between 100 and 10000, got: ${CONFIG_FREERTOS_TICK_RATE_HZ}")
 endif()
 
 
@@ -92,7 +94,8 @@ set(CONFIG_SWO_DECODE_BUFFER_SIZE "1024" CACHE STRING
 
 # Validate CONFIG_SWO_DECODE_BUFFER_SIZE
 if(CONFIG_SWO_DECODE_BUFFER_SIZE LESS 64 OR CONFIG_SWO_DECODE_BUFFER_SIZE GREATER 65536)
-    message(FATAL_ERROR "CONFIG_SWO_DECODE_BUFFER_SIZE must be between 64 and 65536, got: ${CONFIG_SWO_DECODE_BUFFER_SIZE}")
+    message(FATAL_ERROR
+        "CONFIG_SWO_DECODE_BUFFER_SIZE must be between 64 and 65536, got: ${CONFIG_SWO_DECODE_BUFFER_SIZE}")
 endif()
 
 # ============================================================================

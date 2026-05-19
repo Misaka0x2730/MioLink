@@ -123,7 +123,13 @@ static uint8_t *uart_dma_rx_ctrl_block_info[TARGET_SERIAL_UART_DMA_RX_NUMBER_OF_
 
 static uart_bridge_ctx_t s_serial_ctx = {0}; /**< Bridge context for the target-serial UART. */
 
-static bool use_uart_on_tdi_tdo = false; /**< \c true when target serial is routed through TDI/TDO instead of MAIN. */
+/**
+ * \brief \c true when target serial is routed through TDI/TDO instead of MAIN.
+ *
+ * Written from the GDB task (core 1) by \ref target_serial_use_uart_on_tdi_tdo and read by
+ * \c target_serial_thread on core 0; \c volatile forces a fresh load on the consumer side.
+ */
+static volatile bool use_uart_on_tdi_tdo = false;
 
 static TaskHandle_t usb_uart_task = NULL; /**< Handle of the target-serial worker FreeRTOS task. */
 
@@ -219,6 +225,13 @@ static uart_bridge_binding_t s_serial_bindings[SERIAL_BINDING_COUNT] = {
         },
 };
 
+/**
+ * \brief UART-bridge configuration for the target-serial CDC channel.
+ *
+ * Wires the shared DMA-driven RX/TX buffers, drop thresholds, baud-rate-based DMA threshold,
+ * USB-CDC notification bits, and binding table to the bridge core. The bridge treats this
+ * struct as immutable; per-claim state lives in the bridge's own context.
+ */
 static const uart_bridge_config_t s_serial_cfg = {
     .rx_buffers_base = (uint8_t *)uart_rx_buf,
     .rx_buffer_size = TARGET_SERIAL_UART_DMA_RX_BUFFER_SIZE,

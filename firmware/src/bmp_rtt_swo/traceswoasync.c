@@ -187,6 +187,13 @@ static uart_bridge_binding_t s_trace_bindings[TRACE_BINDING_COUNT] = {
         },
 };
 
+/**
+ * \brief UART-bridge configuration for the SWO trace channel.
+ *
+ * TX is unused (SWO is RX-only), so the TX buffer fields are zeroed. \c on_release_request is
+ * \c NULL, making the binding non-evictable: a cooperative claim from another channel must
+ * fail until \c swo_deinit releases the UART explicitly.
+ */
 static const uart_bridge_config_t s_trace_cfg = {
     .rx_buffers_base = (uint8_t *)uart_rx_buf,
     .rx_buffer_size = TRACESWO_RX_DMA_BUFFER_SIZE,

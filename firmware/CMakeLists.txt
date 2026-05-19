@@ -91,7 +91,9 @@ if(BUILD_TYPE STREQUAL "DEBUG")
     set(EXTRA_INFO "${EXTRA_INFO}, Debug Build")
 endif()
 
-configure_file(${CMAKE_CURRENT_LIST_DIR}/headers_template/platform_ident_extra_info.h.in ${CMAKE_CURRENT_BINARY_DIR}/platform_ident_extra_info.h)
+configure_file(
+        ${CMAKE_CURRENT_LIST_DIR}/headers_template/platform_ident_extra_info.h.in
+        ${CMAKE_CURRENT_BINARY_DIR}/platform_ident_extra_info.h)
 
 # Create version header from git tag
 execute_process(COMMAND ${GIT_EXECUTABLE} --git-dir ${CMAKE_CURRENT_LIST_DIR}/../.git describe --tags --always

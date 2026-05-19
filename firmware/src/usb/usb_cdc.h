@@ -63,9 +63,9 @@
  * \brief Logical CDC interface index for composite USB (GDB, target UART, …).
  */
 typedef enum {
-    USB_CDC_GDB = 0,
-    USB_CDC_TARGET_SERIAL,
-    USB_CDC_NUM = CFG_TUD_CDC,
+    USB_CDC_GDB = 0,       /**< CDC 0: GDB remote serial protocol channel. */
+    USB_CDC_TARGET_SERIAL, /**< CDC 1: target UART bridge channel. */
+    USB_CDC_NUM,           /**< Number of CDC interfaces; must match TinyUSB \c CFG_TUD_CDC. */
 } usb_cdc_t;
 
 /**********************************************************************************************************************

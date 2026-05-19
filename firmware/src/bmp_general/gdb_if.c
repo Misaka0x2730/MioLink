@@ -107,6 +107,14 @@ void gdb_if_putchar(const char character, const bool flush)
 
         uint32_t buf_pos = 0;
         while (gdb_to_usb.count > 0) {
+            /* Host may close the CDC mid-transmission; re-check on each iteration so the task
+             * does not spin forever waiting for FIFO space that will never be drained. */
+            if ((usb_get_config() != USB_CONFIG_STATE_CONFIGURED) ||
+                (gdb_serial_get_dtr() == USB_CDC_DTR_DEASSERTED)) {
+                gdb_to_usb.count = 0;
+                return;
+            }
+
             const uint32_t avail = tud_cdc_n_write_available(USB_CDC_GDB);
             const uint32_t bytes_to_write = MIN(avail, gdb_to_usb.count);
 
@@ -196,7 +204,7 @@ char gdb_if_getchar_to(const uint32_t timeout)
         }
     }
 
-    platform_timeout_s receive_timeout;
+    platform_timeout_s receive_timeout = {0};
     platform_timeout_set(&receive_timeout, timeout);
 
     while (!platform_timeout_is_expired(&receive_timeout)) {

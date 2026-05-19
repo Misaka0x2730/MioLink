@@ -347,14 +347,14 @@ struct uart_bridge_ctx {
     int tx_dma_channel;      /**< TX DMA channel; \ref DMA_EX_CHANNEL_UNCLAIMED when TX disabled. */
 
     bool rx_use_dma;                     /**< Selected RX path: \c true = DMA, \c false = INT. */
-    bool rx_ongoing;                     /**< Whether an RX session is currently active. */
+    volatile bool rx_ongoing;            /**< Whether an RX session is currently active. */
     uint32_t rx_int_buf_pos;             /**< Wrap pointer into the flat RX buffer pool for INT-mode. */
     uint32_t rx_dma_buffer_full_mask;    /**< One bit per RX slot: set when DMA filled it. */
     uint32_t rx_dma_current_buffer;      /**< Index of the buffer currently being filled by DMA. */
     uint32_t rx_dma_next_buffer_to_send; /**< Index of the next slot to drain in the task. */
 
-    bool tx_ongoing;      /**< Whether a TX DMA transfer is in flight. */
-    bool tx_dma_finished; /**< Set when DMA completion was observed; UART may still be draining. */
+    volatile bool tx_ongoing;      /**< Whether a TX DMA transfer is in flight. */
+    volatile bool tx_dma_finished; /**< Set when DMA completion was observed; UART may still be draining. */
 
     TimerHandle_t rx_timeout_timer; /**< Per-context RX-idle timer; ID is the context pointer. */
     TaskHandle_t owner_task;        /**< Task to receive notifications. */

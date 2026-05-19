@@ -93,6 +93,7 @@ uint32_t tap_pio_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_t *buff
 
     dma_channel_configure(pio_dma_channel, &tx_config, &(pio->txf[sm]), buffer_send, data_amount, true);
 
+    const uint32_t timeout_start_ms = platform_time_ms();
     uint32_t recv_data_amount = 0;
     while ((dma_channel_is_busy(pio_dma_channel)) || (recv_data_amount < data_amount_to_read)) {
         if (pio_sm_is_rx_fifo_empty(pio, sm) == false) {
@@ -101,6 +102,13 @@ uint32_t tap_pio_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_t *buff
                 buffer_recv[recv_data_amount] = read_value;
             }
             recv_data_amount++;
+        }
+        /* Watchdog: a stuck SM or a wrong data_amount_to_read would otherwise loop forever and
+         * hang the TAP task. Abort the DMA so the channel is reusable on the next call. */
+        if ((platform_time_ms() - timeout_start_ms) >= TAP_PIO_OPERATION_TIMEOUT_MS) {
+            dma_channel_abort(pio_dma_channel);
+            assert(false);
+            break;
         }
     }
 
@@ -151,6 +159,7 @@ uint32_t tap_pio_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer
 
     dma_channel_configure(pio_dma_channel, &tx_config, &(pio->txf[sm]), buffer_send, data_amount, true);
 
+    const uint32_t timeout_start_ms = platform_time_ms();
     uint32_t recv_data_amount = 0;
     while ((dma_channel_is_busy(pio_dma_channel)) || (recv_data_amount < data_amount_to_read)) {
         if (pio_sm_is_rx_fifo_empty(pio, sm) == false) {
@@ -159,6 +168,13 @@ uint32_t tap_pio_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer
                 buffer_recv[recv_data_amount] = read_value;
             }
             recv_data_amount++;
+        }
+        /* Watchdog: a stuck SM or a wrong data_amount_to_read would otherwise loop forever and
+         * hang the TAP task. Abort the DMA so the channel is reusable on the next call. */
+        if ((platform_time_ms() - timeout_start_ms) >= TAP_PIO_OPERATION_TIMEOUT_MS) {
+            dma_channel_abort(pio_dma_channel);
+            assert(false);
+            break;
         }
     }
 

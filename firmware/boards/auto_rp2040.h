@@ -37,6 +37,12 @@
 pico_board_cmake_set(PICO_PLATFORM, rp2040)
 pico_board_cmake_set(PICO_CYW43_SUPPORTED, 1)
 
+/**
+ * \brief Feature flag marking an RP2040 build that performs runtime board auto-detection.
+ *
+ * Defined when \c PICO_BOARD=auto_rp2040 selects this header. Consumers gate auto-detect code
+ * paths (MioLink rev A/B vs MioLink_Pico vs Pico vs Pico W) on its presence.
+ */
 #define BOARD_AUTO_RP2040
 
 /* CYW43 static pin map, kept here because PICO_BOARD=auto_rp2040 does not pull in the SDK
@@ -56,8 +62,25 @@ pico_board_cmake_set(PICO_CYW43_SUPPORTED, 1)
 
 #define PICO_VSYS_PIN                  (29) /**< GPIO wired to VSYS divider on Pico/Pico W */
 
-#define PICO_W_DETECT_CYW43_CS_PIN  (CYW43_DEFAULT_PIN_WL_CS) /**< GPIO sampled to discriminate Pico vs Pico W. */
-#define PICO_W_DETECT_ADC_THRESHOLD (0x600)                   /**< ADC threshold for inferring CYW43 presence. */
+#define PICO_W_DETECT_CYW43_CS_PIN (CYW43_DEFAULT_PIN_WL_CS) /**< GPIO sampled to discriminate Pico vs Pico W. */
+
+/**
+ * \brief ADC threshold (12-bit, 3.3 V reference) for inferring CYW43 presence on \ref PICO_VSYS_PIN.
+ *
+ * Detection samples GPIO29 with the RP2040 internal pull-up active (~50–80 kΩ to 3.3 V) after
+ * closing the Pico W VSYS-divider MOSFET via \c WL_CS = 0:
+ *   - **Pico W (CYW43 present):** only a 10 kΩ pull-down to GND remains on GPIO29.
+ *     Divider 10 kΩ : 50–80 kΩ → V_adc ≈ 0.37–0.55 V → ~455–683 counts (≤ 0x2C0).
+ *   - **Genuine Pico:** permanent 200 kΩ : 100 kΩ VSYS divider in parallel with the pull-up.
+ *     KCL with VSYS = 2.5–5 V and R_pu = 50–80 kΩ → V_adc ≈ 1.96–2.56 V → ~2425–3175 counts (≥ 0x979).
+ *   - **Clones / non-Pico boards without the divider:** GPIO29 floats, internal pull-up dominates
+ *     → V_adc ≈ 3.3 V → ~4080 counts (≥ 0xFE0). Treated as Pico (no CYW43 init).
+ *
+ * Set near the midpoint of the Pico W cluster (max ~683) and the Pico/clone cluster (min ~2425),
+ * giving ~600 counts (~0.5 V) of margin on each side against pull-up tolerance, ADC noise, and
+ * VSYS variation. Below threshold → Pico W; at or above → Pico/clone.
+ */
+#define PICO_W_DETECT_ADC_THRESHOLD (0x600)
 
 #define PICO_BOOT_STAGE2_CHOOSE_W25Q080 (1) /**< Selects W25Q080-compatible boot stage 2. */
 

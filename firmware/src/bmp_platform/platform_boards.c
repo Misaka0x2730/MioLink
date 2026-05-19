@@ -309,7 +309,11 @@ void platform_update_hwtype(void)
             gpio_disable_pulls(PICO_VSYS_PIN);
 
             if (adc_result < PICO_W_DETECT_ADC_THRESHOLD) {
-                cyw43_arch_init();
+                const int cyw43_init_result = cyw43_arch_init();
+                assert(cyw43_init_result == PICO_OK);
+
+                /* Ignore the result in the release build */
+                (void)cyw43_init_result;
                 device_type = PLATFORM_DEVICE_TYPE_PICO_W;
             } else {
                 device_type = PLATFORM_DEVICE_TYPE_PICO;
@@ -328,7 +332,11 @@ void platform_update_hwtype(void)
         }
     }
 #elif PLATFORM_PICO_W_BOARD
-    cyw43_arch_init();
+    const int cyw43_init_result = cyw43_arch_init();
+    assert(cyw43_init_result == PICO_OK);
+
+    /* Ignore the result in the release build */
+    (void)cyw43_init_result;
 #endif
 }
 
@@ -352,6 +360,9 @@ int platform_hwversion(void)
 
         hwversion = gpio_get(HWVERSION_PIN_1) ? (1 << 1) : 0;
         hwversion |= gpio_get(HWVERSION_PIN_0) ? (1 << 0) : 0;
+
+        gpio_disable_pulls(HWVERSION_PIN_0);
+        gpio_disable_pulls(HWVERSION_PIN_1);
 
         hwversion++;
     }
@@ -414,8 +425,10 @@ const platform_led_pins_t *platform_get_led_pins(void)
     case PLATFORM_DEVICE_TYPE_MIOLINK:
         if (platform_hwversion() == PLATFORM_MIOLINK_REV_A) {
             p_pins = &miolink_rev_a_led_pins;
-        } else {
+        } else if (platform_hwversion() == PLATFORM_MIOLINK_REV_B) {
             p_pins = &miolink_rev_b_led_pins;
+        } else {
+            assert(false);
         }
         break;
 #endif

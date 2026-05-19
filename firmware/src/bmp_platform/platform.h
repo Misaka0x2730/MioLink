@@ -47,7 +47,18 @@
 #error "TARGET_SWD_IDLE_CYCLES should be at least 8"
 #endif
 
+/**
+ * \brief Stringify the raw token \p macro without expanding it. Helper for \ref MACRO_VALUE_STR.
+ *
+ * \param[in] macro Token to stringify.
+ */
 #define MACRO_VALUE_STR_WRAP(macro) #macro
+
+/**
+ * \brief Stringify the expanded value of \p macro (two-level expansion: expand, then stringify).
+ *
+ * \param[in] macro Macro whose expanded value is converted to a string literal.
+ */
 #define MACRO_VALUE_STR(macro)      MACRO_VALUE_STR_WRAP(macro)
 
 #if ENABLE_DEBUG == 1

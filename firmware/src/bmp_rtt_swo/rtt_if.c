@@ -35,6 +35,9 @@
 
 #include "hardware/sync.h"
 
+#include "FreeRTOS.h"
+#include "task.h"
+
 #include "tusb.h"
 
 #include "usb.h"
@@ -49,8 +52,9 @@
  **********************************************************************************************************************/
 
 #define RTT_IF_USB_PACKET_SIZE \
-    (CFG_TUD_CDC_EP_BUFSIZE)         /**< USB CDC bulk endpoint packet size used for chunked RTT transfers. */
-#define RTT_IF_TX_TIMEOUT_MS   (25)  /**< Maximum wait, in ms, for USB CDC to accept a chunk before dropping it. */
+    (CFG_TUD_CDC_EP_BUFSIZE)            /**< USB CDC bulk endpoint packet size used for chunked RTT transfers. */
+#define RTT_IF_TX_TIMEOUT_MS     (25U)  /**< Maximum wait, in ms, for USB CDC to accept a chunk before dropping it. */
+#define RTT_IF_TX_RETRY_DELAY_MS (1U)   /**< Yield delay (ms) between USB CDC retries in \ref rtt_write. */
 
 /**********************************************************************************************************************
  * Private Types
@@ -99,6 +103,10 @@ inline static uint32_t recv_bytes_free(void);
 
 inline static uint32_t recv_bytes_free(void)
 {
+    /* Called by the producer (core 0) to read the consumer's tail published from core 1.
+     * The fence pairs with the __dmb() the consumer issues before updating tail in
+     * \ref rtt_getchar, so a tail advance becomes visible here without an extra wait. */
+    __dmb();
     if (s_rtt_recv.tail <= s_rtt_recv.head) {
         return RTT_DOWN_BUF_SIZE - s_rtt_recv.head + s_rtt_recv.tail - 1U;
     }
@@ -116,7 +124,7 @@ inline static uint32_t recv_bytes_free(void)
  */
 void rtt_serial_receive_callback(void)
 {
-    char usb_buf[RTT_IF_USB_PACKET_SIZE];
+    char usb_buf[RTT_IF_USB_PACKET_SIZE] = {0};
 
     const uint32_t len = target_serial_read((uint8_t *)usb_buf, sizeof(usb_buf));
 
@@ -206,6 +214,7 @@ uint32_t rtt_write(const uint32_t channel, const char *buf, uint32_t len)
                 if (platform_time_ms() - start_ms >= RTT_IF_TX_TIMEOUT_MS) {
                     return 0; /* drop silently */
                 }
+                vTaskDelay(pdMS_TO_TICKS(RTT_IF_TX_RETRY_DELAY_MS));
             }
         }
     }

@@ -518,7 +518,7 @@ uint32_t adiv5_swd_raw_access(adiv5_debug_port_s *dp, const uint8_t rnw, const u
     uint32_t response = 0;
     uint8_t ack = SWD_ACK_WAIT;
     bool parity = false;
-    platform_timeout_s timeout;
+    platform_timeout_s timeout = {0};
     platform_timeout_set(&timeout, 250U);
     do {
         if (rnw) {
