@@ -1,0 +1,111 @@
+name: Build Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ARTIFACT_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.sha }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        board:
+          - auto_rp2040
+          - miolink
+          - miolink_pico
+          - pico
+          - pico_w
+          - pico2
+          - pico2_w
+          - weact_studio_rp2040_2mb
+          - weact_studio_rp2040_16mb
+          - waveshare_rp2040_zero
+          - waveshare_rp2040_plus_4mb
+          - seeed_xiao_rp2040
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0
+
+    - uses: carlosperate/arm-none-eabi-gcc-action@v1
+
+    - name: Configure CMake
+      working-directory: ./firmware
+      run: cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=${{ matrix.board }}
+
+    - name: Build
+      working-directory: ./firmware
+      run: cmake --build ./build --config Release
+
+    - name: Rename binary
+      working-directory: ./firmware/build
+      run: mv MioLink.uf2 MioLink_${ARTIFACT_VERSION}_${{ matrix.board }}.uf2
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: MioLink_${{ matrix.board }}
+        path: ./firmware/build/MioLink_${{ env.ARTIFACT_VERSION }}_${{ matrix.board }}.uf2
+
+  publish-development:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+        merge-multiple: true
+
+    - name: Publish development build
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        tag="development"
+        gh release delete "$tag" --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
+        gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Development Build" \
+            --latest=false \
+            --target "$GITHUB_SHA" \
+            --notes "Automated build from commit $GITHUB_SHA" \
+            ./artifacts/*.uf2
+
+  publish-release:
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+        merge-multiple: true
+
+    - name: Create release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        tag: ${{ github.ref_name }}
+      run: |
+        gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$tag" \
+            --generate-notes \
+            ./artifacts/*.uf2
