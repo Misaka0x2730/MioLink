@@ -129,12 +129,14 @@ extern bool debug_bmp; /**< Verbose BMP logging when \c ENABLE_DEBUG is on. */
  * Public Functions Prototypes
  **********************************************************************************************************************/
 
+#if defined(PLATFORM_HAS_POWER_SWITCH)
 /**
  * \brief Whether target power and fault lines report a healthy supply.
  *
  * \return \c true if the target power and fault lines report a healthy supply, \c false otherwise
  */
 bool platform_target_is_power_ok(void);
+#endif
 
 /**
  * \brief Cached device type from board ID GPIOs / compile-time selection.
@@ -197,7 +199,7 @@ void platform_toggle_idle_state(void);
 void platform_set_error_state(bool state);
 
 /**
- * \brief Drive “serial activity” LED.
+ * \brief Drive "serial activity" LED.
  *
  * \param[in] state \c true to set the serial state, \c false to clear it
  */

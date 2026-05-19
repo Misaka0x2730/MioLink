@@ -29,6 +29,7 @@
 
 #include "hardware/gpio.h"
 #include "hardware/sync.h"
+#include "pico/time.h"
 
 #if defined(PICO_CYW43_SUPPORTED)
 #include "hardware/adc.h"
@@ -56,6 +57,11 @@
 #define BOARD_IDENT_FORMAT "Black Magic Probe (%s) %s" /**< Format used to assemble \c board_ident. */
 
 #define PLATFORM_HWVERSION_UNKNOWN (-1) /**< Sentinel meaning hardware version has not yet been latched. */
+
+/**
+ * \brief Settle time (microseconds) before reading a strap pin after enabling its internal pull-up.
+ */
+#define PLATFORM_STRAP_SETTLE_US (1000U)
 
 /**********************************************************************************************************************
  * Private Data
@@ -287,9 +293,7 @@ void platform_update_hwtype(void)
             gpio_init(MIOLINK_TYPE_PIN_0);
             gpio_set_pulls(MIOLINK_TYPE_PIN_0, true, false);
 
-            for (uint32_t i = 0; i < 100000; i++) {
-                __nop();
-            }
+            busy_wait_us_32(PLATFORM_STRAP_SETTLE_US);
 
             if (gpio_get(MIOLINK_TYPE_PIN_0)) {
                 device_type = PLATFORM_DEVICE_TYPE_MIOLINK;
@@ -319,9 +323,7 @@ int platform_hwversion(void)
         gpio_set_pulls(HWVERSION_PIN_0, true, false);
         gpio_set_pulls(HWVERSION_PIN_1, true, false);
 
-        for (uint32_t i = 0; i < 100000; i++) {
-            __nop();
-        }
+        busy_wait_us_32(PLATFORM_STRAP_SETTLE_US);
 
         hwversion = gpio_get(HWVERSION_PIN_1) ? (1 << 1) : 0;
         hwversion |= gpio_get(HWVERSION_PIN_0) ? (1 << 0) : 0;

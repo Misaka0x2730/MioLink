@@ -117,7 +117,7 @@ static bool platform_crc32(target_s *const target, uint32_t *const result, const
 
     for (size_t offset = 0; offset < adjusted_len; offset += sizeof(bytes)) {
         const uint32_t actual_time = platform_time_ms();
-        if (actual_time > last_time + CRC32_KEEPALIVE_INTERVAL_MS) {
+        if ((actual_time - last_time) > CRC32_KEEPALIVE_INTERVAL_MS) {
             last_time = actual_time;
             gdb_if_putchar(0, true);
         }

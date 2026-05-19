@@ -265,6 +265,8 @@ static bool jtagtap_next(const bool tms, const bool tdi)
 
 static void jtagtap_tms_seq(const uint32_t tms_states, const size_t ticks)
 {
+    assert((ticks > 0) && (ticks <= 32));
+
     uint8_t pio_buffer[TAP_PIO_DMA_BUF_SIZE] = {0};
     uint8_t data_amount = 0;
 

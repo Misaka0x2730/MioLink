@@ -71,8 +71,8 @@ Other common options:
 
 - `-DCONFIG_NUMBER_OF_CORES=1` or `2`; RP2040 supports at most two cores.
 - `-DCONFIG_FREERTOS_TICK_RATE_HZ=<100..10000>`.
-- `-DCONFIG_ENABLE_RTT=ON/OFF`.
-- `-DCONFIG_ENABLE_SYSVIEW=ON/OFF`; meaningful in debug builds and only enabled for single-core builds.
+- `-DCONFIG_ENABLE_SEGGER_RTT=ON/OFF` (firmware self-debug via Segger RTT; distinct from BMP target-RTT proxy, which is always compiled in).
+- `-DCONFIG_ENABLE_SEGGER_SYSVIEW=ON/OFF`; meaningful in debug builds and only enabled for single-core builds.
 - `-DBMP_TARGET_<FAMILY>=ON/OFF` from `firmware/cmake/bmp_targets.cmake` to reduce included Black Magic target families.
 
 Successful builds produce `MioLink.uf2` in the selected build directory. Flashing requires BOOTSEL/USB mass-storage or another explicit user-approved flashing method; do not flash hardware unless asked.
@@ -116,7 +116,7 @@ If hardware validation is not possible, say exactly what was built and what rema
   #include <string.h>
   #include "usb_cdc.h"
   ```
-- Object-like `#define` constants must wrap their replacement value in parentheses. This applies to numeric literals, single-identifier aliases, and any compound expression. The only exceptions are macros defined without a replacement value (pure feature flags such as `BOARD_AUTO_RP2040`), header include guards, and function-like macros where each parameter is individually parenthesised in its use site as usual. Example:
+- Object-like `#define` constants must wrap their replacement value in parentheses. This applies to numeric literals, single-identifier aliases, and any compound expression. Exceptions: macros defined without a replacement value (pure feature flags such as `BOARD_AUTO_RP2040`), header include guards, function-like macros where each parameter is individually parenthesised in its use site, and **string-literal concatenations** that must remain usable as initialiser / `printf`-style arguments (wrapping the concatenation in parentheses would change semantics; example: `#define FIRMWARE_VERSION GIT_MIOLINK_VERSION ", BMP " GIT_BMP_VERSION`). Example:
   ```c
   #define MIOLINK_REVA_TARGET_TCK_PIN     (24)
   #define PICO_W_DETECT_CYW43_CS_PIN      (CYW43_DEFAULT_PIN_WL_CS)
@@ -165,6 +165,7 @@ If hardware validation is not possible, say exactly what was built and what rema
   - Public functions: immediately before the prototype in the header.
   - Private `static` functions: immediately before the prototype in the `Private Functions Prototypes` section.
   - Do not duplicate the same Doxygen block above the implementation when a documented prototype already exists.
+  - **Vendored-prototype exception:** when a function is declared in an unmodifiable upstream header (e.g. Black Magic `platform_support.h`, `gdb_if.h`, `swd.h`, `adiv5.h`) and we provide the implementation locally, the Doxygen block lives above the local implementation. Editing the vendored header to host the docs is not allowed (`firmware/external/` is read-only per the rules above).
 - Any Doxygen comment that contains `\brief` must use the multi-line block form, even when the brief is the only tag. Single-line `/** \brief ... */` comments are not allowed.
   - Not allowed:
     ```c
@@ -221,6 +222,7 @@ If hardware validation is not possible, say exactly what was built and what rema
   - Target UART and SWO trace tasks run on core 0.
   - GDB task runs on core 1 in dual-core builds.
   - Timer service task is pinned to core 0.
+  - CYW43 driver task (created by `pico_cyw43_arch_sys_freertos` on Wi-Fi boards) runs at priority 1 with a 256-word stack (`CYW43_TASK_PRIORITY` / `CYW43_TASK_STACK_SIZE` in `firmware/CMakeLists.txt`); no explicit core affinity is set, so the FreeRTOS-SMP scheduler may place it on either core.
 - Do not block the TinyUSB task or hold off interrupts around USB/CDC paths.
 - Be careful with DMA channel and IRQ sharing:
   - `DMA_IRQ_0` is shared by target UART and SWO trace.
@@ -256,7 +258,7 @@ If hardware validation is not possible, say exactly what was built and what rema
 
 - Upstream Black Magic code lives in `firmware/external/blackmagic`.
 - Local replacements/adapters live in `firmware/src/bmp_general`, `firmware/src/bmp_platform`, `firmware/src/bmp_tap`, and `firmware/src/bmp_rtt_swo`.
-- `firmware/external/external.cmake` intentionally excludes upstream `adiv5_swd.c` and `swdptap_generic.c` and uses local RP2040/PIO implementations instead.
+- `firmware/external/external.cmake` intentionally excludes upstream `adiv5_swd.c`, `adiv5_jtag.c`, and `swdptap_generic.c` and uses local RP2040/PIO implementations instead.
 - Keep `GDB_PACKET_BUFFER_SIZE`, platform macros, and `BMP_TARGET_*` feature definitions consistent with Black Magic expectations.
 
 ## When Unsure

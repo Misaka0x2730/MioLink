@@ -102,12 +102,12 @@ void adiv5_jtag_dp_handler(const uint8_t dev_index)
 
     /* Check which version of DP we have here, if it's an ARM-made DP, and set up `dp->version` accordingly */
     if (dp->designer_code == JEP106_MANUFACTURER_ARM) {
-        if (dp->partno == JTAG_IDCODE_PARTNO_SOC400_4BIT || dp->partno == JTAG_IDCODE_PARTNO_SOC400_8BIT) {
+        if ((dp->partno == JTAG_IDCODE_PARTNO_SOC400_4BIT) || (dp->partno == JTAG_IDCODE_PARTNO_SOC400_8BIT)) {
             dp->version = 0U;
-        } else if (dp->partno == JTAG_IDCODE_PARTNO_SOC400_4BIT_CM33 ||
-            dp->partno == JTAG_IDCODE_PARTNO_SOC400_4BIT_LPC43xx) {
+        } else if ((dp->partno == JTAG_IDCODE_PARTNO_SOC400_4BIT_CM33) ||
+            (dp->partno == JTAG_IDCODE_PARTNO_SOC400_4BIT_LPC43xx)) {
             dp->version = 1U;
-        } else if (dp->partno == JTAG_IDCODE_PARTNO_SOC600_4BIT || dp->partno == JTAG_IDCODE_PARTNO_SOC600_8BIT) {
+        } else if ((dp->partno == JTAG_IDCODE_PARTNO_SOC600_4BIT) || (dp->partno == JTAG_IDCODE_PARTNO_SOC600_8BIT)) {
             dp->version = 3U;
         } else {
             DEBUG_WARN("Unknown JTAG-DP found, please report partno code %04x\n", dp->partno);
@@ -182,7 +182,7 @@ uint32_t adiv5_jtag_raw_access(
         result = (uint32_t)(response >> 3U);
         /* Then the acknowledgement code */
         ack = (uint8_t)(response & 0x07U);
-    } while (!platform_timeout_is_expired(&timeout) && ack == JTAG_ACK_WAIT);
+    } while ((!platform_timeout_is_expired(&timeout)) && (ack == JTAG_ACK_WAIT));
 
     /*
      * If even after waiting for the 250ms we still get a WAIT response,
@@ -197,7 +197,7 @@ uint32_t adiv5_jtag_raw_access(
     }
 
     /* If this is an ADIv6 JTAG-DPv1, check for fault */
-    if (dp->version > 2 && ack == JTAG_ADIv6_ACK_FAULT) {
+    if ((dp->version > 2) && (ack == JTAG_ADIv6_ACK_FAULT)) {
         DEBUG_ERROR("JTAG access resulted in fault\n");
         /* Use the SWD ack codes for the fault code to be completely consistent between JTAG-vs-SWD */
         dp->fault = SWD_ACK_FAULT;
@@ -205,7 +205,7 @@ uint32_t adiv5_jtag_raw_access(
     }
 
     /* Check for a not-OK ack under ADIv5 JTAG-DPv0, or ADIv6 JTAG-DPv1 */
-    if ((dp->version < 3 && ack != JTAG_ADIv5_ACK_OK) || (dp->version > 2 && ack != JTAG_ADIv6_ACK_OK)) {
+    if (((dp->version < 3) && (ack != JTAG_ADIv5_ACK_OK)) || ((dp->version > 2) && (ack != JTAG_ADIv6_ACK_OK))) {
         DEBUG_ERROR("JTAG access resulted in: %" PRIx32 ":%x\n", result, ack);
         raise_exception(EXCEPTION_ERROR, "JTAG-DP invalid ACK");
     }
@@ -221,7 +221,7 @@ uint32_t adiv5_jtag_raw_access(
      * reads (e.g. flash verify via compare-sections / qCRC).
      * Recursion is bounded: the recursive call uses a DP register address.
      */
-    if (!rnw && addr == ADIV5_AP_DRW) {
+    if ((!rnw) && (addr == ADIV5_AP_DRW)) {
         adiv5_jtag_raw_access(dp, ADIV5_LOW_READ, ADIV5_DP_RDBUFF, 0);
     }
 

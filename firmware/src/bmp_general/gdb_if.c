@@ -96,7 +96,7 @@ bool gdb_serial_get_dtr(void)
 void gdb_if_putchar(const char character, const bool flush)
 {
     gdb_to_usb.buf[gdb_to_usb.count++] = (uint8_t)character;
-    if (flush || gdb_to_usb.count == sizeof(gdb_to_usb.buf)) {
+    if ((flush) || (gdb_to_usb.count == sizeof(gdb_to_usb.buf))) {
         /* Refuse to send if USB isn't configured, and
          * don't bother if nobody's listening */
         if ((usb_get_config() != USB_CONFIG_STATE_CONFIGURED) ||

@@ -47,8 +47,25 @@ endif()
 # Debug & Tracing Options
 # ============================================================================
 
-option(CONFIG_ENABLE_RTT "Enable Segger RTT trace output in debug builds" ON)
-option(CONFIG_ENABLE_SYSVIEW "Enable Segger SystemView trace in single-core debug builds" ON)
+option(CONFIG_ENABLE_SEGGER_RTT "Enable Segger RTT trace output in debug builds" ON)
+option(CONFIG_ENABLE_SEGGER_SYSVIEW "Enable Segger SystemView trace in single-core debug builds" ON)
+
+# Override the local Segger flags to OFF when their prerequisites are not met, so the configuration
+# summary and the consumers in firmware/CMakeLists.txt agree on the actual feature state. Cache
+# values are left untouched, so a later reconfigure with valid prerequisites still honours the
+# user's original intent.
+if(CONFIG_ENABLE_SEGGER_RTT AND NOT BUILD_TYPE STREQUAL "DEBUG")
+    message(INFO "CONFIG_ENABLE_SEGGER_RTT=ON requires Debug build; disabling for this build.")
+    set(CONFIG_ENABLE_SEGGER_RTT OFF)
+endif()
+if(CONFIG_ENABLE_SEGGER_SYSVIEW AND NOT BUILD_TYPE STREQUAL "DEBUG")
+    message(INFO "CONFIG_ENABLE_SEGGER_SYSVIEW=ON requires Debug build; disabling for this build.")
+    set(CONFIG_ENABLE_SEGGER_SYSVIEW OFF)
+endif()
+if(CONFIG_ENABLE_SEGGER_SYSVIEW AND NOT CONFIG_NUMBER_OF_CORES EQUAL 1)
+    message(INFO "CONFIG_ENABLE_SEGGER_SYSVIEW=ON requires CONFIG_NUMBER_OF_CORES=1; disabling for this build.")
+    set(CONFIG_ENABLE_SEGGER_SYSVIEW OFF)
+endif()
 
 # ============================================================================
 # GDB Interface Options
@@ -86,8 +103,8 @@ message(STATUS "=== MioLink Configuration ===")
 message(STATUS "  Board: ${PICO_BOARD}")
 message(STATUS "  Cores: ${CONFIG_NUMBER_OF_CORES}")
 message(STATUS "  FreeRTOS tick: ${CONFIG_FREERTOS_TICK_RATE_HZ} Hz")
-message(STATUS "  RTT enabled: ${CONFIG_ENABLE_RTT}")
-message(STATUS "  SystemView enabled: ${CONFIG_ENABLE_SYSVIEW}")
+message(STATUS "  Segger RTT enabled: ${CONFIG_ENABLE_SEGGER_RTT}")
+message(STATUS "  Segger SystemView enabled: ${CONFIG_ENABLE_SEGGER_SYSVIEW}")
 message(STATUS "  GDB IF buffer size: ${CONFIG_GDB_IF_BUFFER_SIZE} bytes")
 message(STATUS "  SWO decode buffer size: ${CONFIG_SWO_DECODE_BUFFER_SIZE} bytes")
 message(STATUS "============================")

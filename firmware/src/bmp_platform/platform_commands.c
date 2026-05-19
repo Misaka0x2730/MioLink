@@ -39,6 +39,13 @@
 #include "target_serial.h"
 
 /**********************************************************************************************************************
+ * Private Definitions
+ **********************************************************************************************************************/
+
+/** Upper bound on the number of FreeRTOS tasks reportable by \c monitor rtos_tasksinfo. */
+#define RTOS_TASKSINFO_MAX_TASKS (16U)
+
+/**********************************************************************************************************************
  * Private Functions Prototypes
  **********************************************************************************************************************/
 
@@ -124,7 +131,7 @@ static bool cmd_rtos_heapinfo(target_s *target, int argc, const char **argv)
     (void)argv;
 
     const size_t free_heap = xPortGetFreeHeapSize();
-    gdb_outf("Free heap (bytes): %d\n", free_heap);
+    gdb_outf("Free heap (bytes): %zu\n", free_heap);
 
     return true;
 }
@@ -136,21 +143,22 @@ static bool cmd_rtos_tasksinfo(target_s *target, int argc, const char **argv)
     (void)argv;
 
     UBaseType_t tasks_number = uxTaskGetNumberOfTasks();
-    TaskStatus_t task_status[10] = {0};
+    TaskStatus_t task_status[RTOS_TASKSINFO_MAX_TASKS] = {0};
 
-    if (tasks_number > 0) {
-        if (uxTaskGetSystemState(task_status, sizeof(task_status) / sizeof(task_status[0]), NULL) == tasks_number) {
-            gdb_outf("Total number of tasks: %lu\n", tasks_number);
-            gdb_out("Name:                            Min free stack (bytes):\n");
-            for (uint32_t i = 0; i < tasks_number; i++) {
-                gdb_outf("%-" MACRO_VALUE_STR(configMAX_TASK_NAME_LEN) "s %-5lu\n", task_status[i].pcTaskName,
-                    task_status[i].usStackHighWaterMark * sizeof(StackType_t));
-            }
-        } else {
-            gdb_out("Failed to read tasks info\n");
-        }
-    } else {
+    if (tasks_number == 0) {
         gdb_out("Incorrect tasks number\n");
+    } else if (tasks_number > RTOS_TASKSINFO_MAX_TASKS) {
+        gdb_outf("Too many tasks (%lu); bump RTOS_TASKSINFO_MAX_TASKS (=%u) and rebuild\n",
+            (unsigned long)tasks_number, (unsigned)RTOS_TASKSINFO_MAX_TASKS);
+    } else if (uxTaskGetSystemState(task_status, RTOS_TASKSINFO_MAX_TASKS, NULL) != tasks_number) {
+        gdb_out("Failed to read tasks info\n");
+    } else {
+        gdb_outf("Total number of tasks: %lu\n", (unsigned long)tasks_number);
+        gdb_out("Name:                            Min free stack (bytes):\n");
+        for (UBaseType_t i = 0; i < tasks_number; i++) {
+            gdb_outf("%-" MACRO_VALUE_STR(configMAX_TASK_NAME_LEN) "s %-5zu\n", task_status[i].pcTaskName,
+                (size_t)task_status[i].usStackHighWaterMark * sizeof(StackType_t));
+        }
     }
 
     return true;

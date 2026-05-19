@@ -230,7 +230,7 @@ static uint8_t swdtap_prepare_pio_seq(
     uint32_t *buffer, const uint32_t clock_cycles, const uint32_t data, const bool in, const bool parity)
 {
     assert(buffer != NULL);
-    assert(clock_cycles <= 32);
+    assert((clock_cycles > 0) && (clock_cycles <= 32));
 
     const swd_board_program_t *p_board_programs = swdtap_get_board_programs();
     assert(p_board_programs != NULL);
@@ -280,7 +280,7 @@ static uint8_t swdtap_prepare_pio_seq(
 
 static uint32_t swdptap_seq_in(const size_t clock_cycles)
 {
-    assert(clock_cycles <= 32);
+    assert((clock_cycles > 0) && (clock_cycles <= 32));
 
     uint32_t pio_buffer[TAP_PIO_DMA_BUF_SIZE] = {0};
     const uint8_t data_amount = swdtap_prepare_pio_seq(pio_buffer, clock_cycles, 0, true, false);
@@ -297,7 +297,7 @@ static uint32_t swdptap_seq_in(const size_t clock_cycles)
 static bool swdptap_seq_in_parity(uint32_t *ret, const size_t clock_cycles)
 {
     assert(ret != NULL);
-    assert(clock_cycles <= 32);
+    assert((clock_cycles > 0) && (clock_cycles <= 32));
 
     uint32_t pio_buffer[TAP_PIO_DMA_BUF_SIZE] = {0};
     const uint8_t data_amount = swdtap_prepare_pio_seq(pio_buffer, clock_cycles, 0, true, true);
@@ -323,7 +323,7 @@ static bool swdptap_seq_in_parity(uint32_t *ret, const size_t clock_cycles)
 
 static void swdptap_seq_out(const uint32_t tms_states, const size_t clock_cycles)
 {
-    assert(clock_cycles <= 32);
+    assert((clock_cycles > 0) && (clock_cycles <= 32));
 
     uint32_t pio_buffer[TAP_PIO_DMA_BUF_SIZE] = {0};
     const uint8_t data_amount = swdtap_prepare_pio_seq(pio_buffer, clock_cycles, tms_states, false, false);
@@ -336,7 +336,7 @@ static void swdptap_seq_out(const uint32_t tms_states, const size_t clock_cycles
 
 static void swdptap_seq_out_parity(const uint32_t tms_states, const size_t clock_cycles)
 {
-    assert(clock_cycles <= 32);
+    assert((clock_cycles > 0) && (clock_cycles <= 32));
 
     uint32_t pio_buffer[TAP_PIO_DMA_BUF_SIZE] = {0};
     const uint8_t data_amount = swdtap_prepare_pio_seq(pio_buffer, clock_cycles, tms_states, false, true);
@@ -535,6 +535,7 @@ void swdptap_init(void)
 void swdptap_seq_out_buffer(const uint32_t *tms_states, const size_t clock_cycles)
 {
     assert(tms_states != NULL);
+    assert(clock_cycles > 0);
 
     uint32_t pio_buffer[TAP_PIO_DMA_BUF_SIZE] = {0};
     uint8_t data_amount = 0;
@@ -616,6 +617,11 @@ uint8_t swdtap_adiv5_write_check(const uint8_t request, const uint32_t data)
 uint8_t swdtap_adiv5_read_check(const uint8_t request, uint32_t *data, bool *parity)
 {
     assert(data != NULL);
+
+    *data = 0U;
+    if (parity != NULL) {
+        *parity = false;
+    }
 
     uint32_t pio_buffer[TAP_PIO_DMA_BUF_SIZE] = {0};
     const uint8_t data_amount = swdtap_adiv5_prepare_pio_seq(pio_buffer, request, 0, true, true);

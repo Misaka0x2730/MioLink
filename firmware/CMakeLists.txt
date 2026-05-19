@@ -200,17 +200,19 @@ if(BUILD_TYPE STREQUAL "DEBUG")
         ENABLE_DEBUG=1
     )
 
-    # Enable RTT trace if debug is enabled and CONFIG_ENABLE_RTT is ON
-    if(CONFIG_ENABLE_RTT)
+    # Enable Segger RTT trace if debug is enabled and CONFIG_ENABLE_SEGGER_RTT is ON
+    if(CONFIG_ENABLE_SEGGER_RTT)
+        target_compile_definitions(MioLink PRIVATE
+            ENABLE_SEGGER_RTT=1
+        )
         target_link_libraries(MioLink PRIVATE
             segger_rtt
         )
     endif()
 
-    # Enable SystemView trace if only one core is used, debug is enabled, and CONFIG_ENABLE_SYSVIEW is ON
-    if(CONFIG_NUMBER_OF_CORES EQUAL 1 AND CONFIG_ENABLE_SYSVIEW)
+    if(CONFIG_ENABLE_SEGGER_SYSVIEW)
         target_compile_definitions(MioLink PRIVATE
-            ENABLE_SYSVIEW_TRACE=1
+            ENABLE_SEGGER_SYSVIEW=1
         )
 
         target_link_libraries(MioLink PRIVATE
@@ -221,10 +223,9 @@ if(BUILD_TYPE STREQUAL "DEBUG")
     # Set debug linker script
     pico_set_linker_script(MioLink ${CMAKE_CURRENT_BINARY_DIR}/memmap_debug.ld)
 else()
-    # Disable debug mode and SysView trace
+    # Disable debug mode
     target_compile_definitions(MioLink PRIVATE
         ENABLE_DEBUG=0
-        ENABLE_SYSVIEW_TRACE=0
     )
 
     # Set release linker script

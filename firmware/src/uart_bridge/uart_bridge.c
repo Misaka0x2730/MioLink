@@ -290,6 +290,8 @@ static void uart_bridge_revert_binding_locked(const uart_bridge_binding_t *bindi
  * \brief Mutex-held helper for \ref uart_bridge_release.
  *
  * Caller must hold \ref s_bridge_mutex.
+ *
+ * \param[in,out] ctx Bridge context whose ownership is being released.
  */
 static void uart_bridge_release_locked(uart_bridge_ctx_t *ctx);
 
@@ -298,6 +300,8 @@ static void uart_bridge_release_locked(uart_bridge_ctx_t *ctx);
  *
  * Caller must hold \ref s_bridge_mutex. The function is reused by
  * \ref uart_bridge_deinit to avoid re-locking on the same path.
+ *
+ * \param[in,out] ctx Bridge context whose UART/DMA state is being torn down.
  */
 static void uart_bridge_deinit_uart_locked(uart_bridge_ctx_t *ctx);
 
@@ -1001,7 +1005,8 @@ static void uart_bridge_uart_isr_handler(uart_bridge_ctx_t *ctx)
         if (uart_int_status & RP_UART_INT_RX_BITS) {
             /* Intentionally drain at most (trigger - 1) bytes to leave at least one byte in the FIFO.
              * RX_TIMEOUT only asserts while the FIFO is non-empty; the trailing byte ensures it fires
-             * after the burst ends, which is the trigger for rx_int_finish() to sink */
+             * after the burst ends, which is the trigger for rx_int_finish() to flush the residual
+             * FIFO contents and sink them. */
             const uint8_t fifo_trigger_bytes = s_rx_fifo_trigger_bytes[ctx->cfg->rx_int_fifo_level];
             for (uint32_t i = 0; i < (uint32_t)(fifo_trigger_bytes - 1U); i++) {
                 if (!uart_is_readable(ctx->uart)) {

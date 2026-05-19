@@ -155,7 +155,7 @@ to exclude the API function. */
 #define INCLUDE_xTaskResumeFromISR          0
 #define INCLUDE_xQueueGetMutexHolder        1
 
-#if ENABLE_SYSVIEW_TRACE
+#if defined(ENABLE_SEGGER_SYSVIEW)
 #include "SEGGER_SYSVIEW_FreeRTOS.h"
 #endif
 

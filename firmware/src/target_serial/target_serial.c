@@ -42,7 +42,7 @@
 #include "usb_cdc.h"
 #include "target_serial.h"
 
-#if ENABLE_DEBUG
+#if defined(ENABLE_SEGGER_RTT)
 #include "SEGGER_RTT.h"
 #endif
 
@@ -75,8 +75,10 @@
 
 #define TARGET_SERIAL_UART_DMA_RX_BAUDRATE_THRESHOLD \
     UART_BRIDGE_DEFAULT_RX_DMA_BAUDRATE_THRESHOLD /**< Below this baud, use IRQ RX path instead of DMA. */
-#define TARGET_SERIAL_UART_DMA_RX_MIN_TIMEOUT UART_BRIDGE_DEFAULT_RX_DMA_MIN_TIMEOUT_MS /**< Minimum DMA RX idle timeout, ms. */
-#define TARGET_SERIAL_UART_DMA_RX_MAX_TIMEOUT UART_BRIDGE_DEFAULT_RX_DMA_MAX_TIMEOUT_MS /**< Maximum DMA RX idle timeout, ms. */
+/** Minimum DMA RX idle timeout, ms. */
+#define TARGET_SERIAL_UART_DMA_RX_MIN_TIMEOUT UART_BRIDGE_DEFAULT_RX_DMA_MIN_TIMEOUT_MS
+/** Maximum DMA RX idle timeout, ms. */
+#define TARGET_SERIAL_UART_DMA_RX_MAX_TIMEOUT UART_BRIDGE_DEFAULT_RX_DMA_MAX_TIMEOUT_MS
 
 #define TARGET_SERIAL_UART_DMA_TX_BUFFER_SIZE (256) /**< TX DMA staging buffer size, bytes. */
 #define TARGET_SERIAL_UART_DMA_TX_CHECK_FINISHED_PERIOD_MS \
@@ -463,7 +465,9 @@ bool target_serial_send_to_usb(uint8_t *data, const size_t len, bool flush, cons
 void target_serial_use_uart_on_tdi_tdo(const bool new_state)
 {
     use_uart_on_tdi_tdo = new_state;
-    xTaskNotify(usb_uart_task, USB_CDC_NOTIF_DUMMY, eSetBits);
+    if (usb_uart_task != NULL) {
+        xTaskNotify(usb_uart_task, USB_CDC_NOTIF_DUMMY, eSetBits);
+    }
 }
 
 bool target_serial_uart_on_tdi_tdo_is_used(void)
@@ -542,9 +546,12 @@ __attribute__((used)) int _write(const int file, const void *const ptr, const si
 
     if (debug_bmp) {
         bytes_written = debug_serial_debug_write(ptr, len);
-    } else {
+    }
+#if defined(ENABLE_SEGGER_RTT)
+    else {
         bytes_written = SEGGER_RTT_Write(0, ptr, len);
     }
+#endif
 
     return (bytes_written == len) ? (int)bytes_written : -1;
 #else

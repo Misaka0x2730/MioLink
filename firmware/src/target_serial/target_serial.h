@@ -89,6 +89,8 @@ void target_serial_use_uart_on_tdi_tdo(const bool new_state);
 
 /**
  * \brief Whether the TDI/TDO UART is currently selected for target serial.
+ *
+ * \return \c true if the TDI/TDO-pin UART is the active sink/source; \c false for the main UART.
  */
 bool target_serial_uart_on_tdi_tdo_is_used(void);
 

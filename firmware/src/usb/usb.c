@@ -193,7 +193,7 @@ static char const *string_desc_arr[] = {
 #endif
 };
 
-static uint16_t string_descriptor[512] = {0}; /**< Scratch buffer holding the latest UTF-16 string descriptor. */
+static uint16_t string_descriptor[127] = {0}; /**< Scratch buffer holding the latest UTF-16 string descriptor. */
 
 /**
  * \brief Microsoft OS 2.0 descriptor blob enabling WinUSB auto-binding for the trace interface.

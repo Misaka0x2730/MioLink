@@ -37,6 +37,13 @@
 
 /**
  * \brief DMA channel claimed for PIO TX transfers; \ref DMA_EX_CHANNEL_UNCLAIMED until first use.
+ *
+ * \note A single channel is shared by both SWD and JTAG TAP transports. This is safe only because
+ *       Black Magic drives the TAP exclusively from the GDB task (BMP probes never run SWD and
+ *       JTAG concurrently — selecting one transport reconfigures the same \c pio0 block via
+ *       \c swdptap_init / \c jtagtap_init, and only one is active at a time). If a future caller
+ *       ever needs concurrent TAP DMA — including from a different task or core — this channel
+ *       must be split per transport (and per state machine) before any concurrent submission.
  */
 static int pio_dma_channel = DMA_EX_CHANNEL_UNCLAIMED;
 

@@ -42,6 +42,7 @@
 
 #define ADC_TARGET_VOLTAGE_BUF_SIZE    (250)   /**< Number of VTref ADC samples buffered per DMA transfer cycle. */
 #define ADC_TARGET_VOLTAGE_SAMPLE_RATE (1000U) /**< VTref ADC sample rate in Hz (1 ksps). */
+#define PLATFORM_TARGET_VOLTAGE_MAX    (99U)   /**< Maximum VTref value (100 mV units) that fits the "X.X V" display format. */
 
 /**
  * \brief Convert a sum of \ref ADC_TARGET_VOLTAGE_BUF_SIZE 8-bit ADC samples to target voltage in 100 mV units.
@@ -52,7 +53,7 @@
  * V(100mV) = (sum * 33) / (ADC_TARGET_VOLTAGE_BUF_SIZE * 128).
  *
  * \param[in] sum Sum of \ref ADC_TARGET_VOLTAGE_BUF_SIZE consecutive 8-bit ADC samples.
- * \return Target voltage in 100 mV units (e.g. \c 33 ≈ 3.3 V).
+ * \return Target voltage in 100 mV units (e.g. \c 33 ~= 3.3 V).
  */
 #define ADC_TARGET_VOLTAGE_FROM_SUM(sum) (((sum) * 33U) / (ADC_TARGET_VOLTAGE_BUF_SIZE * 128U))
 
@@ -65,7 +66,7 @@
  */
 static int adc_target_voltage_dma_chan = DMA_EX_CHANNEL_UNCLAIMED;
 static uint8_t adc_target_voltage_buf[ADC_TARGET_VOLTAGE_BUF_SIZE] = {0}; /**< Rolling buffer for VTref ADC readings. */
-static uint16_t target_voltage = 0; /**< Latest target voltage in units of 100 mV. */
+static volatile uint16_t target_voltage = 0; /**< Latest target voltage in units of 100 mV; written from DMA_IRQ_1, read from task context. */
 
 /**********************************************************************************************************************
  * Private Functions Prototypes
@@ -163,6 +164,7 @@ void platform_vtref_init(void)
     }
 }
 
+#if defined(PLATFORM_HAS_POWER_SWITCH)
 /**
  * \brief Whether the target VTref enable line is currently asserted.
  *
@@ -194,17 +196,21 @@ bool platform_target_is_power_ok(void)
  * \brief Enable or disable the target VTref output when the board supports it.
  *
  * \param[in] power \c true to drive VTref, \c false to release it.
- * \return Always \c true.
+ * \return \c true if the request was applied to the enable pin; \c false if the current board has
+ *         no VTref power-switch hardware (the caller cannot drive VTref on this platform).
  */
 bool platform_target_set_power(const bool power)
 {
     const platform_vtref_info_t *p_vtref_info = platform_get_vtref_info();
 
-    if ((p_vtref_info != NULL) && (p_vtref_info->enable_pin != PIN_NOT_CONNECTED)) {
-        gpio_put(p_vtref_info->enable_pin, power);
+    if ((p_vtref_info == NULL) || (p_vtref_info->enable_pin == PIN_NOT_CONNECTED)) {
+        return false;
     }
+
+    gpio_put(p_vtref_info->enable_pin, power);
     return true;
 }
+#endif /* PLATFORM_HAS_POWER_SWITCH */
 
 /**
  * \brief Latest averaged target voltage in units of 100 mV.
@@ -227,12 +233,17 @@ const char *platform_target_voltage(void)
         return "Not supported";
     }
 
+#if defined(PLATFORM_HAS_POWER_SWITCH)
     if (platform_target_is_power_ok() == false) {
         return "ABSENT!";
     }
+#endif
 
     static char ret[] = "0.0V";
     uint32_t val = platform_target_voltage_sense();
+    if (val > PLATFORM_TARGET_VOLTAGE_MAX) {
+        val = PLATFORM_TARGET_VOLTAGE_MAX;
+    }
     ret[0] = '0' + val / 10U;
     ret[2] = '0' + val % 10U;
 

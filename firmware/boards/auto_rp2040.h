@@ -39,6 +39,21 @@ pico_board_cmake_set(PICO_CYW43_SUPPORTED, 1)
 
 #define BOARD_AUTO_RP2040
 
+/* CYW43 static pin map, kept here because PICO_BOARD=auto_rp2040 does not pull in the SDK
+ * pico_w.h board header (which is where the SDK would normally provide these as defaults). */
+#define CYW43_PIN_WL_DYNAMIC (0) /**< Disables dynamic CYW43 pin remapping. */
+
+#define CYW43_DEFAULT_PIN_WL_REG_ON    (23) /**< CYW43 regulator enable pin. */
+#define CYW43_DEFAULT_PIN_WL_DATA_OUT  (24) /**< CYW43 SPI MOSI / data out pin. */
+#define CYW43_DEFAULT_PIN_WL_DATA_IN   (24) /**< CYW43 SPI MISO / data in pin (shared with data out). */
+#define CYW43_DEFAULT_PIN_WL_HOST_WAKE (24) /**< CYW43 host-wake input pin. */
+#define CYW43_DEFAULT_PIN_WL_CLOCK     (29) /**< CYW43 SPI clock pin. */
+#define CYW43_DEFAULT_PIN_WL_CS        (25) /**< CYW43 SPI chip-select pin. */
+#define CYW43_PIN_WL_HOST_WAKE         (24) /**< Active CYW43 host-wake pin override. */
+#define CYW43_PIN_WL_REG_ON            (23) /**< Active CYW43 regulator-enable override. */
+#define CYW43_WL_GPIO_COUNT            (3)  /**< Number of CYW43-managed virtual GPIOs. */
+#define CYW43_WL_GPIO_LED_PIN          (0)  /**< CYW43 virtual GPIO that drives the on-board LED. */
+
 #define PICO_VSYS_PIN               (29) /**< GPIO wired to VSYS divider on Pico/Pico W */
 
 #define PICO_W_DETECT_CYW43_CS_PIN  (CYW43_DEFAULT_PIN_WL_CS)      /**< GPIO sampled to discriminate Pico vs Pico W. */

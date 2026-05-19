@@ -176,7 +176,7 @@ uint8_t make_packet_request(const uint8_t rnw, const uint16_t addr)
     const uint8_t reg = addr & 0x0cU;
     request |= (reg << 1U) & 0x18U;
     /* Then adjust the parity again accordingly */
-    if (reg == 4U || reg == 8U) {
+    if ((reg == 4U) || (reg == 8U)) {
         request ^= 0x20U;
     }
 
@@ -319,10 +319,10 @@ bool adiv5_swd_scan_targetid(const uint32_t targetid)
     /* On non hosted platforms, scan_multidrop can be constant */
     const
 #endif
-        bool scan_multidrop = targetid || dp->version >= 2U;
+        bool scan_multidrop = (targetid) || (dp->version >= 2U);
 
 #if CONFIG_BMDA == 1
-    if (scan_multidrop && !dp->write_no_check) {
+    if ((scan_multidrop) && (!dp->write_no_check)) {
         DEBUG_WARN("Discovered multi-drop enabled target but CMSIS_DAP < v1.2 cannot handle multi-drop\n");
         scan_multidrop = false;
     }
@@ -445,7 +445,7 @@ uint32_t adiv5_swd_read(adiv5_debug_port_s *dp, uint16_t addr)
 uint32_t adiv5_swd_clear_error(adiv5_debug_port_s *const dp, const bool protocol_recovery)
 {
     /* Only do the comms reset dance on DPv2+ w/ fault or to perform protocol recovery. */
-    if ((dp->version >= 2U && dp->fault) || protocol_recovery) {
+    if (((dp->version >= 2U) && (dp->fault)) || (protocol_recovery)) {
         /*
          * Note that on DPv2+ devices, during a protocol error condition
          * the target becomes deselected during line reset. Once reset,
@@ -510,7 +510,7 @@ uint32_t adiv5_swd_clear_error(adiv5_debug_port_s *const dp, const bool protocol
  */
 uint32_t adiv5_swd_raw_access(adiv5_debug_port_s *dp, const uint8_t rnw, const uint16_t addr, const uint32_t value)
 {
-    if ((addr & ADIV5_APnDP) && dp->fault) {
+    if ((addr & ADIV5_APnDP) && (dp->fault)) {
         return 0;
     }
 
@@ -534,7 +534,7 @@ uint32_t adiv5_swd_raw_access(adiv5_debug_port_s *dp, const uint8_t rnw, const u
                 ADIV5_DP_ABORT_ORUNERRCLR | ADIV5_DP_ABORT_WDERRCLR | ADIV5_DP_ABORT_STKERRCLR |
                     ADIV5_DP_ABORT_STKCMPCLR);
         }
-    } while ((ack == SWD_ACK_WAIT || ack == SWD_ACK_FAULT) && !platform_timeout_is_expired(&timeout));
+    } while (((ack == SWD_ACK_WAIT) || (ack == SWD_ACK_FAULT)) && (!platform_timeout_is_expired(&timeout)));
 
     if (ack == SWD_ACK_WAIT) {
         DEBUG_ERROR("SWD access resulted in wait, aborting\n");
@@ -570,7 +570,7 @@ uint32_t adiv5_swd_raw_access(adiv5_debug_port_s *dp, const uint8_t rnw, const u
      * After a successful AP DRW write, drain the AP write buffer with a
      * RDBUFF read.
      */
-    if (!rnw && addr == ADIV5_AP_DRW) {
+    if ((!rnw) && (addr == ADIV5_AP_DRW)) {
         adiv5_swd_raw_access(dp, ADIV5_LOW_READ, ADIV5_DP_RDBUFF, 0);
     }
 

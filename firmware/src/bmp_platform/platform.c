@@ -175,15 +175,15 @@ void platform_init(void)
 /**
  * \brief Drive nRST. Assertion holds the target in reset for 10 ms before returning.
  *
- * \param[in] assert \c true to assert reset; \c false to release.
+ * \param[in] assert_reset \c true to assert reset; \c false to release.
  */
-void platform_nrst_set_val(bool assert)
+void platform_nrst_set_val(bool assert_reset)
 {
     const platform_target_pins_t *target_pins = platform_get_target_pins();
     assert(target_pins != NULL);
 
     if (target_pins->reset != PIN_NOT_CONNECTED) {
-        if (assert) {
+        if (assert_reset) {
             gpio_put(target_pins->reset, target_pins->reset_state);
             platform_delay(10);
         } else {
@@ -268,7 +268,7 @@ uint8_t platform_spi_xfer(const spi_bus_e bus, const uint8_t value)
     return value;
 }
 
-#if ENABLE_SYSVIEW_TRACE
+#if defined(ENABLE_SEGGER_SYSVIEW)
 /**
  * \brief SystemView timestamp source: free-running microseconds from the RP2040 timer.
  *

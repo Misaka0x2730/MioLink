@@ -55,7 +55,7 @@
 #include "swo.h"
 #endif
 
-#if ENABLE_DEBUG
+#if defined(ENABLE_SEGGER_RTT)
 #include "SEGGER_RTT.h"
 #endif
 
@@ -159,11 +159,11 @@ _Noreturn static void gdb_thread(void *params)
  */
 void main(void)
 {
-#if ENABLE_DEBUG
+#if defined(ENABLE_SEGGER_RTT)
     SEGGER_RTT_Init();
 #endif
 
-#if ENABLE_SYSVIEW_TRACE
+#if defined(ENABLE_SEGGER_SYSVIEW)
     traceSTART();
 #endif
 

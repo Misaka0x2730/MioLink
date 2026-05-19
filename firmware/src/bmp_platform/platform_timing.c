@@ -45,8 +45,8 @@
  * Private Definitions
  **********************************************************************************************************************/
 
-#define MONITOR_TICKS_LIMIT       (3) /**< VTref health check period, in system ticks. */
-#define MONITOR_ERROR_COUNT_LIMIT (5) /**< Consecutive VTref faults required to trip TPWR shutdown. */
+#define TPWR_CHECK_PERIOD_TICKS (3) /**< TPWR / VTref health check period, in system ticks. */
+#define TPWR_FAULT_STREAK_LIMIT (5) /**< Consecutive VTref fault observations required to trip TPWR shutdown. */
 
 /**********************************************************************************************************************
  * Public Data
@@ -61,9 +61,19 @@ uint32_t target_interface_frequency = PLATFORM_DEFAULT_FREQUENCY; /**< Cached ef
 
 static volatile uint32_t time_ms = 0; /**< Free-running millisecond counter, advanced by the system tick timer. */
 
-static size_t morse_tick = 0;           /**< Tick counter to time morse status updates. */
-static uint8_t monitor_ticks = 0;       /**< Tick counter for periodic VTref health checks. */
-static uint8_t monitor_error_count = 0; /**< VTref fault count; triggers TPWR shutdown when it exceeds \c MONITOR_ERROR_COUNT_LIMIT. */
+static size_t morse_tick = 0; /**< Tick counter to time morse status updates. */
+
+#if defined(PLATFORM_HAS_POWER_SWITCH)
+/**
+ * \brief Sub-tick counter pacing the periodic VTref health check; wraps at \c TPWR_CHECK_PERIOD_TICKS.
+ */
+static uint8_t tpwr_check_period_ticks = 0;
+
+/**
+ * \brief Consecutive VTref fault observations; triggers TPWR shutdown when above \c TPWR_FAULT_STREAK_LIMIT.
+ */
+static uint8_t tpwr_consecutive_faults = 0;
+#endif
 
 /**********************************************************************************************************************
  * Private Functions Prototypes
@@ -121,30 +131,32 @@ static void timing_application_timer_cb(TimerHandle_t xTimer)
         ++morse_tick;
     }
 
+#if defined(PLATFORM_HAS_POWER_SWITCH)
     /* First check if target power is presently enabled */
     if (platform_target_get_power()) {
         /* If we're on the 3rd tick (30 ms), check the power fault pin */
-        if (++monitor_ticks == MONITOR_TICKS_LIMIT) {
-            monitor_ticks = 0;
+        if (++tpwr_check_period_ticks == TPWR_CHECK_PERIOD_TICKS) {
+            tpwr_check_period_ticks = 0;
 
             /* Now compare the reference against the known good range */
             if (platform_target_is_power_ok() == false) {
-                monitor_error_count++;
-            } else if (monitor_error_count) {
-                monitor_error_count--;
+                tpwr_consecutive_faults++;
+            } else if (tpwr_consecutive_faults) {
+                tpwr_consecutive_faults--;
             }
 
             /* Something's wrong, and it is not a glitch, so turn tpwr off and set the morse blink pattern */
-            if (monitor_error_count > MONITOR_ERROR_COUNT_LIMIT) {
-                monitor_error_count = 0;
+            if (tpwr_consecutive_faults > TPWR_FAULT_STREAK_LIMIT) {
+                tpwr_consecutive_faults = 0;
 
                 platform_target_set_power(false);
                 morse("TPWR ERROR", true);
             }
         }
     } else {
-        monitor_ticks = 0;
+        tpwr_check_period_ticks = 0;
     }
+#endif
 }
 
 static uint32_t platform_get_interface_periph_clk(void)
@@ -212,16 +224,7 @@ uint32_t platform_max_frequency_get(void)
 
 uint32_t platform_timeout_time_left(const platform_timeout_s *const timeout)
 {
-    /* Cache the current time for the whole calculation */
-    const uint32_t counter = platform_time_ms();
-
-    if ((counter & UINT32_C(0x80000000)) && (!(timeout->time & UINT32_C(0x80000000)))) {
-        return UINT32_MAX - counter + timeout->time + 1;
-    }
-
-    if (timeout->time > counter) {
-        return timeout->time - counter;
-    }
-
-    return 0;
+    /* Wrap-safe if timeout intervals are below 2^31 ms (~24.8 days). */
+    const int32_t left = (int32_t)(timeout->time - platform_time_ms());
+    return (left > 0) ? (uint32_t)left : 0U;
 }
