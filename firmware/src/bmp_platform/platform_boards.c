@@ -63,6 +63,11 @@
  */
 #define PLATFORM_STRAP_SETTLE_US (1000U)
 
+/**
+ * \brief Settle time (microseconds) between the discarded and the effective ADC sample during Pico/Pico W detection.
+ */
+#define PLATFORM_PICO_W_DETECT_ADC_SETTLE_US (100U)
+
 /**********************************************************************************************************************
  * Private Data
  **********************************************************************************************************************/
@@ -302,6 +307,7 @@ void platform_update_hwtype(void)
 
             /* Drop the first measurement to flush the ADC pipeline. */
             (void)adc_read();
+            busy_wait_us_32(PLATFORM_PICO_W_DETECT_ADC_SETTLE_US);
             const uint16_t adc_result = adc_read();
 
             gpio_init(PICO_W_DETECT_CYW43_CS_PIN);
