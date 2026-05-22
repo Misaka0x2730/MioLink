@@ -67,18 +67,24 @@ pico_board_cmake_set(PICO_CYW43_SUPPORTED, 1)
 /**
  * \brief ADC threshold (12-bit, 3.3 V reference) for inferring CYW43 presence on \ref PICO_VSYS_PIN.
  *
- * Detection samples GPIO29 with the RP2040 internal pull-up active (~50–80 kΩ to 3.3 V) after
- * closing the Pico W VSYS-divider MOSFET via \c WL_CS = 0:
- *   - **Pico W (CYW43 present):** only a 10 kΩ pull-down to GND remains on GPIO29.
- *     Divider 10 kΩ : 50–80 kΩ → V_adc ≈ 0.37–0.55 V → ~455–683 counts (≤ 0x2C0).
- *   - **Genuine Pico:** permanent 200 kΩ : 100 kΩ VSYS divider in parallel with the pull-up.
- *     KCL with VSYS = 2.5–5 V and R_pu = 50–80 kΩ → V_adc ≈ 1.96–2.56 V → ~2425–3175 counts (≥ 0x979).
- *   - **Clones / non-Pico boards without the divider:** GPIO29 floats, internal pull-up dominates
- *     → V_adc ≈ 3.3 V → ~4080 counts (≥ 0xFE0). Treated as Pico (no CYW43 init).
+ * Detection drives \c WL_CS (\ref PICO_W_DETECT_CYW43_CS_PIN) LOW and samples GPIO29 with the
+ * RP2040 internal pull-up active (~50–80 kΩ to 3.3 V). What separates the board variants at
+ * GPIO29:
+ *   - **Pico W (CYW43 present):** GPIO29 carries the CYW43 \c WL_CLK net with a 10 kΩ pull-down
+ *     to GND. That pull-down dominates the weak internal pull-up, holding GPIO29 well below 1 V
+ *     (ADC well below 0x600).
+ *   - **Genuine Pico:** the FET that gates the 200 kΩ / 100 kΩ VSYS divider stays OFF while the
+ *     GPIO29 pull-up is active (the pulled-up GPIO29 keeps the FET back-biased), so the divider
+ *     is disconnected from GPIO29. Only the internal pull-up acts, with a small bleed through
+ *     the FET body diode into the divider midpoint, so GPIO29 settles a few hundred mV below
+ *     the 3.3 V rail (ADC well above 0x600).
+ *   - **Clones / non-Pico boards without the divider+FET:** GPIO29 sees only the internal
+ *     pull-up and sits close to the 3.3 V rail (ADC well above 0x600). Treated as Pico (no
+ *     CYW43 init).
  *
- * Set near the midpoint of the Pico W cluster (max ~683) and the Pico/clone cluster (min ~2425),
- * giving ~600 counts (~0.5 V) of margin on each side against pull-up tolerance, ADC noise, and
- * VSYS variation. Below threshold → Pico W; at or above → Pico/clone.
+ * Exact ADC counts drift with chip-to-chip pull-up tolerance, VSYS, supply rail, and ADC noise,
+ * but the two clusters stay separated by ~2 V. 0x600 (1536, ~1.24 V) sits in the middle of that
+ * gap. Below threshold → Pico W; at or above → Pico/clone.
  */
 #define PICO_W_DETECT_ADC_THRESHOLD (0x600)
 
