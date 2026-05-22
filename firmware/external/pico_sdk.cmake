@@ -3,7 +3,9 @@
 #
 # Imported before project() so PICO_PLATFORM / PICO_BOARD propagate into the
 # toolchain selection. The rest of the vendored dependencies live in
-# external.cmake, which is included after pico_sdk_init().
+# external.cmake, which is included before pico_sdk_init() so that
+# PICO_TINYUSB_PATH and TINYUSB_OPT_OS are honoured when the SDK creates its
+# tinyusb_common_base target.
 # ============================================================================
 
 # Set Pico SDK path

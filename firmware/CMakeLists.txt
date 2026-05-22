@@ -51,11 +51,16 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/config)
 # Include boards header
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/boards)
 
+# Import the remaining vendored libraries (FreeRTOS, TinyUSB, Black Magic, SEGGER).
+# Must run before pico_sdk_init(): the SDK creates the tinyusb_common_base target
+# during pico_sdk_init() and freezes PICO_TINYUSB_PATH and CFG_TUSB_OS at that
+# point. external.cmake sets PICO_TINYUSB_PATH to the vendored TinyUSB copy and
+# TINYUSB_OPT_OS to OPT_OS_FREERTOS; if it ran later, the SDK would silently
+# fall back to its bundled lib/tinyusb and OPT_OS_PICO (non-blocking OSAL).
+include(${CMAKE_CURRENT_LIST_DIR}/external/external.cmake)
+
 # Initialize Pico SDK (must be after project)
 pico_sdk_init()
-
-# Import the remaining vendored libraries (FreeRTOS, TinyUSB, Black Magic, SEGGER).
-include(${CMAKE_CURRENT_LIST_DIR}/external/external.cmake)
 
 # ============================================================================
 # Create main executable target and configure common executable parameters
