@@ -108,7 +108,7 @@ bool traceswo_decode(const void *buf, uint16_t len, const bool flush, const bool
     }
 
     if (flush) {
-        if ((usb_get_config() == USB_CONFIG_STATE_CONFIGURED) && (gdb_serial_get_dtr() == USB_CDC_DTR_ASSERTED)) {
+        if ((usb_get_config() == USB_CONFIG_STATE_CONFIGURED) && (target_serial_get_dtr() == USB_CDC_DTR_ASSERTED)) {
             target_serial_send_to_usb(swo_decoder.buf, swo_decoder.buf_len, flush, true);
         }
         swo_decoder.buf_len = 0;
