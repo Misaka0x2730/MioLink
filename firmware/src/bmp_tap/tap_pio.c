@@ -185,7 +185,10 @@ uint32_t tap_pio_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer
 
 uint32_t tap_pio_set_sm_freq(PIO pio, uint32_t sm, uint32_t freq, uint32_t max_interface_freq)
 {
-    const uint32_t min_freq = (max_interface_freq >> 16); /* Max divider = 65536 */
+    uint32_t min_freq = (max_interface_freq >> 16); /* Max divider = 65536 */
+    if (min_freq == 0U) {
+        min_freq = 1U;
+    }
     const uint32_t max_freq = max_interface_freq;
 
     if (freq < min_freq) {
@@ -194,15 +197,17 @@ uint32_t tap_pio_set_sm_freq(PIO pio, uint32_t sm, uint32_t freq, uint32_t max_i
         freq = max_freq;
     }
 
+    assert(freq != 0U);
+
     uint32_t clkdiv_int = (max_interface_freq / freq);
     uint32_t clkdiv_frac = ((((uint64_t)max_interface_freq) << 8) / freq) & 0xFF;
 
-    if (clkdiv_int >= (((uint32_t)UINT16_MAX) + 1)) {
+    if (clkdiv_int > ((uint32_t)UINT16_MAX)) {
         clkdiv_int = 0;
         clkdiv_frac = 0;
     }
 
-    pio_sm_set_clkdiv_int_frac(pio, sm, clkdiv_int, clkdiv_frac);
+    pio_sm_set_clkdiv_int_frac8(pio, sm, clkdiv_int, clkdiv_frac);
     pio_sm_clkdiv_restart(pio, sm);
 
     return freq;
