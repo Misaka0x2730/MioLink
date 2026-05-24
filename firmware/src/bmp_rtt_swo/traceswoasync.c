@@ -48,7 +48,7 @@
  **********************************************************************************************************************/
 
 #define TRACESWO_UART_RX_INT_FIFO_LEVEL \
-    UART_BRIDGE_DEFAULT_RX_INT_FIFO_LEVEL /**< UART RX FIFO trigger level used in IRQ mode. */
+    (UART_BRIDGE_DEFAULT_RX_INT_FIFO_LEVEL) /**< UART RX FIFO trigger level used in IRQ mode. */
 
 #define TRACESWO_RX_DMA_TOTAL_BUFFERS_SIZE (16 * 1024) /**< Total RX DMA staging area, in bytes. */
 #define TRACESWO_RX_DMA_NUMBER_OF_BUFFERS  (32)        /**< Number of DMA ring buffers. */
@@ -56,7 +56,7 @@
     (TRACESWO_RX_DMA_TOTAL_BUFFERS_SIZE / TRACESWO_RX_DMA_NUMBER_OF_BUFFERS) /**< Single DMA buffer size, in bytes. */
 
 #define TRACESWO_RX_DMA_DROP_BUFFER_THRESHOLD \
-    UART_BRIDGE_DEFAULT_RX_DROP_THRESHOLD(TRACESWO_RX_DMA_NUMBER_OF_BUFFERS) /**< Drop threshold. */
+    (UART_BRIDGE_DEFAULT_RX_DROP_THRESHOLD(TRACESWO_RX_DMA_NUMBER_OF_BUFFERS)) /**< Drop threshold. */
 
 #if (TRACESWO_RX_DMA_NUMBER_OF_BUFFERS < 4)
 #error "TRACESWO_RX_DMA_NUMBER_OF_BUFFERS should be at least 4"

@@ -32,6 +32,7 @@
 #include "general.h"
 
 #include "platform.h"
+#include "target_serial.h"
 
 #include "tap_pio.h"
 #include "jtagtap.h"
@@ -150,6 +151,11 @@ static void jtagtap_cycle(bool tms, bool tdi, size_t clock_cycles);
  */
 void jtagtap_init(void)
 {
+    /* JTAG reuses TDI/TDO, which the target-serial bridge may currently drive as a UART.
+     * Force the bridge to drop those pins before we reconfigure them as PIO, otherwise the
+     * UART driver would keep stale ownership of GPIOs we are about to repurpose. */
+    target_serial_tap_acquire_tdi_tdo();
+
     tap_pio_disable_all_machines(TAP_PIO_SWD);
     tap_pio_disable_all_machines(TAP_PIO_JTAG);
 

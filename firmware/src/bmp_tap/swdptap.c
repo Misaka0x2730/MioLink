@@ -33,6 +33,7 @@
 
 #include "platform.h"
 #include "platform_swdtap.h"
+#include "target_serial.h"
 
 #include "tap_pio.h"
 #include "swd.h"
@@ -176,6 +177,26 @@ swd_proc_s swd_proc = {0}; /**< Black Magic SWD procedure vtable, populated by \
  **********************************************************************************************************************/
 
 /**
+ * \brief Resolve the SWD PIO program set for the active board.
+ *
+ * \return Pointer to the board-specific program table.
+ */
+static const swd_board_program_t *swdtap_get_board_programs(void);
+
+/**
+ * \brief Build a PIO command stream for a single seq-in/seq-out (with optional parity).
+ *
+ * \param[out] buffer       Destination buffer (must hold at least \ref TAP_PIO_DMA_BUF_SIZE words).
+ * \param[in]  clock_cycles Number of bits to shift (0 < cycles ≤ 32).
+ * \param[in]  data         Data word (for seq-out only).
+ * \param[in]  in           \c true for seq-in, \c false for seq-out.
+ * \param[in]  parity       Append parity handling sequence.
+ * \return Number of words written to \a buffer.
+ */
+static uint8_t swdtap_prepare_pio_seq(
+    uint32_t *buffer, uint32_t clock_cycles, uint32_t data, bool in, bool parity);
+
+/**
  * \brief SWD bare seq-in helper (no parity) — wired into \c swd_proc.seq_in.
  *
  * \param[in] clock_cycles Number of bits to shift in (≤ 32).
@@ -208,15 +229,23 @@ static void swdptap_seq_out(uint32_t tms_states, size_t clock_cycles);
  */
 static void swdptap_seq_out_parity(uint32_t tms_states, size_t clock_cycles);
 
+/**
+ * \brief Build a PIO command stream that performs a complete ADIv5 read/write transaction.
+ *
+ * \param[out] buffer    Destination buffer.
+ * \param[in]  request   ADIv5 packet request byte.
+ * \param[in]  data      Word to write (write transactions only).
+ * \param[in]  rnw       \c true for read, \c false for write.
+ * \param[in]  check_ack Insert the ACK-check program after the request.
+ * \return Number of words written to \a buffer.
+ */
+static uint8_t swdtap_adiv5_prepare_pio_seq(
+    uint32_t *buffer, uint8_t request, uint32_t data, bool rnw, bool check_ack);
+
 /**********************************************************************************************************************
  * Private Functions
  **********************************************************************************************************************/
 
-/**
- * \brief Resolve the SWD PIO program set for the active board.
- *
- * \return Pointer to the board-specific program table.
- */
 static const swd_board_program_t *swdtap_get_board_programs(void)
 {
     const swd_board_program_t *p_board_program = NULL;
@@ -249,16 +278,6 @@ static const swd_board_program_t *swdtap_get_board_programs(void)
     return p_board_program;
 }
 
-/**
- * \brief Build a PIO command stream for a single seq-in/seq-out (with optional parity).
- *
- * \param[out] buffer       Destination buffer (must hold at least \ref TAP_PIO_DMA_BUF_SIZE words).
- * \param[in]  clock_cycles Number of bits to shift (0 < cycles ≤ 32).
- * \param[in]  data         Data word (for seq-out only).
- * \param[in]  in           \c true for seq-in, \c false for seq-out.
- * \param[in]  parity       Append parity handling sequence.
- * \return Number of words written to \a buffer.
- */
 static uint8_t swdtap_prepare_pio_seq(
     uint32_t *buffer, const uint32_t clock_cycles, const uint32_t data, const bool in, const bool parity)
 {
@@ -380,16 +399,6 @@ static void swdptap_seq_out_parity(const uint32_t tms_states, const size_t clock
     pio_sm_clear_fifos(TAP_PIO_SWD, TAP_PIO_SM_SWD);
 }
 
-/**
- * \brief Build a PIO command stream that performs a complete ADIv5 read/write transaction.
- *
- * \param[out] buffer    Destination buffer.
- * \param[in]  request   ADIv5 packet request byte.
- * \param[in]  data      Word to write (write transactions only).
- * \param[in]  rnw       \c true for read, \c false for write.
- * \param[in]  check_ack Insert the ACK-check program after the request.
- * \return Number of words written to \a buffer.
- */
 static uint8_t swdtap_adiv5_prepare_pio_seq(
     uint32_t *buffer, const uint8_t request, const uint32_t data, const bool rnw, const bool check_ack)
 {
@@ -448,6 +457,10 @@ static uint8_t swdtap_adiv5_prepare_pio_seq(
  */
 void swdptap_init(void)
 {
+    /* SWD does not use TDI/TDO; release the JTAG-side lockout so the target-serial bridge
+     * can rebind TDI/TDO as a UART if the user has previously enabled UART-on-TDI/TDO. */
+    target_serial_tap_release_tdi_tdo();
+
     tap_pio_disable_all_machines(TAP_PIO_SWD);
     tap_pio_disable_all_machines(TAP_PIO_JTAG);
 

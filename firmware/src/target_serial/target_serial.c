@@ -55,7 +55,7 @@
  **********************************************************************************************************************/
 
 #define TARGET_SERIAL_UART_RX_INT_FIFO_LEVEL \
-    UART_BRIDGE_DEFAULT_RX_INT_FIFO_LEVEL /**< UART RX FIFO trigger level used in IRQ mode. */
+    (UART_BRIDGE_DEFAULT_RX_INT_FIFO_LEVEL) /**< UART RX FIFO trigger level used in IRQ mode. */
 
 #define TARGET_SERIAL_UART_DMA_RX_TOTAL_BUFFERS_SIZE (16 * 1024) /**< Total RX DMA staging area, in bytes. */
 #define TARGET_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS  (32)        /**< Number of DMA RX ring buffers. */
@@ -67,7 +67,7 @@
  * \brief Drop-buffer threshold for the target-serial RX DMA ring.
  */
 #define TARGET_SERIAL_UART_DMA_RX_DROP_BUFFER_THRESHOLD \
-    UART_BRIDGE_DEFAULT_RX_DROP_THRESHOLD(TARGET_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS)
+    (UART_BRIDGE_DEFAULT_RX_DROP_THRESHOLD(TARGET_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS))
 
 #if (TARGET_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS < 4)
 #error "TARGET_SERIAL_UART_DMA_RX_NUMBER_OF_BUFFERS should be at least 4"
@@ -130,6 +130,17 @@ static uart_bridge_ctx_t s_serial_ctx = {0}; /**< Bridge context for the target-
  * \c target_serial_thread on core 0; \c volatile forces a fresh load on the consumer side.
  */
 static volatile bool use_uart_on_tdi_tdo = false;
+
+/**
+ * \brief \c true while the JTAG TAP holds TDI/TDO; suppresses the TDI/TDO UART binding.
+ *
+ * Asserted by \ref target_serial_tap_acquire_tdi_tdo from \c jtagtap_init (core 1) and
+ * cleared by \ref target_serial_tap_release_tdi_tdo from \c swdptap_init.  Read by
+ * \c target_serial_thread (core 0) when computing the desired UART; while set, the bridge
+ * binds \c TARGET_SERIAL_UART_MAIN regardless of \ref use_uart_on_tdi_tdo so the JTAG PIO
+ * has exclusive ownership of the TDI/TDO GPIOs.
+ */
+static volatile bool tdi_tdo_held_by_tap = false;
 
 static TaskHandle_t usb_uart_task = NULL; /**< Handle of the target-serial worker FreeRTOS task. */
 
@@ -336,7 +347,8 @@ static void serial_update_config(cdc_line_coding_t *line_coding)
         data_bits = line_coding->data_bits;
     }
 
-    uart_inst_t *const desired_uart = use_uart_on_tdi_tdo ? TARGET_SERIAL_UART_TDI_TDO : TARGET_SERIAL_UART_MAIN;
+    uart_inst_t *const desired_uart =
+        ((use_uart_on_tdi_tdo) && (!tdi_tdo_held_by_tap)) ? TARGET_SERIAL_UART_TDI_TDO : TARGET_SERIAL_UART_MAIN;
 
     /* NO_FORCE: never evict the SWO owner; if it currently holds the contested UART
      * we will retry from the polling section of target_serial_thread.  The bridge
@@ -408,7 +420,8 @@ static void target_serial_thread(void *params)
             }
         }
 
-        uart_inst_t *const desired_uart = use_uart_on_tdi_tdo ? TARGET_SERIAL_UART_TDI_TDO : TARGET_SERIAL_UART_MAIN;
+        uart_inst_t *const desired_uart =
+            ((use_uart_on_tdi_tdo) && (!tdi_tdo_held_by_tap)) ? TARGET_SERIAL_UART_TDI_TDO : TARGET_SERIAL_UART_MAIN;
         if (s_serial_ctx.uart != desired_uart) {
             cdc_line_coding_t line_coding = {0};
             tud_cdc_n_get_line_coding(USB_CDC_TARGET_SERIAL, &line_coding);
@@ -486,6 +499,39 @@ void target_serial_use_uart_on_tdi_tdo(const bool new_state)
 bool target_serial_uart_on_tdi_tdo_is_used(void)
 {
     return use_uart_on_tdi_tdo;
+}
+
+void target_serial_tap_acquire_tdi_tdo(void)
+{
+    /* Assert the lockout first so any concurrent serial-task iteration that re-evaluates
+     * desired_uart after this point will resolve to MAIN, preventing it from re-claiming
+     * TDI/TDO once we drop our hold below. */
+    tdi_tdo_held_by_tap = true;
+
+    /* Detach UART hardware + return TDI/TDO GPIOs to SIO only if we still hold them.
+     * If the serial task has already swapped us to MAIN, the TDI/TDO slot is unowned and
+     * deinit would mistakenly tear down MAIN.  uart_bridge_get_owner takes the bridge
+     * mutex, which also acts as a cross-core memory barrier publishing the lockout write
+     * above before any subsequent claim by the serial task. */
+    if (uart_bridge_get_owner(TARGET_SERIAL_UART_TDI_TDO) == &s_serial_ctx) {
+        uart_bridge_deinit_uart(&s_serial_ctx);
+    }
+
+    /* Wake the serial task so it picks up MAIN without waiting for the polling timeout. */
+    if (usb_uart_task != NULL) {
+        xTaskNotify(usb_uart_task, USB_CDC_NOTIF_DUMMY, eSetBits);
+    }
+}
+
+void target_serial_tap_release_tdi_tdo(void)
+{
+    tdi_tdo_held_by_tap = false;
+
+    /* If the user previously enabled UART-on-TDI/TDO the polling loop will see the
+     * lockout drop and rebind TDI/TDO; a notify just shortens the latency. */
+    if (usb_uart_task != NULL) {
+        xTaskNotify(usb_uart_task, USB_CDC_NOTIF_DUMMY, eSetBits);
+    }
 }
 
 void target_serial_init(void)

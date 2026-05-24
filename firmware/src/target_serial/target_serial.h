@@ -95,6 +95,27 @@ void target_serial_use_uart_on_tdi_tdo(const bool new_state);
 bool target_serial_uart_on_tdi_tdo_is_used(void);
 
 /**
+ * \brief Surrender the TDI/TDO UART so that the JTAG TAP can repurpose the pins.
+ *
+ * Asserts a sticky lockout that suppresses the user-visible UART-on-TDI/TDO selection until
+ * \ref target_serial_tap_release_tdi_tdo clears it.  If the bridge currently owns the TDI/TDO
+ * UART, the call synchronously detaches the UART peripheral and returns the GPIOs to SIO so
+ * that JTAG can reassign them to PIO immediately on return.  Intended to be invoked from
+ * \c jtagtap_init before it touches TDI/TDO GPIOs.
+ */
+void target_serial_tap_acquire_tdi_tdo(void);
+
+/**
+ * \brief Release the TDI/TDO UART lockout previously asserted by \ref target_serial_tap_acquire_tdi_tdo.
+ *
+ * After this call, if the user has enabled UART-on-TDI/TDO via
+ * \ref target_serial_use_uart_on_tdi_tdo, the serial task will rebind TDI/TDO at its next
+ * polling iteration.  Intended to be invoked from \c swdptap_init when SWD reclaims control
+ * of the TAP pins (SWD does not touch TDI/TDO, so they become available for UART again).
+ */
+void target_serial_tap_release_tdi_tdo(void);
+
+/**
  * \brief Start FreeRTOS task(s) and DMA for USB↔UART bridging.
  */
 void target_serial_init(void);
