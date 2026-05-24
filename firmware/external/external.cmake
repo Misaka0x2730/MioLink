@@ -48,7 +48,7 @@ target_compile_definitions(blackmagic INTERFACE
     ${BMP_TARGET_DEFS}
 )
 
-# BlackMagic sources
+# BlackMagic sources 
 target_sources(blackmagic INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/blackmagic/src/command.c
     ${CMAKE_CURRENT_LIST_DIR}/blackmagic/src/exception.c
@@ -56,7 +56,6 @@ target_sources(blackmagic INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/blackmagic/src/gdb_packet.c
     ${CMAKE_CURRENT_LIST_DIR}/blackmagic/src/hex_utils.c
     ${CMAKE_CURRENT_LIST_DIR}/blackmagic/src/maths_utils.c
-    ${CMAKE_CURRENT_LIST_DIR}/blackmagic/src/morse.c
     ${CMAKE_CURRENT_LIST_DIR}/blackmagic/src/remote.c
     ${CMAKE_CURRENT_LIST_DIR}/blackmagic/src/rtt.c
     ${CMAKE_CURRENT_LIST_DIR}/blackmagic/src/timing.c
