@@ -32,6 +32,22 @@
 #include <stdbool.h>
 
 /**********************************************************************************************************************
+ * Public Definitions
+ **********************************************************************************************************************/
+
+/**
+ * \brief Maximum number of UTF-16 characters carried by a single USB string descriptor.
+ *
+ * The descriptor's \c bLength field is one byte and includes the 2-byte
+ * (\c bLength + \c bDescriptorType) header. Each UTF-16 character takes 2 bytes, so the largest
+ * descriptor that still fits is \c (255 - 2) / 2 = 126 characters. Buffers that back string
+ * descriptors (the runtime UTF-16 scratch buffer, the ASCII \c board_ident source) should be
+ * sized against this constant so that nothing produced by \c tud_descriptor_string_cb is
+ * silently truncated.
+ */
+#define USB_STRING_DESCRIPTOR_MAX_CHARS (126U)
+
+/**********************************************************************************************************************
  * Public Types
  **********************************************************************************************************************/
 

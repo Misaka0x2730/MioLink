@@ -33,6 +33,7 @@
 #include "platform_boards.h"
 #include "platform_periph.h"
 #include "platform_threads.h"
+#include "usb.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -84,6 +85,16 @@
 #define SWO_ENCODING            (SWO_ENCODING_UART) /**< Active SWO line code (NRZ UART on RP2040) */
 #define SWO_ENDPOINT            (0x83)              /**< USB endpoint for decoded SWO stream */
 #endif
+
+/**
+ * \brief Storage length (bytes) for the composite ASCII board identification string.
+ *
+ * Sized to \ref USB_STRING_DESCRIPTOR_MAX_CHARS payload bytes plus one slot for the NUL
+ * written by \c snprintf: the iProduct USB string descriptor cannot carry more than
+ * \ref USB_STRING_DESCRIPTOR_MAX_CHARS characters, so any ASCII payload past that limit
+ * would be silently truncated by \c tud_descriptor_string_cb anyway.
+ */
+#define BOARD_IDENT_LENGTH (USB_STRING_DESCRIPTOR_MAX_CHARS + 1U)
 
 #define SET_RUN_STATE(state)   running_status = (state)          /**< Target run-state hint for UI. */
 #define SET_IDLE_STATE(state)  platform_set_idle_state((state))  /**< Idle LED / morse path. */
@@ -156,6 +167,8 @@ bool platform_target_is_power_ok(void);
 
 /**
  * \brief Cached device type from board ID GPIOs / compile-time selection.
+ *
+ * \return Cached \c platform_device_type_t resolved at boot or by the last call to \c platform_update_hwtype()
  */
 platform_device_type_t platform_hwtype(void);
 

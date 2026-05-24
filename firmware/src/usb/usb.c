@@ -140,11 +140,10 @@
 /**
  * \brief Scratch buffer length in \c uint16_t words for the runtime UTF-16 string descriptor.
  *
- * One word holds the \c bLength / \c bDescriptorType header; the remaining words hold characters.
- * Total size in bytes equals twice this value and must fit the 1-byte USB \c bLength field
- * (\c <=255 bytes).
+ * One word holds the \c bLength / \c bDescriptorType header; the remaining
+ * \ref USB_STRING_DESCRIPTOR_MAX_CHARS words hold UTF-16 characters.
  */
-#define USB_STRING_DESCRIPTOR_BUF_LEN (127)
+#define USB_STRING_DESCRIPTOR_BUF_LEN (USB_STRING_DESCRIPTOR_MAX_CHARS + 1U)
 
 /**********************************************************************************************************************
  * Private Types

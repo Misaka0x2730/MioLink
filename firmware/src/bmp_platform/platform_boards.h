@@ -66,7 +66,7 @@
 
 /**
  * \brief True when building for any MioLink board.
- * */
+ */
 #define PLATFORM_IS_MIOLINK_BOARD ((PLATFORM_AUTO_DETECT) || (PLATFORM_BOARD_MIOLINK) || (PLATFORM_BOARD_MIOLINK_PICO))
 
 /**
@@ -92,8 +92,6 @@
 #endif
 
 #define PLATFORM_IDENT "(Unknown MioLink) " /**< Default USB string fragment before \c platform_make_board_ident() */
-
-#define BOARD_IDENT_LENGTH (256U) /**< Max length for composite board identification string */
 
 #define PLATFORM_MIOLINK_REV_A (1) /**< Hardware revision A discriminator. */
 #define PLATFORM_MIOLINK_REV_B (2) /**< Hardware revision B discriminator. */
