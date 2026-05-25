@@ -477,6 +477,8 @@ static void uart_bridge_apply_binding_locked(uart_bridge_ctx_t *ctx, const uart_
         }
     }
 
+    gpio_set_pulls((uint)binding->pins[UART_BRIDGE_BINDING_PIN_RX].gpio, true, false);
+
     /* Publish ctx into the dispatcher slot before the NVIC line is enabled so an
      * IRQ that latches on the rising edge of irq_set_enabled cannot dispatch with
      * a stale (or NULL) ctx. */
@@ -545,15 +547,15 @@ static BaseType_t uart_bridge_rx_dma_start_receiving(uart_bridge_ctx_t *ctx)
 
     uart_ex_set_rx_and_timeout_irq_enabled(ctx->uart, false, false);
     uart_ex_clear_rx_and_rx_timeout_irq_flags(ctx->uart);
-    uart_ex_set_dma_req_enabled(ctx->uart, true, ctx->cfg->tx_buffer != NULL);
-
-    dma_ex_set_channel_enabled((uint32_t)ctx->rx_dma_channel, true, false);
 
     dma_irqn_acknowledge_channel(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->rx_dma_channel);
     dma_irqn_set_channel_enabled(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->rx_dma_channel, true);
 
     BaseType_t higher_priority_task_woken = pdFALSE;
     xTimerResetFromISR(ctx->rx_timeout_timer, &higher_priority_task_woken);
+
+    uart_ex_set_dma_req_enabled(ctx->uart, true, ctx->cfg->tx_buffer != NULL);
+
     return higher_priority_task_woken;
 }
 
@@ -795,7 +797,8 @@ void uart_bridge_configure_uart(
 
         ctx->rx_use_dma = true;
 
-        dma_ex_set_channel_enabled((uint32_t)ctx->rx_dma_channel, false, false);
+        uart_ex_set_dma_req_enabled(ctx->uart, false, ctx->cfg->tx_buffer != NULL);
+        dma_ex_set_channel_enabled((uint32_t)ctx->rx_dma_channel, true, false);
         dma_irqn_set_channel_enabled(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->rx_dma_channel, true);
 
         dma_channel_set_read_addr((uint)ctx->rx_dma_ctrl_channel, (void *)ctx->cfg->rx_ctrl_block_info, true);
