@@ -130,6 +130,10 @@
 
 #define configUSE_CORE_AFFINITY 1
 #else
+/* RP2040/RP2350 specific */
+#define configSUPPORT_PICO_SYNC_INTEROP 0
+#define configSUPPORT_PICO_TIME_INTEROP 0
+
 #define configUSE_CORE_AFFINITY 0
 #endif
 
