@@ -91,8 +91,8 @@ static void bmp_poll_loop(void)
     while ((gdb_target_running) && (cur_target)) {
         gdb_poll_target();
 
-        // Check again, as `gdb_poll_target()` may
-        // alter these variables.
+        /* Check again, as `gdb_poll_target()` may
+         * alter these variables. */
         if ((!gdb_target_running) || (!cur_target)) {
             break;
         }
@@ -109,7 +109,7 @@ static void bmp_poll_loop(void)
 
     SET_IDLE_STATE(true);
     const gdb_packet_s *const packet = gdb_packet_receive();
-    // If port closed and target detached, stay idle
+    /* If port closed and target detached, stay idle */
     if ((packet->data[0] != '\x04') || (cur_target)) {
         SET_IDLE_STATE(false);
     }

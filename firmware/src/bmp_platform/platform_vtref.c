@@ -149,19 +149,19 @@ void platform_vtref_init(void)
             adc_target_voltage_dma_chan = dma_claim_unused_channel(true);
             dma_channel_config adc_dma_config = dma_channel_get_default_config(adc_target_voltage_dma_chan);
 
-            // Reading from constant address, writing to incrementing byte addresses
+            /* Reading from constant address, writing to incrementing byte addresses */
             channel_config_set_transfer_data_size(&adc_dma_config, DMA_SIZE_8);
             channel_config_set_read_increment(&adc_dma_config, false);
             channel_config_set_write_increment(&adc_dma_config, true);
 
-            // Pace transfers based on availability of ADC samples
+            /* Pace transfers based on availability of ADC samples */
             channel_config_set_dreq(&adc_dma_config, DREQ_ADC);
 
             dma_channel_configure(adc_target_voltage_dma_chan, &adc_dma_config,
-                adc_target_voltage_buf,         // dst
-                &adc_hw->fifo,                  // src
-                sizeof(adc_target_voltage_buf), // transfer count
-                true                            // start immediately
+                adc_target_voltage_buf,         /* dst */
+                &adc_hw->fifo,                  /* src */
+                sizeof(adc_target_voltage_buf), /* transfer count */
+                true                            /* start immediately */
             );
 
             dma_channel_acknowledge_irq1((uint)adc_target_voltage_dma_chan);
