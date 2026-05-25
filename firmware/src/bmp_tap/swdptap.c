@@ -314,7 +314,7 @@ static uint8_t swdtap_prepare_pio_seq(
         } else {
             const bool parity_value = (calculate_odd_parity(data) != 0);
 
-            if (clock_cycles <= (TAP_PIO_MAX_TICKS_PER_TRANSFER - 1)) {
+            if (clock_cycles < TAP_PIO_MAX_TICKS_PER_TRANSFER) {
                 uint32_t data_value = data;
                 data_value |= (parity_value ? (1UL << clock_cycles) : 0);
                 buffer[pos++] = data_value;
@@ -338,7 +338,7 @@ static uint32_t swdptap_seq_in(const size_t clock_cycles)
     const uint8_t data_amount = swdtap_prepare_pio_seq(pio_buffer, clock_cycles, 0, true, false);
 
     tap_pio_dma_send_uint32(TAP_PIO_SWD, TAP_PIO_SM_SWD, pio_buffer, data_amount);
-    const uint32_t value = (pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) >> (32U - clock_cycles));
+    const uint32_t value = (pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) >> (TAP_PIO_MAX_TICKS_PER_TRANSFER - clock_cycles));
     tap_pio_wait_for_tx_stall(TAP_PIO_SWD, TAP_PIO_SM_SWD);
 
     pio_sm_clear_fifos(TAP_PIO_SWD, TAP_PIO_SM_SWD);
@@ -355,13 +355,17 @@ static bool swdptap_seq_in_parity(uint32_t *ret, const size_t clock_cycles)
     const uint8_t data_amount = swdtap_prepare_pio_seq(pio_buffer, clock_cycles, 0, true, true);
 
     tap_pio_dma_send_uint32(TAP_PIO_SWD, TAP_PIO_SM_SWD, pio_buffer, data_amount);
-    const uint32_t value = (pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) >> (32U - clock_cycles));
 
+    uint32_t value = 0;
     bool parity_read = false;
+
     if (clock_cycles == TAP_PIO_MAX_TICKS_PER_TRANSFER) {
+        value = pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD);
         parity_read = (pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) != 0);
     } else {
-        parity_read = ((value & (1UL << clock_cycles)) != 0);
+        const uint32_t packed = pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) >> (TAP_PIO_MAX_TICKS_PER_TRANSFER - clock_cycles - 1U);
+        parity_read = ((packed & (1UL << clock_cycles)) != 0);
+        value = packed & ((1UL << clock_cycles) - 1U);
     }
 
     tap_pio_wait_for_tx_stall(TAP_PIO_SWD, TAP_PIO_SM_SWD);
