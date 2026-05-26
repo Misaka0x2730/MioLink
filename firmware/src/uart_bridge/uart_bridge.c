@@ -132,6 +132,14 @@ _Static_assert((UART_EX_FIFO_DEPTH / 2U) >= 1U, "UART_EX_FIFO_DEPTH too small fo
 _Static_assert(((UART_EX_FIFO_DEPTH * 3U) / 4U) >= 1U, "UART_EX_FIFO_DEPTH too small for LEVEL_3_4 trigger");
 _Static_assert(((UART_EX_FIFO_DEPTH * 7U) / 8U) >= 1U, "UART_EX_FIFO_DEPTH too small for LEVEL_7_8 trigger");
 
+/* rx_dma_buffer_full_mask is a uint32_t bitmap with one bit per RX slot, mutated through
+ * Atomic_OR_u32 / Atomic_AND_u32. The DMA paths use (1UL << buffer_index) shifts whose
+ * index can grow up to rx_buffer_count - 1; bounding the maximum at 32 keeps every shift
+ * well-defined and the mask wide enough to hold all bits. Raising this requires a wider
+ * mask plus a matching atomic primitive. */
+_Static_assert(UART_BRIDGE_RX_BUFFER_COUNT_MAX <= 32U,
+    "UART_BRIDGE_RX_BUFFER_COUNT_MAX must fit in the uint32_t rx_dma_buffer_full_mask");
+
 /**
  * \brief UART ownership table.
  *
@@ -386,16 +394,16 @@ static const irq_handler_t s_uart_bridge_isrs[NUM_UARTS] = {
 
 static void uart_bridge_lock(void)
 {
-    if (s_bridge_mutex != NULL) {
-        xSemaphoreTake(s_bridge_mutex, portMAX_DELAY);
-    }
+    assert(s_bridge_mutex != NULL);
+
+    xSemaphoreTake(s_bridge_mutex, portMAX_DELAY);
 }
 
 static void uart_bridge_unlock(void)
 {
-    if (s_bridge_mutex != NULL) {
-        xSemaphoreGive(s_bridge_mutex);
-    }
+    assert(s_bridge_mutex != NULL);
+
+    xSemaphoreGive(s_bridge_mutex);
 }
 
 static void uart_bridge_register_ctx(uart_bridge_ctx_t *ctx)
@@ -487,7 +495,10 @@ static void uart_bridge_apply_binding_locked(uart_bridge_ctx_t *ctx, const uart_
         }
     }
 
-    gpio_set_pulls((uint)binding->pins[UART_BRIDGE_BINDING_PIN_RX].gpio, true, false);
+    const int rx_gpio = binding->pins[UART_BRIDGE_BINDING_PIN_RX].gpio;
+    if (rx_gpio >= 0) {
+        gpio_set_pulls((uint)rx_gpio, true, false);
+    }
 
     /* Publish ctx into the dispatcher slot before the NVIC line is enabled so an
      * IRQ that latches on the rising edge of irq_set_enabled cannot dispatch with
@@ -922,9 +933,24 @@ void uart_bridge_rx_dma_finish_receiving(uart_bridge_ctx_t *ctx)
 {
     assert(ctx->rx_ongoing != false);
 
+    /* Stop the UART from raising new RX DREQs and tear down the ctrl side of the chain so
+     * the data channel cannot loop back into a fresh buffer behind our backs. */
     uart_ex_set_dma_req_enabled(ctx->uart, false, ctx->cfg->tx_buffer != NULL);
-
     dma_ex_channel_abort_and_disable_irq((uint32_t)ctx->rx_dma_ctrl_channel, UART_BRIDGE_DMA_IRQ_INDEX);
+
+    /* Mask the data-channel completion IRQ in the dispatcher BEFORE we snapshot
+     * rx_dma_current_buffer / trans_count: otherwise a late completion firing between the
+     * ctrl abort and our reads could still advance rx_dma_current_buffer and OR a new bit
+     * into rx_dma_buffer_full_mask, racing the local current_buffer copy below. The data
+     * channel itself is left running here so dma_ex_get_trans_count can still observe the
+     * residual byte count; the abort happens further down. */
+    dma_irqn_set_channel_enabled(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->rx_dma_channel, false);
+
+    /* Brief portENTER_CRITICAL window flushes any DMA-dispatcher instance still running on
+     * the other core (the ISR takes the same FreeRTOS spinlock via xTaskNotifyFromISR), so
+     * by the time we exit no in-flight ISR can still mutate rx_dma_current_buffer. */
+    portENTER_CRITICAL();
+    portEXIT_CRITICAL();
 
     const uint32_t current_buffer = ctx->rx_dma_current_buffer;
 
