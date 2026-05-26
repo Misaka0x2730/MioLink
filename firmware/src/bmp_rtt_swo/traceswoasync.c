@@ -363,6 +363,7 @@ void traceswo_task_init(void)
      * so the line stops driving when SWO takes over \c uart0 from a prior
      * target-serial TDI/TDO session. */
     const platform_target_pins_t *const target_pins = platform_get_target_pins();
+    assert(target_pins != NULL);
 
     s_trace_bindings[TRACE_BINDING_IDX_SWO].pins[UART_BRIDGE_BINDING_PIN_TX].gpio = (int)target_pins->tdo;
     s_trace_bindings[TRACE_BINDING_IDX_SWO].pins[UART_BRIDGE_BINDING_PIN_RX].gpio = (int)target_pins->tdi;

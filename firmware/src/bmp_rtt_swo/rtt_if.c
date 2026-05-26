@@ -107,10 +107,17 @@ inline static uint32_t recv_bytes_free(void)
      * The fence pairs with the __dmb() the consumer issues before updating tail in
      * \ref rtt_getchar, so a tail advance becomes visible here without an extra wait. */
     __dmb();
-    if (s_rtt_recv.tail <= s_rtt_recv.head) {
-        return RTT_DOWN_BUF_SIZE - s_rtt_recv.head + s_rtt_recv.tail - 1U;
+    /* Snapshot both cursors into locals so the branch decision and the byte-count
+     * computation observe the exact same (head, tail) pair; without this, tail could
+     * advance between the two volatile reads and the second formula would return a
+     * value larger than RTT_DOWN_BUF_SIZE - 1, breaking the rtt_flag_skip drop
+     * heuristic. */
+    const uint32_t tail = s_rtt_recv.tail;
+    const uint32_t head = s_rtt_recv.head;
+    if (tail <= head) {
+        return RTT_DOWN_BUF_SIZE - head + tail - 1U;
     }
-    return s_rtt_recv.tail - s_rtt_recv.head - 1U;
+    return tail - head - 1U;
 }
 
 /**********************************************************************************************************************

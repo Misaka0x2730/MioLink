@@ -310,9 +310,11 @@ void platform_update_hwtype(void)
             busy_wait_us_32(PLATFORM_PICO_W_DETECT_ADC_SETTLE_US);
             const uint16_t adc_result = adc_read();
 
+            gpio_pull_up(PICO_W_DETECT_CYW43_CS_PIN);
             gpio_init(PICO_W_DETECT_CYW43_CS_PIN);
+
+            gpio_pull_down(PICO_VSYS_PIN);
             gpio_init(PICO_VSYS_PIN);
-            gpio_disable_pulls(PICO_VSYS_PIN);
 
             if (adc_result < PICO_W_DETECT_ADC_THRESHOLD) {
                 const int cyw43_init_result = cyw43_arch_init();
@@ -335,8 +337,6 @@ void platform_update_hwtype(void)
             } else {
                 device_type = PLATFORM_DEVICE_TYPE_MIOLINK_PICO;
             }
-
-            gpio_disable_pulls(MIOLINK_TYPE_PIN_0);
         }
     }
 #elif PLATFORM_PICO_W_BOARD
@@ -431,14 +431,17 @@ const platform_led_pins_t *platform_get_led_pins(void)
     switch (device_type) {
 #if PLATFORM_AUTO_DETECT || PLATFORM_BOARD_MIOLINK
     case PLATFORM_DEVICE_TYPE_MIOLINK:
-        if (platform_hwversion() == PLATFORM_MIOLINK_REV_A) {
+    {
+        const int hw_version = platform_hwversion();
+        if (hw_version == PLATFORM_MIOLINK_REV_A) {
             p_pins = &miolink_rev_a_led_pins;
-        } else if (platform_hwversion() == PLATFORM_MIOLINK_REV_B) {
+        } else if (hw_version == PLATFORM_MIOLINK_REV_B) {
             p_pins = &miolink_rev_b_led_pins;
         } else {
             assert(false);
         }
         break;
+    }
 #endif
 
 #if PLATFORM_AUTO_DETECT || PLATFORM_BOARD_MIOLINK_PICO
@@ -474,12 +477,17 @@ const platform_vtref_info_t *platform_get_vtref_info(void)
     switch (device_type) {
 #if PLATFORM_AUTO_DETECT || PLATFORM_BOARD_MIOLINK
     case PLATFORM_DEVICE_TYPE_MIOLINK:
-        if (platform_hwversion() == PLATFORM_MIOLINK_REV_A) {
+    {
+        const int hw_version = platform_hwversion();
+        if (hw_version == PLATFORM_MIOLINK_REV_A) {
             p_vtref_info = &miolink_rev_a_vtref_info;
-        } else {
+        } else if (hw_version == PLATFORM_MIOLINK_REV_B) {
             p_vtref_info = &miolink_rev_b_vtref_info;
+        } else {
+            assert(false);
         }
         break;
+    }
 #endif
 
 #if PLATFORM_AUTO_DETECT || PLATFORM_BOARD_MIOLINK_PICO

@@ -83,6 +83,29 @@
  */
 #define SWD_ADIV5_WRITE_DATA_PHASE_WORDS (4U)
 
+/**
+ * \brief Extract the 3-bit SWD ACK from the 32-bit RX FIFO word produced by the SWD PIO.
+ *
+ * The SM left-justifies the response inside its ISR (autopush MSB-first with 32-bit threshold),
+ * so the ACK lives in the top \ref SWD_ACK_BITS bits — i.e. \c bits[31:29] in the FIFO word.
+ *
+ * \param[in] fifo_word 32-bit word pulled from the SWD PIO RX FIFO.
+ */
+#define SWD_ACK_FROM_FIFO_WORD(fifo_word) \
+    ((uint8_t)(((fifo_word) >> (SWD_DATA_BITS - SWD_ACK_BITS)) & ((1U << SWD_ACK_BITS) - 1U)))
+
+/**
+ * \brief Encode the expected SWD ACK as the 32-bit comparator the \c swd_adiv5_check_ack PIO
+ *        program loads into its Y register.
+ *
+ * Inverse of \ref SWD_ACK_FROM_FIFO_WORD: the SM compares the captured response (already
+ * left-justified inside its ISR) against this comparator, so the expected ACK must be
+ * shifted to the same top \ref SWD_ACK_BITS bits of a 32-bit word.
+ *
+ * \param[in] ack Three-bit SWD ACK value (e.g. \ref SWDP_ACK_OK).
+ */
+#define SWD_ACK_TO_PIO_X(ack) ((uint32_t)(ack) << (SWD_DATA_BITS - SWD_ACK_BITS))
+
 /**********************************************************************************************************************
  * Private Types
  **********************************************************************************************************************/
@@ -254,12 +277,17 @@ static const swd_board_program_t *swdtap_get_board_programs(void)
 
     switch (device_type) {
     case PLATFORM_DEVICE_TYPE_MIOLINK:
-        if (platform_hwversion() == PLATFORM_MIOLINK_REV_A) {
+    {
+        const int platform_hw_version = platform_hwversion();
+        if (platform_hw_version == PLATFORM_MIOLINK_REV_A) {
             p_board_program = &miolink_rev_a_programs;
-        } else {
+        } else if (platform_hw_version == PLATFORM_MIOLINK_REV_B) {
             p_board_program = &miolink_rev_b_programs;
+        } else {
+            assert(false);
         }
         break;
+    }
 
     case PLATFORM_DEVICE_TYPE_MIOLINK_PICO:
         p_board_program = &miolink_pico_programs;
@@ -274,6 +302,8 @@ static const swd_board_program_t *swdtap_get_board_programs(void)
         assert(false);
         break;
     }
+
+    assert(p_board_program != NULL);
 
     return p_board_program;
 }
@@ -338,7 +368,8 @@ static uint32_t swdptap_seq_in(const size_t clock_cycles)
     const uint8_t data_amount = swdtap_prepare_pio_seq(pio_buffer, clock_cycles, 0, true, false);
 
     tap_pio_dma_send_uint32(TAP_PIO_SWD, TAP_PIO_SM_SWD, pio_buffer, data_amount);
-    const uint32_t value = (pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) >> (TAP_PIO_MAX_TICKS_PER_TRANSFER - clock_cycles));
+    const uint32_t value =
+        (pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) >> (TAP_PIO_MAX_TICKS_PER_TRANSFER - clock_cycles));
     tap_pio_wait_for_tx_stall(TAP_PIO_SWD, TAP_PIO_SM_SWD);
 
     pio_sm_clear_fifos(TAP_PIO_SWD, TAP_PIO_SM_SWD);
@@ -363,7 +394,8 @@ static bool swdptap_seq_in_parity(uint32_t *ret, const size_t clock_cycles)
         value = pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD);
         parity_read = (pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) != 0);
     } else {
-        const uint32_t packed = pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) >> (TAP_PIO_MAX_TICKS_PER_TRANSFER - clock_cycles - 1U);
+        const uint32_t packed =
+            pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) >> (TAP_PIO_MAX_TICKS_PER_TRANSFER - clock_cycles - 1U);
         parity_read = ((packed & (1UL << clock_cycles)) != 0);
         value = packed & ((1UL << clock_cycles) - 1U);
     }
@@ -427,7 +459,7 @@ static uint8_t swdtap_adiv5_prepare_pio_seq(
 
     if (check_ack) {
         buffer[pos++] = (uint32_t)(p_board_programs->swd_adiv5_check_ack->origin);
-        buffer[pos++] = (SWDP_ACK_OK << (SWD_DATA_BITS - SWD_ACK_BITS));
+        buffer[pos++] = SWD_ACK_TO_PIO_X(SWDP_ACK_OK);
 
         if (rnw) {
             buffer[pos++] = SWD_ADIV5_READ_DATA_PHASE_WORDS - 1;
@@ -474,6 +506,7 @@ void swdptap_init(void)
     tap_pio_disable_all_machines(TAP_PIO_JTAG);
 
     const platform_target_pins_t *target_pins = platform_get_target_pins();
+    assert(target_pins != NULL);
 
     uint32_t tms_dir_mask = 0;
     if (target_pins->tms_dir != PIN_NOT_CONNECTED) {
@@ -591,7 +624,7 @@ uint8_t swdtap_adiv5_write_no_check(const uint8_t request, const uint32_t data)
     const uint8_t data_amount = swdtap_adiv5_prepare_pio_seq(pio_buffer, request, data, false, false);
 
     tap_pio_dma_send_uint32(TAP_PIO_SWD, TAP_PIO_SM_SWD, pio_buffer, data_amount);
-    const uint8_t ack = (uint8_t)((pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) >> 29) & 0x7);
+    const uint8_t ack = SWD_ACK_FROM_FIFO_WORD(pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD));
     tap_pio_wait_for_tx_stall(TAP_PIO_SWD, TAP_PIO_SM_SWD);
 
     pio_sm_clear_fifos(TAP_PIO_SWD, TAP_PIO_SM_SWD);
@@ -607,7 +640,7 @@ uint8_t swdtap_adiv5_read_no_check(const uint8_t request, uint32_t *data)
     const uint8_t data_amount = swdtap_adiv5_prepare_pio_seq(pio_buffer, request, 0, true, false);
 
     tap_pio_dma_send_uint32(TAP_PIO_SWD, TAP_PIO_SM_SWD, pio_buffer, data_amount);
-    const uint8_t ack = (uint8_t)((pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) >> 29) & 0x7);
+    const uint8_t ack = SWD_ACK_FROM_FIFO_WORD(pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD));
     *data = pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD);
     pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD);
     tap_pio_wait_for_tx_stall(TAP_PIO_SWD, TAP_PIO_SM_SWD);
@@ -623,7 +656,7 @@ uint8_t swdtap_adiv5_write_check(const uint8_t request, const uint32_t data)
     const uint8_t data_amount = swdtap_adiv5_prepare_pio_seq(pio_buffer, request, data, false, true);
 
     tap_pio_dma_send_uint32(TAP_PIO_SWD, TAP_PIO_SM_SWD, pio_buffer, data_amount);
-    const uint8_t ack = (uint8_t)((pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) >> 29) & 0x7);
+    const uint8_t ack = SWD_ACK_FROM_FIFO_WORD(pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD));
     tap_pio_wait_for_tx_stall(TAP_PIO_SWD, TAP_PIO_SM_SWD);
 
     pio_sm_clear_fifos(TAP_PIO_SWD, TAP_PIO_SM_SWD);
@@ -644,7 +677,7 @@ uint8_t swdtap_adiv5_read_check(const uint8_t request, uint32_t *data, bool *par
     const uint8_t data_amount = swdtap_adiv5_prepare_pio_seq(pio_buffer, request, 0, true, true);
 
     tap_pio_dma_send_uint32(TAP_PIO_SWD, TAP_PIO_SM_SWD, pio_buffer, data_amount);
-    const uint8_t ack = (uint8_t)((pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD) >> 29) & 0x7);
+    const uint8_t ack = SWD_ACK_FROM_FIFO_WORD(pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD));
 
     if (ack == SWDP_ACK_OK) {
         *data = pio_sm_get_blocking(TAP_PIO_SWD, TAP_PIO_SM_SWD);

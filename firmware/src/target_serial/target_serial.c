@@ -450,7 +450,7 @@ void target_serial_update_led(void)
     }
 }
 
-uint16_t target_serial_get_available(void)
+uint32_t target_serial_get_available(void)
 {
     return tud_cdc_n_write_available(USB_CDC_TARGET_SERIAL);
 }
@@ -540,6 +540,7 @@ void target_serial_init(void)
      * task can call \ref uart_bridge_try_claim.  The bindings array is treated as
      * read-only by the bridge after this point. */
     const platform_target_pins_t *const target_pins = platform_get_target_pins();
+    assert(target_pins != NULL);
 
     s_serial_bindings[SERIAL_BINDING_MAIN].pins[UART_BRIDGE_BINDING_PIN_TX].gpio = (int)target_pins->uart_tx;
     s_serial_bindings[SERIAL_BINDING_MAIN].pins[UART_BRIDGE_BINDING_PIN_RX].gpio = (int)target_pins->uart_rx;

@@ -155,6 +155,42 @@ If hardware validation is not possible, say exactly what was built and what rema
   if (channel != 0U)
       return len;
   ```
+- Do not use `goto` (including `goto out` / `goto cleanup` idioms for shared error-path cleanup). If a function needs an unconditional cleanup step regardless of how its body exits, structure the code so the cleanup lives in an outer wrapper while the body sits in a helper that uses normal early `return`s; or repeat the cleanup at each exit point if a wrapper would add more friction than it removes. Example:
+  ```c
+  static bool do_work_inner(...)
+  {
+      if (failed_step_a()) {
+          return false;
+      }
+      if (failed_step_b()) {
+          return false;
+      }
+      return true;
+  }
+
+  static bool do_work(...)
+  {
+      acquire_resource();
+      const bool ok = do_work_inner(...);
+      release_resource();
+      return ok;
+  }
+  ```
+  Not allowed:
+  ```c
+  static bool do_work(...)
+  {
+      bool ok = false;
+      acquire_resource();
+      if (failed_step_a()) {
+          goto out;
+      }
+      ok = true;
+  out:
+      release_resource();
+      return ok;
+  }
+  ```
 - Keep comments useful for hardware timing, concurrency, USB descriptors, and board-specific behavior. Avoid narrating obvious C statements.
 
 ## C Documentation And Initialization

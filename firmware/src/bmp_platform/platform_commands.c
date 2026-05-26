@@ -113,6 +113,9 @@ static bool cmd_uart_on_tdi_tdo(target_s *target, int argc, const char **argv)
         } else if (parse_enable_or_disable(argv[1], &uart_on_tdi_tdo)) {
             print_status = true;
             target_serial_use_uart_on_tdi_tdo(uart_on_tdi_tdo);
+        } else {
+            print_status = true;
+            gdb_out("Invalid argument; use 'enable' or 'disable'\n");
         }
     } else {
         gdb_out("Unrecognized command format\n");

@@ -44,8 +44,8 @@
  * Private Definitions
  **********************************************************************************************************************/
 
-#define TARGET_JTAG_TICKS_NO_FINAL(ticks) ((ticks) - 1) /**< Encode \a ticks for PIO sequences without a final TMS bit. */
-#define TARGET_JTAG_TICKS_FINAL(ticks)    ((ticks) - 2) /**< Encode \a ticks for PIO sequences with a final TMS bit. */
+#define TARGET_JTAG_TICKS_NO_FINAL(ticks) ((ticks) - 1) /**< Encode \a ticks for sequences without a final TMS bit. */
+#define TARGET_JTAG_TICKS_FINAL(ticks)    ((ticks) - 2) /**< Encode \a ticks for sequences with a final TMS bit. */
 
 /**
  * \brief Maximum TMS tick count accepted by \ref jtagtap_tms_seq.
@@ -165,6 +165,7 @@ void jtagtap_init(void)
     tap_pio_disable_all_machines(TAP_PIO_JTAG);
 
     const platform_target_pins_t *target_pins = platform_get_target_pins();
+    assert(target_pins != NULL);
 
     if (target_pins->tms_dir != PIN_NOT_CONNECTED) {
         gpio_init(target_pins->tms_dir);
@@ -362,7 +363,7 @@ static void jtagtap_tdi_tdo_seq(
             data_out_cnt = data_bytes;
         }
 
-        if ((clock_cycles % JTAG_BITS_PER_BYTE) != 0) {
+        if ((data_out_cnt > 0) && ((clock_cycles % JTAG_BITS_PER_BYTE) != 0)) {
             data_out[data_out_cnt - 1] >>= (JTAG_BITS_PER_BYTE - (clock_cycles % JTAG_BITS_PER_BYTE));
         }
     }

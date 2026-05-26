@@ -54,11 +54,14 @@ bool target_serial_get_dtr(void);
 void target_serial_update_led(void);
 
 /**
- * \brief Bytes waiting in the target UART RX software path.
+ * \brief Free space in the target-serial USB CDC IN FIFO available for \ref target_serial_send_to_usb.
  *
- * \return Number of bytes available to \c target_serial_read.
+ * Reports how many bytes can currently be enqueued for transmission from the probe to the host
+ * over the target-serial CDC IN endpoint; it does \b not describe RX/host-to-target buffering.
+ *
+ * \return Number of bytes the caller may write before the CDC IN FIFO is full.
  */
-uint16_t target_serial_get_available(void);
+uint32_t target_serial_get_available(void);
 
 /**
  * \brief Read from the target UART bridge into \a data.

@@ -160,6 +160,10 @@ extern bool debug_bmp; /**< Verbose BMP logging when \c ENABLE_DEBUG is on. */
 /**
  * \brief Whether target power and fault lines report a healthy supply.
  *
+ * Assumes an active-LOW fault input on every supported board, matched by the internal
+ * pull-up applied in \ref platform_vtref_init. A board with active-HIGH fault polarity
+ * would need a per-board polarity field in \ref platform_vtref_info_t.
+ *
  * \return \c true if the target power and fault lines report a healthy supply, \c false otherwise
  */
 bool platform_target_is_power_ok(void);
