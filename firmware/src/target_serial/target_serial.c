@@ -319,9 +319,9 @@ static void serial_update_config(cdc_line_coding_t *line_coding)
     uint8_t stop_bits = 2;
     switch (line_coding->stop_bits) {
     case CDC_LINE_CODING_STOP_BITS_1:
-    case CDC_LINE_CODING_STOP_BITS_1_5:
         stop_bits = 1;
         break;
+    case CDC_LINE_CODING_STOP_BITS_1_5:
     case CDC_LINE_CODING_STOP_BITS_2:
         /* Fall through. */
     default:
