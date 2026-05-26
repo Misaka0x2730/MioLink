@@ -128,7 +128,8 @@ _Noreturn static void gdb_thread(void *params)
 
     vTaskSuspendAll();
 
-    usb_cdc_register_listener(USB_CDC_GDB, xTaskGetCurrentTaskHandle(), USB_CDC_NOTIF_USB_RX_AVAILABLE);
+    usb_cdc_register_listener(USB_CDC_GDB, xTaskGetCurrentTaskHandle(),
+        USB_CDC_NOTIF_USB_RX_AVAILABLE | USB_CDC_NOTIF_LINE_STATE_UPDATE);
 
     blackmagic_usb_init();
     target_serial_init();

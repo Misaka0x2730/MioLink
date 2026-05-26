@@ -55,6 +55,16 @@
 
 #define GDB_IF_TX_WAIT_MS (1U) /**< Back-off delay (ms) when the USB TX FIFO has no space available. */
 
+/**
+ * \brief Back-off delay (ms) while DTR stays asserted but the USB device is not configured.
+ *
+ * Guards \ref gdb_if_getchar against a busy-loop in the pathological window where the host
+ * has driven DTR=1 without (or before) a valid USB configuration; a tick-sized wait yields
+ * the CPU while we wait for either \c USB_CDC_NOTIF_LINE_STATE_UPDATE or enumeration to
+ * complete.
+ */
+#define GDB_IF_UNCONFIGURED_WAIT_MS (5U)
+
 /**********************************************************************************************************************
  * Private Types
  **********************************************************************************************************************/
@@ -149,6 +159,7 @@ char gdb_if_getchar(void)
         }
 
         if (usb_get_config() != USB_CONFIG_STATE_CONFIGURED) {
+            vTaskDelay(pdMS_TO_TICKS(GDB_IF_UNCONFIGURED_WAIT_MS));
             continue;
         }
 
