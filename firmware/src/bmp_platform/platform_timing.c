@@ -146,7 +146,7 @@ static void timing_application_timer_cb(TimerHandle_t xTimer)
             }
 
             /* Something's wrong, and it is not a glitch, so turn tpwr off and set the morse blink pattern */
-            if (tpwr_consecutive_faults > TPWR_FAULT_STREAK_LIMIT) {
+            if (tpwr_consecutive_faults >= TPWR_FAULT_STREAK_LIMIT) {
                 tpwr_consecutive_faults = 0;
 
                 platform_target_set_power(false);
