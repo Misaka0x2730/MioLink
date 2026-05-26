@@ -48,6 +48,36 @@
 static int pio_dma_channel = DMA_EX_CHANNEL_UNCLAIMED;
 
 /**********************************************************************************************************************
+ * Private Functions Prototypes
+ **********************************************************************************************************************/
+
+/**
+ * \brief Minimum-impact recovery for a stuck PIO state machine.
+ *
+ * Stops the SM (freezes its PC so a half-issued instruction does not advance further), drains both
+ * TX and RX FIFOs, and resets the SM's internal scratch / shift counters (X, Y, OSR / ISR fill
+ * counts) via \c pio_sm_restart. The PC itself is deliberately left where it was — the caller is
+ * expected to either re-enable the SM (and accept that the very next operation may immediately
+ * retrigger the same timeout if the underlying cause persists) or to fully reinitialise via
+ * \c pio_sm_init / \c swdptap_init / \c jtagtap_init.
+ *
+ * \param[in] pio PIO block instance.
+ * \param[in] sm  State machine index.
+ */
+static void tap_pio_recover_sm(PIO pio, uint32_t sm);
+
+/**********************************************************************************************************************
+ * Private Functions
+ **********************************************************************************************************************/
+
+static void tap_pio_recover_sm(PIO pio, uint32_t sm)
+{
+    pio_sm_set_enabled(pio, sm, false);
+    pio_sm_clear_fifos(pio, sm);
+    pio_sm_restart(pio, sm);
+}
+
+/**********************************************************************************************************************
  * Public Functions
  **********************************************************************************************************************/
 
@@ -104,9 +134,12 @@ uint32_t tap_pio_dma_send_recv_uint32(PIO pio, uint32_t sm, const uint32_t *buff
             recv_data_amount++;
         }
         /* Watchdog: a stuck SM or a wrong data_amount_to_read would otherwise loop forever and
-         * hang the TAP task. Abort the DMA so the channel is reusable on the next call. */
+         * hang the TAP task. Abort the DMA so the channel is reusable on the next call, and run
+         * the minimum-impact SM recovery so the next caller does not inherit a half-filled FIFO
+         * or stale OSR/ISR shift counts. */
         if ((platform_time_ms() - timeout_start_ms) >= TAP_PIO_OPERATION_TIMEOUT_MS) {
             dma_channel_abort(pio_dma_channel);
+            tap_pio_recover_sm(pio, sm);
             assert(false);
             break;
         }
@@ -170,9 +203,12 @@ uint32_t tap_pio_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer
             recv_data_amount++;
         }
         /* Watchdog: a stuck SM or a wrong data_amount_to_read would otherwise loop forever and
-         * hang the TAP task. Abort the DMA so the channel is reusable on the next call. */
+         * hang the TAP task. Abort the DMA so the channel is reusable on the next call, and run
+         * the minimum-impact SM recovery so the next caller does not inherit a half-filled FIFO
+         * or stale OSR/ISR shift counts. */
         if ((platform_time_ms() - timeout_start_ms) >= TAP_PIO_OPERATION_TIMEOUT_MS) {
             dma_channel_abort(pio_dma_channel);
+            tap_pio_recover_sm(pio, sm);
             assert(false);
             break;
         }
