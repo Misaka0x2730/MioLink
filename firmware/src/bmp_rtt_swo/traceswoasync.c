@@ -323,21 +323,22 @@ void swo_init(swo_coding_e swo_mode, uint32_t baudrate, uint32_t itm_stream_bitm
 
     assert(swo_mode == swo_nrz_uart);
 
+    swo_current_mode = swo_mode;
+
     /* Claim the UART.  FORCE cooperatively evicts \c target_serial when it currently
      * holds \c TRACESWO_UART (SWO has priority).  The bridge applies the matching
      * binding's GPIO functions and installs the shared UART-IRQ handler atomically
      * with the ownership update, so no separate \c gpio_set_function / \c irq_*
      * sequence is required here. */
     if (uart_bridge_try_claim(&s_trace_ctx, TRACESWO_UART, UART_BRIDGE_CLAIM_FORCE) == false) {
+        swo_current_mode = swo_none;
         return;
     }
 
-    uart_bridge_configure_uart(&s_trace_ctx, baudrate, 8, 1, UART_PARITY_NONE);
-
-    traceswo_setmask(itm_stream_bitmask);
     traceswo_decoding = itm_stream_bitmask != 0;
+    traceswo_setmask(itm_stream_bitmask);
 
-    swo_current_mode = swo_mode;
+    uart_bridge_configure_uart(&s_trace_ctx, baudrate, 8, 1, UART_PARITY_NONE);
 
     gdb_outf("Baudrate: %" PRIu32 " ", swo_get_baudrate());
 }
