@@ -335,6 +335,8 @@ void platform_update_hwtype(void)
             } else {
                 device_type = PLATFORM_DEVICE_TYPE_MIOLINK_PICO;
             }
+
+            gpio_disable_pulls(MIOLINK_TYPE_PIN_0);
         }
     }
 #elif PLATFORM_PICO_W_BOARD
