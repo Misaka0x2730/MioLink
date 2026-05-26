@@ -461,6 +461,11 @@ static uint8_t swdtap_adiv5_prepare_pio_seq(
  */
 void swdptap_init(void)
 {
+    /* Snapshot the in-use interface frequency before pio_sm_init reprograms the SM's clkdiv
+     * register from the default config (which would otherwise reset the divider to 1.0).
+     * The captured value is reapplied after the SM is back up. */
+    const uint32_t saved_freq = platform_max_frequency_get();
+
     /* SWD does not use TDI/TDO; release the JTAG-side lockout so the target-serial bridge
      * can rebind TDI/TDO as a UART if the user has previously enabled UART-on-TDI/TDO. */
     target_serial_tap_release_tdi_tdo();
@@ -534,7 +539,7 @@ void swdptap_init(void)
     pio_sm_init(TAP_PIO_SWD, TAP_PIO_SM_SWD, p_board_programs->swd_start_prog->origin, &swd_program_config);
     pio_sm_set_enabled(TAP_PIO_SWD, TAP_PIO_SM_SWD, true);
 
-    platform_max_frequency_set(platform_max_frequency_get());
+    platform_max_frequency_set(saved_freq);
 
     tms_dir = SWDIO_STATUS_FLOAT;
 

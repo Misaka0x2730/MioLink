@@ -212,3 +212,21 @@ uint32_t tap_pio_set_sm_freq(PIO pio, uint32_t sm, uint32_t freq, uint32_t max_i
 
     return freq;
 }
+
+uint32_t tap_pio_get_sm_freq(PIO pio, uint32_t sm, uint32_t max_interface_freq)
+{
+    check_pio_param(pio);
+    check_sm_param(sm);
+
+    /* CLKDIV layout (RP2040 §3.5.5): bits 31:16 = INT, 15:8 = FRAC, 7:0 = reserved.
+     * Combined view is 16.8 fixed-point; shifting the register right by 8 yields the
+     * 24-bit divider with 8 fractional bits. The hardware treats INT=FRAC=0 specially
+     * as divisor = 65536. */
+    const uint32_t divider_fp8 = (pio->sm[sm].clkdiv) >> 8U;
+
+    if (divider_fp8 == 0U) {
+        return max_interface_freq / (UINT16_MAX + 1U);
+    }
+
+    return (uint32_t)(((uint64_t)max_interface_freq * 256U) / divider_fp8);
+}

@@ -53,7 +53,6 @@
  **********************************************************************************************************************/
 
 bool running_status = false; /**< Whether a target is currently being driven by GDB. */
-uint32_t target_interface_frequency = PLATFORM_DEFAULT_FREQUENCY; /**< Cached effective TAP/SWD clock (Hz). */
 
 /**********************************************************************************************************************
  * Private Data
@@ -208,18 +207,23 @@ void platform_max_frequency_set(uint32_t freq)
     }
 
     for (uint32_t i = 0; i < NUM_PIO_STATE_MACHINES; i++) {
-        target_interface_frequency = tap_pio_set_sm_freq(TAP_PIO_JTAG, i, freq, platform_get_interface_periph_clk());
+        tap_pio_set_sm_freq(TAP_PIO_JTAG, i, freq, platform_get_interface_periph_clk());
     }
 }
 
 /**
- * \brief Effective interface frequency that the JTAG/SWD PIO last accepted.
+ * \brief Effective interface frequency derived from the current PIO state-machine divider.
+ *
+ * Reads the divider register live so the reported value matches the rate actually generated
+ * by the hardware after divider quantisation — not the value most recently requested via
+ * \ref platform_max_frequency_set. SWD and JTAG share \c pio0 with identical dividers, so
+ * \ref TAP_PIO_SM_SWD on \ref TAP_PIO_SWD is used as the canonical source.
  *
  * \return Frequency in Hz.
  */
 uint32_t platform_max_frequency_get(void)
 {
-    return target_interface_frequency;
+    return tap_pio_get_sm_freq(TAP_PIO_SWD, TAP_PIO_SM_SWD, platform_get_interface_periph_clk());
 }
 
 uint32_t platform_timeout_time_left(const platform_timeout_s *const timeout)

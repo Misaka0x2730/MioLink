@@ -151,6 +151,11 @@ static void jtagtap_cycle(bool tms, bool tdi, size_t clock_cycles);
  */
 void jtagtap_init(void)
 {
+    /* Snapshot the in-use interface frequency before pio_sm_init reprograms the SM's clkdiv
+     * register from the default config (which would otherwise reset the divider to 1.0).
+     * The captured value is reapplied after the SMs are back up. */
+    const uint32_t saved_freq = platform_max_frequency_get();
+
     /* JTAG reuses TDI/TDO, which the target-serial bridge may currently drive as a UART.
      * Force the bridge to drop those pins before we reconfigure them as PIO, otherwise the
      * UART driver would keep stale ownership of GPIOs we are about to repurpose. */
@@ -219,7 +224,7 @@ void jtagtap_init(void)
     pio_sm_init(TAP_PIO_JTAG, TAP_PIO_SM_JTAG_TMS_SEQ, target_jtag_program.origin, &prog_config);
     pio_sm_set_enabled(TAP_PIO_JTAG, TAP_PIO_SM_JTAG_TMS_SEQ, false);
 
-    platform_max_frequency_set(platform_max_frequency_get());
+    platform_max_frequency_set(saved_freq);
 
     jtag_proc.jtagtap_reset = jtagtap_reset;
     jtag_proc.jtagtap_next = jtagtap_next;

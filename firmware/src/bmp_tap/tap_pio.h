@@ -208,4 +208,19 @@ uint32_t tap_pio_dma_send_recv_uint8(PIO pio, uint32_t sm, const uint8_t *buffer
  */
 uint32_t tap_pio_set_sm_freq(PIO pio, uint32_t sm, uint32_t freq, uint32_t max_interface_freq);
 
+/**
+ * \brief Read the actual SM frequency back from the current \c CLKDIV register value.
+ *
+ * Inverts the 16.8 fixed-point divider programmed by \ref tap_pio_set_sm_freq. Use this in
+ * place of caching the requested frequency: the divider math quantises to a 1/256 step,
+ * so the achievable rate differs slightly from the value originally passed in.
+ *
+ * \param[in] pio                PIO block instance.
+ * \param[in] sm                 State machine index.
+ * \param[in] max_interface_freq Same value most recently passed to \ref tap_pio_set_sm_freq
+ *                               for this SM. The function does not derive it from hardware.
+ * \return Currently active interface frequency in Hz, derived from the SM's \c CLKDIV register.
+ */
+uint32_t tap_pio_get_sm_freq(PIO pio, uint32_t sm, uint32_t max_interface_freq);
+
 #endif /* MIOLINK_TAP_PIO_H */
