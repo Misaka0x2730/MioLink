@@ -389,7 +389,6 @@ static void cdc_notify_listener(uint8_t interface, uint32_t bits)
 _Noreturn static void usb_task_thread(void *param)
 {
     (void)param;
-    assert(USB_CDC_NUM == CFG_TUD_CDC);
 
     tusb_init();
 
@@ -448,6 +447,9 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
         const char *str = string_desc_arr[index];
         chr_count = strlen(str);
         const size_t max_count = (sizeof(string_descriptor) / sizeof(string_descriptor[0])) - 1;
+        /* In Debug builds, fail loudly when a string overflows the descriptor buffer so the
+         * truncation does not silently lop off the tail of e.g. a board ident on new hardware. */
+        assert(chr_count <= max_count);
         if (chr_count > max_count) {
             chr_count = max_count;
         }

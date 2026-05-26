@@ -72,9 +72,14 @@ uint32_t target_serial_read(uint8_t *data, uint32_t buffer_size);
 /**
  * \brief Enqueue payload to the target-serial CDC IN endpoint.
  *
+ * Calling with \a len == 0 is treated as an explicit flush request: the call is reported
+ * as successful and the CDC IN endpoint is flushed regardless of the \a flush argument.
+ *
  * \param[in] data              Bytes to send; may be consumed or copied depending on path.
- * \param[in] len               Length of \a data.
- * \param[in] flush             Force immediate start / short packet if applicable.
+ *                              Ignored when \a len is 0.
+ * \param[in] len               Length of \a data. Pass 0 to flush only.
+ * \param[in] flush             Force immediate start / short packet if applicable. Implicitly
+ *                              forced to \c true when \a len is 0.
  * \param[in] allow_drop_buffer Allow dropping when USB TX is stalled (back-pressure policy).
  * \return \c false if the frame could not be accepted.
  */

@@ -68,6 +68,8 @@ typedef enum {
     USB_CDC_NUM,           /**< Number of CDC interfaces; must match TinyUSB \c CFG_TUD_CDC. */
 } usb_cdc_t;
 
+_Static_assert(USB_CDC_NUM == CFG_TUD_CDC);
+
 /**********************************************************************************************************************
  * Public Functions Prototypes
  **********************************************************************************************************************/

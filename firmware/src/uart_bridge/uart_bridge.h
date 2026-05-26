@@ -457,8 +457,14 @@ void uart_bridge_tx_dma_send(uart_bridge_ctx_t *ctx);
 /**
  * \brief Check whether the UART line has fully drained after a TX DMA completion.
  *
+ * Pure helper: looks only at the hardware state of the bound UART and the TX channel
+ * claim. It does NOT inspect \c ctx->tx_ongoing or \c ctx->tx_dma_finished, so callers
+ * driving the TX state machine must check those flags themselves before treating a
+ * \c true return value as "transfer complete and TX idle". A bare \c true here only
+ * means "no TX configured, no UART bound, or the PL011 \c FR.BUSY bit is clear".
+ *
  * \param[in,out] ctx Bridge context.
- * \return \c true if the UART transmitter is idle (or TX is disabled).
+ * \return \c true if the UART transmitter is idle (or TX is disabled / no UART bound).
  */
 bool uart_bridge_tx_dma_check_finished(uart_bridge_ctx_t *ctx);
 
@@ -515,8 +521,23 @@ void uart_bridge_release(uart_bridge_ctx_t *ctx);
 /**
  * \brief Look up the current owner of \a uart in the bridge table.
  *
+ * The bridge mutex is held only for the table read; it is released before this function
+ * returns, so the returned pointer is a TOCTOU snapshot. Between the snapshot and any
+ * use of the pointer, another task or core may call \ref uart_bridge_release or
+ * \ref uart_bridge_try_claim and invalidate the ownership.
+ *
+ * Safe use patterns:
+ *  - Compare-only checks ("is the owner my context?") whose subsequent action is
+ *    serialised through some external invariant (e.g. a per-context "held-by-tap"
+ *    flag that the would-be releaser checks before releasing).
+ *  - Diagnostic / logging reads that tolerate staleness.
+ *
+ * Do NOT dereference the returned pointer (or call other bridge helpers on it) without
+ * additional serialisation: by then the context may have released its UART, or another
+ * context may have replaced it.
+ *
  * \param[in] uart UART instance.
- * \return Owning context, or \c NULL when the UART is free.
+ * \return Owning context at the moment the mutex was held, or \c NULL when the UART is free.
  */
 uart_bridge_ctx_t *uart_bridge_get_owner(uart_inst_t *uart);
 

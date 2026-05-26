@@ -231,7 +231,7 @@ static inline uint32_t uart_ex_get_baudrate(uart_inst_t *uart)
 {
     const uint32_t ibrd = uart_get_hw(uart)->ibrd;
     const uint32_t fbrd = uart_get_hw(uart)->fbrd;
-    return (4 * clock_get_hz(UART_CLOCK_NUM(uart))) / (64 * ibrd + fbrd);
+    return (4 * clock_get_hz(UART_CLOCK_NUM(uart))) / ((64 * ibrd) + fbrd);
 }
 
 /**

@@ -122,6 +122,16 @@ static const uint8_t s_rx_fifo_trigger_bytes[UART_EX_RX_FIFO_LEVEL_COUNT] = {
     [UART_EX_RX_FIFO_LEVEL_7_8] = (UART_EX_FIFO_DEPTH * 7U) / 8U,
 };
 
+/* The INT-mode RX ISR drains at most (trigger - 1) bytes per pass. A trigger of zero
+ * would underflow the loop bound to UINT32_MAX, so the table must keep every entry
+ * strictly positive. Enforce the invariant here so a too-shallow UART_EX_FIFO_DEPTH
+ * (or a new RX-level enum value) is rejected at compile time. */
+_Static_assert((UART_EX_FIFO_DEPTH / 8U) >= 1U, "UART_EX_FIFO_DEPTH too small for LEVEL_1_8 trigger");
+_Static_assert((UART_EX_FIFO_DEPTH / 4U) >= 1U, "UART_EX_FIFO_DEPTH too small for LEVEL_1_4 trigger");
+_Static_assert((UART_EX_FIFO_DEPTH / 2U) >= 1U, "UART_EX_FIFO_DEPTH too small for LEVEL_1_2 trigger");
+_Static_assert(((UART_EX_FIFO_DEPTH * 3U) / 4U) >= 1U, "UART_EX_FIFO_DEPTH too small for LEVEL_3_4 trigger");
+_Static_assert(((UART_EX_FIFO_DEPTH * 7U) / 8U) >= 1U, "UART_EX_FIFO_DEPTH too small for LEVEL_7_8 trigger");
+
 /**
  * \brief UART ownership table.
  *
@@ -648,9 +658,15 @@ void uart_bridge_init(uart_bridge_ctx_t *ctx, const uart_bridge_config_t *cfg, T
      * untouched so a subsequent claim takes the full setup path. */
     ctx->uart = NULL;
 
-    ctx->rx_dma_channel = dma_claim_unused_channel(true);
-    ctx->rx_dma_ctrl_channel = dma_claim_unused_channel(true);
-    ctx->tx_dma_channel = (cfg->tx_buffer != NULL) ? dma_claim_unused_channel(true) : DMA_EX_CHANNEL_UNCLAIMED;
+    ctx->rx_dma_channel = DMA_EX_CHANNEL_UNCLAIMED;
+    ctx->rx_dma_ctrl_channel = DMA_EX_CHANNEL_UNCLAIMED;
+    ctx->tx_dma_channel = DMA_EX_CHANNEL_UNCLAIMED;
+
+    dma_ex_claim_channel_if_unclaimed(&ctx->rx_dma_channel);
+    dma_ex_claim_channel_if_unclaimed(&ctx->rx_dma_ctrl_channel);
+    if (cfg->tx_buffer != NULL) {
+        dma_ex_claim_channel_if_unclaimed(&ctx->tx_dma_channel);
+    }
 
     ctx->rx_use_dma = false;
     ctx->rx_ongoing = false;
@@ -1011,6 +1027,11 @@ static void uart_bridge_uart_isr_handler(uart_bridge_ctx_t *ctx)
              * after the burst ends, which is the trigger for rx_int_finish() to flush the residual
              * FIFO contents and sink them. */
             const uint8_t fifo_trigger_bytes = s_rx_fifo_trigger_bytes[ctx->cfg->rx_int_fifo_level];
+            /* Hard-guard the (trigger - 1) underflow path: a zero trigger would wrap the
+             * loop bound to UINT32_MAX and either hang this ISR or stream past the RX
+             * buffer pool. Static asserts on s_rx_fifo_trigger_bytes catch the current
+             * table, but a future entry could regress; keep the runtime check too. */
+            assert(fifo_trigger_bytes >= 1U);
             for (uint32_t i = 0; i < (uint32_t)(fifo_trigger_bytes - 1U); i++) {
                 if (!uart_is_readable(ctx->uart)) {
                     break;

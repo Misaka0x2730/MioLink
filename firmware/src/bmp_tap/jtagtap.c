@@ -44,8 +44,8 @@
  * Private Definitions
  **********************************************************************************************************************/
 
-#define TARGET_JTAG_TICKS_NO_FINAL(ticks) (ticks - 1) /**< Encode \a ticks for PIO sequences without a final TMS bit. */
-#define TARGET_JTAG_TICKS_FINAL(ticks)    (ticks - 2) /**< Encode \a ticks for PIO sequences with a final TMS bit. */
+#define TARGET_JTAG_TICKS_NO_FINAL(ticks) ((ticks) - 1) /**< Encode \a ticks for PIO sequences without a final TMS bit. */
+#define TARGET_JTAG_TICKS_FINAL(ticks)    ((ticks) - 2) /**< Encode \a ticks for PIO sequences with a final TMS bit. */
 
 /**
  * \brief Maximum TMS tick count accepted by \ref jtagtap_tms_seq.
