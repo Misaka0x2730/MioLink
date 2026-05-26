@@ -109,8 +109,8 @@ static bool platform_crc32(target_s *const target, uint32_t *const result, const
     channel_config_set_transfer_data_size(&dma_config, DMA_SIZE_32);
     channel_config_set_read_increment(&dma_config, true);
     channel_config_set_write_increment(&dma_config, false);
-
     channel_config_set_sniff_enable(&dma_config, true);
+
     dma_sniffer_enable(crc_dma_channel, DMA_SNIFF_CTRL_CALC_VALUE_CRC32, true);
     dma_sniffer_set_byte_swap_enabled(false);
     dma_sniffer_set_output_reverse_enabled(false);
@@ -124,6 +124,7 @@ static bool platform_crc32(target_s *const target, uint32_t *const result, const
         const size_t read_len = MIN(sizeof(bytes), adjusted_len - offset);
         if (target_mem32_read(target, bytes, base + offset, read_len)) {
             DEBUG_ERROR("%s: error around address 0x%08" PRIx32 "\n", __func__, (uint32_t)(base + offset));
+            dma_sniffer_disable();
             return false;
         }
 
@@ -140,11 +141,14 @@ static bool platform_crc32(target_s *const target, uint32_t *const result, const
     if (remainder) {
         if (target_mem32_read(target, bytes, base + adjusted_len, remainder)) {
             DEBUG_ERROR("%s: error around address 0x%08" PRIx32 "\n", __func__, (uint32_t)(base + adjusted_len));
+            dma_sniffer_disable();
             return false;
         }
         crc = soft_crc32(crc, bytes, remainder);
     }
     *result = crc;
+
+    dma_sniffer_disable();
     return true;
 }
 
