@@ -74,16 +74,21 @@
         7, TUSB_DESC_ENDPOINT, _epin, TUSB_XFER_BULK, U16_TO_U8S_LE(_epsize), 0
 
 /**
- * \brief Emit the raw byte sequence for the DFU runtime interface association + interface.
+ * \brief Emit the raw byte sequence for the DFU runtime function: IAD + Interface + DFU Functional descriptor.
+ *
+ * Generates an 8-byte Interface Association Descriptor (the device declares \c MISC/IAD, so every function
+ * needs its own IAD for correct host enumeration and WinUSB binding via MS OS 2.0) immediately followed by
+ * the standard 18-byte \c TUD_DFU_RT_DESCRIPTOR (9-byte Interface + 9-byte DFU Functional descriptor).
  *
  * \param[in] _itfnum Interface number assigned to the DFU runtime interface.
- * \param[in] _stridx String descriptor index used for the association and the interface.
+ * \param[in] _stridx String descriptor index used for both the association and the interface.
  */
-#define MAKE_DFU_DESCRIPTOR(_itfnum, _stridx)                                                          \
-    8, TUSB_DESC_INTERFACE_ASSOCIATION, _itfnum, 1, TUSB_CLASS_APPLICATION_SPECIFIC, 1, 1, _stridx, 9, \
-        TUSB_DESC_INTERFACE, _itfnum, 0, 0, TUSB_CLASS_APPLICATION_SPECIFIC, 1, 1, _stridx
+#define MAKE_DFU_DESCRIPTOR(_itfnum, _stridx)                                                                          \
+    8, TUSB_DESC_INTERFACE_ASSOCIATION, _itfnum, 1, TUSB_CLASS_APPLICATION_SPECIFIC,                                   \
+        APP_SUBCLASS_DFU_RUNTIME, DFU_PROTOCOL_RT, _stridx,                                                            \
+    TUD_DFU_RT_DESCRIPTOR(_itfnum, _stridx, 0x09, 255, 1024)
 
-#define DUMMY_DESC_SIZE (8 + 9) /**< Size of the DFU runtime descriptor block in bytes. */
+#define DFU_RT_DESC_SIZE (8 + TUD_DFU_RT_DESC_LEN) /**< Size of the DFU runtime descriptor block in bytes. */
 
 #if defined(PLATFORM_HAS_TRACESWO)
 /**
@@ -110,7 +115,7 @@
  * \brief Total config descriptor length.
  */
 #define ITF_CONFIG_LEN \
-    (TUD_CONFIG_DESC_LEN + ((ITF_NUM_CDC / 2) * TUD_CDC_DESC_LEN) + DUMMY_DESC_SIZE + TRACE_DESC_SIZE)
+    (TUD_CONFIG_DESC_LEN + ((ITF_NUM_CDC / 2) * TUD_CDC_DESC_LEN) + DFU_RT_DESC_SIZE + TRACE_DESC_SIZE)
 
 #define BOS_TOTAL_LEN (TUD_BOS_DESC_LEN + TUD_BOS_MICROSOFT_OS_DESC_LEN) /**< Total BOS descriptor length. */
 
