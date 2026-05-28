@@ -1,71 +1,74 @@
-/* MioLink RP2350 release linker script.
- * Based on the Pico SDK rp2350 default linker (src/rp2_common/pico_crt0/rp2350/memmap_default.ld)
- * with the MioLink RAM-resident hot-path optimisation copied from the RP2040 release variant:
- * critical .text and .rodata from TinyUSB, FreeRTOS, Pico SDK, CYW43 driver, Black Magic, and
- * MioLink-local sources are excluded from FLASH and placed in RAM via the .data segment.
- *
- * Defines the following symbols for use by code:
- *  __exidx_start
- *  __exidx_end
- *  __etext
- *  __data_start__
- *  __preinit_array_start
- *  __preinit_array_end
- *  __init_array_start
- *  __init_array_end
- *  __fini_array_start
- *  __fini_array_end
- *  __data_end__
- *  __bss_start__
- *  __bss_end__
- *  __end__
- *  end
- *  __HeapLimit
- *  __StackLimit
- *  __StackTop
- *  __stack (== StackTop)
- */
+/* Based on GCC ARM embedded samples.
+   Defines the following symbols for use by code:
+    __exidx_start
+    __exidx_end
+    __etext
+    __data_start__
+    __preinit_array_start
+    __preinit_array_end
+    __init_array_start
+    __init_array_end
+    __fini_array_start
+    __fini_array_end
+    __data_end__
+    __bss_start__
+    __bss_end__
+    __end__
+    end
+    __HeapLimit
+    __StackLimit
+    __StackTop
+    __stack (== StackTop)
+*/
 
 MEMORY
 {
-    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = ${PICO_FLASH_SIZE_BYTES_STRING}
-    RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 512k
-    SCRATCH_X(rwx) : ORIGIN = 0x20080000, LENGTH = 4k
-    SCRATCH_Y(rwx) : ORIGIN = 0x20081000, LENGTH = 4k
+    INCLUDE "pico_flash_region.ld"
+    RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
+    SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
+    SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k
 }
 
 ENTRY(_entry_point)
 
 SECTIONS
 {
+    /* Second stage bootloader is prepended to the image. It must be 256 bytes big
+       and checksummed. It is usually built by the boot_stage2 target
+       in the Raspberry Pi Pico SDK
+    */
+
     .flash_begin : {
         __flash_binary_start = .;
     } > FLASH
 
-    /* The bootrom will enter the image at the point indicated in your
-       IMAGE_DEF, which is usually the reset handler of your vector table.
+    .boot2 : {
+        __boot2_start__ = .;
+        KEEP (*(.boot2))
+        __boot2_end__ = .;
+    } > FLASH
 
+    ASSERT(__boot2_end__ - __boot2_start__ == 256,
+        "ERROR: Pico second stage bootloader must be 256 bytes in size")
+
+    /* The second stage will always enter the image at the start of .text.
        The debugger will use the ELF entry point, which is the _entry_point
-       symbol, and in our case is *different from the bootrom's entry point.*
-       This is used to go back through the bootrom on debugger launches only,
-       to perform the same initial flash setup that would be performed on a
-       cold boot.
+       symbol if present, otherwise defaults to start of .text.
+       This can be used to transfer control back to the bootrom on debugger
+       launches only, to perform proper flash setup.
     */
-
     .text : {
         __logical_binary_start = .;
         KEEP (*(.vectors))
         KEEP (*(.binary_info_header))
         __binary_info_header_end = .;
-        KEEP (*(.embedded_block))
-        __embedded_block_end = .;
         KEEP (*(.reset))
         /* TODO revisit this now memset/memcpy/float in ROM */
         /* bit of a hack right now to exclude all floating point and time critical (e.g. memset, memcpy) code from
          * FLASH ... we will include any thing excluded here in .data below by default */
         *(.init)
-        *libgcc.a:cmse_nonsecure_call.o
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:
+        *(EXCLUDE_FILE(*libgcc.a:
+                       *libg.a:
                        *tinyusb/src/*.c.o*
                        *FreeRTOS-Kernel/*.c.o*
                        *pico-sdk/src/*.c.o*
@@ -78,6 +81,8 @@ SECTIONS
                        *blackmagic/src/target/cortex*.c.o*
                        *blackmagic/src/target/jtag*.c.o*
                        *blackmagic/src/target/target_flash.c.o*
+                       *blackmagic/src/target/riscv_adi_dtm.c.o*
+                       *blackmagic/src/target/riscv_jtag_dtm.c.o*
                        *bmp_platform/*.c.o*
                        *bmp_general/*.c.o*
                        *bmp_rtt_swo/*.c.o*
@@ -99,55 +104,14 @@ SECTIONS
         *(SORT(.dtors.*))
         *(.dtors)
 
-        . = ALIGN(4);
-        /* preinit data */
-        PROVIDE_HIDDEN (__preinit_array_start = .);
-        KEEP(*(SORT(.preinit_array.*)))
-        KEEP(*(.preinit_array))
-        PROVIDE_HIDDEN (__preinit_array_end = .);
-
-        . = ALIGN(4);
-        /* init data */
-        PROVIDE_HIDDEN (__init_array_start = .);
-        KEEP(*(SORT(.init_array.*)))
-        KEEP(*(.init_array))
-        PROVIDE_HIDDEN (__init_array_end = .);
-
-        . = ALIGN(4);
-        /* finit data */
-        PROVIDE_HIDDEN (__fini_array_start = .);
-        *(SORT(.fini_array.*))
-        *(.fini_array)
-        PROVIDE_HIDDEN (__fini_array_end = .);
-
         *(.eh_frame*)
         . = ALIGN(4);
     } > FLASH
 
-    /* Note the boot2 section is optional, and should be discarded if there is
-       no reference to it *inside* the binary, as it is not called by the
-       bootrom. (The bootrom performs a simple best-effort XIP setup and
-       leaves it to the binary to do anything more sophisticated.) However
-       there is still a size limit of 256 bytes, to ensure the boot2 can be
-       stored in boot RAM.
-
-       Really this is a "XIP setup function" -- the name boot2 is historic and
-       refers to its dual-purpose on RP2040, where it also handled vectoring
-       from the bootrom into the user image.
-    */
-
-    .boot2 : {
-        __boot2_start__ = .;
-        *(.boot2)
-        __boot2_end__ = .;
-    } > FLASH
-
-    ASSERT(__boot2_end__ - __boot2_start__ <= 256,
-        "ERROR: Pico second stage bootloader must be no more than 256 bytes in size")
-
     .rodata : {
         *cyw43-driver/*.c.o*(.rodata*)
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:
+        *(EXCLUDE_FILE(*libgcc.a:
+                       *libg.a:
                        *tinyusb/src/*.c.o*
                        *FreeRTOS-Kernel/*.c.o*
                        *pico-sdk/src/*.c.o*
@@ -160,6 +124,8 @@ SECTIONS
                        *blackmagic/src/target/cortex*.c.o*
                        *blackmagic/src/target/jtag*.c.o*
                        *blackmagic/src/target/target_flash.c.o*
+                       *blackmagic/src/target/riscv_adi_dtm.c.o*
+                       *blackmagic/src/target/riscv_jtag_dtm.c.o*
                        *bmp_platform/*.c.o*
                        *bmp_general/*.c.o*
                        *bmp_rtt_swo/*.c.o*
@@ -167,7 +133,6 @@ SECTIONS
                        *target_serial/*.c.o*
                        *usb/*.c.o*
                        *src/main.c.o*) .rodata*)
-        *(.srodata*)
         . = ALIGN(4);
         *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.flashdata*)))
         . = ALIGN(4);
@@ -196,13 +161,8 @@ SECTIONS
     __binary_info_end = .;
     . = ALIGN(4);
 
-    .ram_vector_table (NOLOAD): {
+   .ram_vector_table (NOLOAD): {
         *(.ram_vector_table)
-    } > RAM
-
-    .uninitialized_data (NOLOAD): {
-        . = ALIGN(4);
-        *(.uninitialized_data*)
     } > RAM
 
     .data : {
@@ -218,7 +178,6 @@ SECTIONS
         . = ALIGN(4);
 
         *(.data*)
-        *(.sdata*)
 
         . = ALIGN(4);
         *(.after_data.*)
@@ -229,52 +188,39 @@ SECTIONS
         KEEP(*(.mutex_array))
         PROVIDE_HIDDEN (__mutex_array_end = .);
 
+        . = ALIGN(4);
+        /* preinit data */
+        PROVIDE_HIDDEN (__preinit_array_start = .);
+        KEEP(*(SORT(.preinit_array.*)))
+        KEEP(*(.preinit_array))
+        PROVIDE_HIDDEN (__preinit_array_end = .);
+
+        . = ALIGN(4);
+        /* init data */
+        PROVIDE_HIDDEN (__init_array_start = .);
+        KEEP(*(SORT(.init_array.*)))
+        KEEP(*(.init_array))
+        PROVIDE_HIDDEN (__init_array_end = .);
+
+        . = ALIGN(4);
+        /* finit data */
+        PROVIDE_HIDDEN (__fini_array_start = .);
+        *(SORT(.fini_array.*))
+        *(.fini_array)
+        PROVIDE_HIDDEN (__fini_array_end = .);
+
         *(.jcr)
         . = ALIGN(4);
-    } > RAM AT> FLASH
-
-    .tdata : {
-        . = ALIGN(4);
-        *(.tdata .tdata.* .gnu.linkonce.td.*)
         /* All data end */
-        __tdata_end = .;
+        __data_end__ = .;
     } > RAM AT> FLASH
-    PROVIDE(__data_end__ = .);
-
     /* __etext is (for backwards compatibility) the name of the .data init source pointer (...) */
     __etext = LOADADDR(.data);
 
-    .tbss (NOLOAD) : {
+    .uninitialized_data (NOLOAD): {
         . = ALIGN(4);
-        __bss_start__ = .;
-        __tls_base = .;
-        *(.tbss .tbss.* .gnu.linkonce.tb.*)
-        *(.tcommon)
-
-        __tls_end = .;
+        *(.uninitialized_data*)
     } > RAM
-
-    .bss (NOLOAD) : {
-        . = ALIGN(4);
-        __tbss_end = .;
-
-        *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.bss*)))
-        *(COMMON)
-        PROVIDE(__global_pointer$ = . + 2K);
-        *(.sbss*)
-        . = ALIGN(4);
-        __bss_end__ = .;
-    } > RAM
-
-    .heap (NOLOAD):
-    {
-        __end__ = .;
-        end = __end__;
-        KEEP(*(.heap*))
-    } > RAM
-    /* historically on GCC sbrk was growing past __HeapLimit to __StackLimit, however
-       to be more compatible, we now set __HeapLimit explicitly to where the end of the heap is */
-    __HeapLimit = ORIGIN(RAM) + LENGTH(RAM);
 
     /* Start and end symbols must be word-aligned */
     .scratch_x : {
@@ -292,6 +238,23 @@ SECTIONS
         __scratch_y_end__ = .;
     } > SCRATCH_Y AT > FLASH
     __scratch_y_source__ = LOADADDR(.scratch_y);
+
+    .bss  : {
+        . = ALIGN(4);
+        __bss_start__ = .;
+        *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.bss*)))
+        *(COMMON)
+        . = ALIGN(4);
+        __bss_end__ = .;
+    } > RAM
+
+    .heap (NOLOAD):
+    {
+        __end__ = .;
+        end = __end__;
+        KEEP(*(.heap*))
+        __HeapLimit = .;
+    } > RAM
 
     /* .stack*_dummy section doesn't contains any symbols. It is only
      * used for linker to calculate size of stack sections, and assign
@@ -312,9 +275,8 @@ SECTIONS
     } > SCRATCH_Y
 
     .flash_end : {
-        KEEP(*(.embedded_end_block*))
         PROVIDE(__flash_binary_end = .);
-    } > FLASH =0xaa
+    } > FLASH
 
     /* stack limit is poorly named, but historically is maximum heap ptr */
     __StackLimit = ORIGIN(RAM) + LENGTH(RAM);
@@ -324,22 +286,9 @@ SECTIONS
     __StackBottom = __StackTop - SIZEOF(.stack_dummy);
     PROVIDE(__stack = __StackTop);
 
-    /* picolibc and LLVM */
-    PROVIDE (__heap_start = __end__);
-    PROVIDE (__heap_end = __HeapLimit);
-    PROVIDE( __tls_align = MAX(ALIGNOF(.tdata), ALIGNOF(.tbss)) );
-    PROVIDE( __tls_size_align = (__tls_size + __tls_align - 1) & ~(__tls_align - 1));
-    PROVIDE( __arm32_tls_tcb_offset = MAX(8, __tls_align) );
-
-    /* llvm-libc */
-    PROVIDE (_end = __end__);
-    PROVIDE (__llvm_libc_heap_limit = __HeapLimit);
-
     /* Check if data + heap + stack exceeds RAM limit */
     ASSERT(__StackLimit >= __HeapLimit, "region RAM overflowed")
 
-    ASSERT( __binary_info_header_end - __logical_binary_start <= 1024, "Binary info must be in first 1024 bytes of the binary")
-    ASSERT( __embedded_block_end - __logical_binary_start <= 4096, "Embedded block must be in first 4096 bytes of the binary")
-
+    ASSERT( __binary_info_header_end - __logical_binary_start <= 256, "Binary info must be in first 256 bytes of the binary")
     /* todo assert on extra code */
 }

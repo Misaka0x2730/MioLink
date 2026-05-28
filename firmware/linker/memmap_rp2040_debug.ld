@@ -23,7 +23,7 @@
 
 MEMORY
 {
-    FLASH(rx) : ORIGIN = 0x10000000, LENGTH = ${PICO_FLASH_SIZE_BYTES_STRING}
+    INCLUDE "pico_flash_region.ld"
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k
@@ -67,11 +67,14 @@ SECTIONS
         /* bit of a hack right now to exclude all floating point and time critical (e.g. memset, memcpy) code from
          * FLASH ... we will include any thing excluded here in .data below by default */
         *(.init)
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:
+        *(EXCLUDE_FILE(*libgcc.a:
+                       *libg.a:
                        *tinyusb/src/*.c.o*
                        *FreeRTOS-Kernel/*.c.o*
                        *pico-sdk/src/*.c.o*
-                       *pico-sdk/src/*.S.o*) .text*)
+                       *pico-sdk/src/*.S.o*
+                       *blackmagic/src/target/riscv_adi_dtm.c.o*
+                       *blackmagic/src/target/riscv_jtag_dtm.c.o*) .text*)
         *(.fini)
         /* Pull all c'tors into .text */
         *crtbegin.o(.ctors)
@@ -92,11 +95,14 @@ SECTIONS
 
     .rodata : {
         *cyw43-driver/*.c.o*(.rodata*)
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:
+        *(EXCLUDE_FILE(*libgcc.a:
+                               *libg.a:
                                *tinyusb/src/*.c.o*
                                *FreeRTOS-Kernel/*.c.o*
                                *pico-sdk/src/*.c.o*
-                               *pico-sdk/src/*.S.o*) .rodata*)
+                               *pico-sdk/src/*.S.o*
+                               *blackmagic/src/target/riscv_adi_dtm.c.o*
+                               *blackmagic/src/target/riscv_jtag_dtm.c.o*) .rodata*)
         . = ALIGN(4);
         *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.flashdata*)))
         . = ALIGN(4);
