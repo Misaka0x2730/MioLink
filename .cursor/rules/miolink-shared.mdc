@@ -1,0 +1,16 @@
+---
+description: Shared MioLink repository rules for Cursor.
+alwaysApply: true
+---
+
+Use the shared repository rules in @AGENTS.md.
+
+## Token Budget
+
+- Keep context small: inspect only files directly relevant to the current task.
+- Use precise `rg` searches before opening files.
+- Exclude `firmware/external`, build trees, generated files, IDE caches, and vendored code unless explicitly needed.
+- Read focused ranges instead of whole long files.
+- Do not paste full file contents or long code blocks into chat unless requested.
+- Keep responses concise; summarize only decisions, changes, and verification.
+- Do not re-read rules/templates/README files unless the task is about them.

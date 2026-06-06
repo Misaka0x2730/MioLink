@@ -1,0 +1,51 @@
+/*
+ * This file is part of the MioLink project.
+ *
+ * Copyright (C) 2026 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef MIOLINK_BOARDS_PINOUT_MIOLINK_REV_A_H
+#define MIOLINK_BOARDS_PINOUT_MIOLINK_REV_A_H
+
+/**********************************************************************************************************************
+ * Public Definitions
+ **********************************************************************************************************************/
+
+#define MIOLINK_REVA_TARGET_VOLTAGE_ADC_PIN    (29) /**< GPIO (ADC capable) that samples target VTref. */
+#define MIOLINK_REVA_TARGET_VOLTAGE_ENABLE_PIN (3)  /**< GPIO enabling target power switch. */
+#define MIOLINK_REVA_TARGET_VOLTAGE_FAULT_PIN  (1)  /**< GPIO that signals power-switch fault. */
+
+#define MIOLINK_REVA_LED_ACT_PIN (13) /**< Activity LED GPIO. */
+#define MIOLINK_REVA_LED_ERR_PIN (10) /**< Error LED GPIO. */
+#define MIOLINK_REVA_LED_SER_PIN (12) /**< Serial-activity LED GPIO. */
+
+#define MIOLINK_REVA_TARGET_TCK_PIN     (24) /**< JTAG/SWD clock pin. */
+#define MIOLINK_REVA_TARGET_TDO_PIN     (17) /**< JTAG TDO / SWO input pin. */
+#define MIOLINK_REVA_TARGET_TDI_PIN     (28) /**< JTAG TDI pin. */
+#define MIOLINK_REVA_TARGET_TMS_PIN     (26) /**< JTAG TMS / SWD SWDIO pin. */
+#define MIOLINK_REVA_TARGET_TMS_DIR_PIN (27) /**< Direction control for level-shifted TMS/SWDIO. */
+
+#define MIOLINK_REVA_TARGET_UART_TX_PIN (8)  /**< Target UART TX pin. */
+#define MIOLINK_REVA_TARGET_UART_RX_PIN (21) /**< Target UART RX pin. */
+
+#define MIOLINK_REVA_TARGET_NRST_PIN (18) /**< Target reset (nRST) GPIO. */
+
+/* SWD PIO configuration for MioLink rev A (matches \c pio_swd_miolink_rev_a.pio). */
+#define MIOLINK_REVA_SWD_PIO_SET_PIN_COUNT     (2) /**< Consecutive pins driven by \c set: TMS, TMS_DIR. */
+#define MIOLINK_REVA_SWD_PIO_SIDESET_PIN_COUNT (1) /**< Sideset pin count (excluding the optional bit). */
+#define MIOLINK_REVA_SWD_PIO_SIDESET_PIN_BASE  (MIOLINK_REVA_TARGET_TCK_PIN) /**< First sideset pin: TCK. */
+
+#endif /* MIOLINK_BOARDS_PINOUT_MIOLINK_REV_A_H */

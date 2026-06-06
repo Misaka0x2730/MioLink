@@ -1,6 +1,6 @@
 # MioLink
 
-This project is a port of the [Black Magic Probe project](https://github.com/blackmagic-debug/blackmagic) to Raspberry Pi RP2040 (2 Cortex-M0+ cores at 125MHz) MCU.  
+This project is a port of the [Black Magic Probe project](https://github.com/blackmagic-debug/blackmagic) to Raspberry Pi RP2040 (2 Cortex-M0+ cores) and RP2350 (2 Cortex-M33 cores) MCUs.  
 The project is a USB debugger that supports a lot of ARM Cortex target processors ([see supported device list here](https://black-magic.org/supported-targets.html)) via SWD and JTAG interfaces.  
 It also supports debug output via Serial Wire Output (SWO) and RTT. Additionally, the device has an extra UART serial port that can be accessed through a second Virtual COM port.  
 This README contains only the basic information: information about the hardware, how to build the firmware and flash the probe.  
@@ -21,6 +21,7 @@ Detailed instructions on how to use the debugger, how to configure SWO, RTT and 
     - [SWD pins description](#swd-pins-description)
 - [Building and flashing the probe](#building-and-flashing-the-probe)
   - [Requirements](#requirements)
+  - [Board selection](#board-selection)
   - [Build on Windows](#build-on-windows)
     - [Install all requirements and clone the repository](#install-all-requirements-and-clone-the-repository)
     - [Build debug image](#build-debug-image)
@@ -43,7 +44,9 @@ At this moment, there are two revisions of *MioLink*: rev. A and rev. B.
 You can find information about their differences [here](https://github.com/Misaka0x2730/MioLink/wiki/MioLink-revisions-comparsion).  
 [MioLink_Pico](https://github.com/Misaka0x2730/MioLink/blob/main/hardware/MioLink_Pico/revA/MioLink_Pico_revA.pdf) is a breakout board for Pico and Pico W featuring a power switch and voltage converters.  
 Standard Pico and Pico W boards are also supported.  
-The device type is determined at runtime, so all boards use the same firmware.  
+Pico 2 and Pico 2 W (RP2350), as well as other Pico SDK boards with a compatible pinout (e.g. `weact_studio_rp2040_2mb`), are also supported.  
+For RP2040 boards (MioLink rev. A/B, MioLink_Pico, Pico, Pico W) the device type is determined at runtime, so a single firmware image is shared between them.  
+Runtime auto-detection is not available for RP2350 boards (Pico 2, Pico 2 W) or for other Pico SDK boards built by name; these require a board-specific firmware image built with the corresponding `-DPICO_BOARD=<board>` option.  
 [MioLink_adapter](https://github.com/Misaka0x2730/MioLink/blob/main/hardware/MioLink_adapter/revA/MioLink_adapter_revA.pdf) is an adapter that allows you to connect the probe with target boards that have different types of connectors.  
 You can find all hardware CAD files (designed in KiCad) [here](https://github.com/Misaka0x2730/MioLink/tree/main/hardware).  
 
@@ -132,29 +135,47 @@ The following tools are required to build this project:
 - gcc
 - arm-none-eabi-gcc
 
+## Board selection
+The firmware is built with the `-DPICO_BOARD=<board>` option passed to `cmake`, which selects the target board.  
+By default, `-DPICO_BOARD=auto_rp2040` is used: a single firmware image is built that detects the board at runtime (MioLink rev. A/B, MioLink_Pico, Pico, or Pico W) using hardware strap pins and CYW43/ADC probing.  
+If you want an image limited to a single board, pass `-DPICO_BOARD=<board>` with a specific board name. In this case, only the code and drivers for the selected board are included, and runtime detection is disabled.
+
+The following board options are available:
+
+Board | Description
+:--------------:|:----------:
+`auto_rp2040` | Default. Runtime board detection for RP2040 boards (MioLink rev. A/B, MioLink_Pico, Pico, Pico W) with a single firmware.
+`miolink` | MioLink (rev. A and rev. B).
+`miolink_pico` | MioLink_Pico breakout board.
+`pico` | Raspberry Pi Pico (RP2040).
+`pico_w` | Raspberry Pi Pico W (RP2040).
+`pico2` | Raspberry Pi Pico 2 (RP2350).
+`pico2_w` | Raspberry Pi Pico 2 W (RP2350).
+
+Any other Pico SDK board (e.g. `weact_studio_rp2040_2mb`) can also be passed by name.
+
+Example (runtime detection, default):
+```raw
+cmake -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=auto_rp2040 ..
+```
+
+Example (specific board):
+```raw
+cmake -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=weact_studio_rp2040_2mb ..
+```
+
 ## Build on Windows
 The simplest way to build the firmware under Windows environment is to use MinGW64.
 
 ### Install all requirements and clone the repository
 1. Download and install [MSYS2](https://www.msys2.org/);
 2. Run mingw64;
-3. Upgrade packets, MinGW64 will be restarted:  ```pacman -Syu```
-4. Install all requirements:  ```pacman -S git mingw-w64-x86_64-python mingw-w64-x86_64-make mingw-w64-x86_64-cmake mingw-w64-x86_64-arm-none-eabi-gcc mingw-w64-x86_64-gcc```
-5. Clone this project with submodules:  ```git clone --recurse-submodules https://github.com/Misaka0x2730/MioLink.git```
-6. Change current dir:  ```cd MioLink/firmware```
 
 ### Build debug image:
-1. Create working directory:  ```mkdir debug```
-2. Go to working directory:  ```cd debug```
-3. Run cmake:  ```cmake -DCMAKE_BUILD_TYPE=Debug -G "MinGW Makefiles" ..```
-4. Build image:  ```cmake --build .```
 5. Use ```MioLink.uf2``` to flash device via factory USB-MSC bootloader.
 
 ### Build release image:
-1. Create working directory:  ```mkdir release```
-2. Go to working directory:  ```cd release```
-3. Run cmake:  ```cmake -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles" ..```
-4. Build image:  ```cmake --build .```
+```raw
 5. Use ```MioLink.uf2``` to flash device via factory USB-MSC bootloader.
 
 ## Build on Ubuntu
@@ -167,7 +188,7 @@ sudo tar -xf arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi.tar.xz
 sudo rm arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi.tar.xz
 export PATH="$PATH":/opt/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin
 sudo apt-get install git python3 cmake
-```
+```raw
 Note: ```export PATH``` will set the path environment variable only for the current session.  
 If you want to set PATH permanently, you need to add ```export PATH="$PATH":/opt/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin``` to your ```~/.profile``` or ```~/.bashrc```.
 
@@ -175,21 +196,12 @@ If you want to set PATH permanently, you need to add ```export PATH="$PATH":/opt
 ```
 cd ~
 git clone --recurse-submodules https://github.com/Misaka0x2730/MioLink.git
-```
-3. Change current dir:  ```cd MioLink/firmware```
 
 ### Build debug image:
-1. Create working directory:  ```mkdir debug```
-2. Go to working directory:  ```cd debug```
-3. Run cmake:  ```cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" ..```
-4. Build image:  ```cmake --build .```
 5. Use ```MioLink.uf2``` to flash device via factory USB-MSC bootloader.
 
 ### Build release image:
-1. Create working directory:  ```mkdir release```
-2. Go to working directory:  ```cd release```
-3. Run cmake:  ```cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..```
-4. Build image:  ```cmake --build .```
+```raw
 5. Use ```MioLink.uf2``` to flash device via factory USB-MSC bootloader.
 
 ## Build on Mac OS
@@ -201,21 +213,12 @@ git clone --recurse-submodules https://github.com/Misaka0x2730/MioLink.git
 5. Clone this project with submodules:
 ```
 git clone --recurse-submodules https://github.com/Misaka0x2730/MioLink.git
-```
-6. Change current dir:  ```cd MioLink/firmware```
 
 ### Build debug image:
-1. Create working directory:  ```mkdir debug```
-2. Go to working directory:  ```cd debug```
-3. Run cmake:  ```cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" ..```
-4. Build image:  ```cmake --build .```
 5. Use ```MioLink.uf2``` to flash device via factory USB-MSC bootloader.
 
 ### Build release image:
-1. Create working directory:  ```mkdir release```
-2. Go to working directory:  ```cd release```
-3. Run cmake:  ```cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..```
-4. Build image:  ```cmake --build .```
+```raw
 5. Use ```MioLink.uf2``` to flash device via factory USB-MSC bootloader.
 
 ## How to flash the probe
@@ -225,3 +228,5 @@ git clone --recurse-submodules https://github.com/Misaka0x2730/MioLink.git
 4. Release BOOT (BOOTSEL on Pico and Pico W) button;
 5. Drag-and-Drop ```MioLink.uf2``` file to mass storage device;
 6. The device will be flashed and rebooted automatically, after which it is ready for use.
+
+```

@@ -1,6 +1,8 @@
 # IDE settings
 .idea/
 .vscode/
+.cursor/debug-*.log
+.claude/
 
 # KiCad files
 *.kicad_prl
@@ -64,15 +66,17 @@ Mkfile.old
 dkms.conf
 
 # CMake folders
+build/
+firmware/build*/
 firmware/cmake-build-*/
 hardware/**/*-backups/
 hardware/**/jlcpcb/gerber/
 
+# CLion cache
+.cache
+
 # Mac OS DS_Store files
 .DS_Store
-
-# Ignore picotool
-firmware/thirdParty/picotool/*
 
 # Test boards
 test_board/*

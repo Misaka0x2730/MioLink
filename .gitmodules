@@ -1,12 +1,18 @@
-[submodule "blackmagic"]
-	path = firmware/thirdParty/blackmagic
-	url = https://github.com/Misaka0x2730/blackmagic
-	branch = main
-[submodule "FreeRTOS-Kernel"]
-	path = firmware/thirdParty/FreeRTOS-Kernel
+[submodule "firmware/external/pico-sdk"]
+	path = firmware/external/pico-sdk
+	url = https://github.com/raspberrypi/pico-sdk.git
+[submodule "firmware/external/FreeRTOS-Kernel"]
+	path = firmware/external/FreeRTOS-Kernel
 	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
-	branch = main
-[submodule "tinyusb"]
-	path = firmware/thirdParty/tinyusb
-	url = https://github.com/Misaka0x2730/tinyusb.git
-	branch = master
+[submodule "firmware/external/tinyusb"]
+	path = firmware/external/tinyusb
+	url = https://github.com/hathach/tinyusb.git
+[submodule "firmware/external/SEGGER/RTT"]
+	path = firmware/external/SEGGER/RTT
+	url = https://github.com/SEGGERMicro/RTT.git
+[submodule "firmware/external/SEGGER/SysView"]
+	path = firmware/external/SEGGER/SysView
+	url = https://github.com/SEGGERMicro/SystemView.git
+[submodule "firmware/external/blackmagic"]
+	path = firmware/external/blackmagic
+	url = https://codeberg.org/blackmagic-debug/blackmagic.git

@@ -1,0 +1,1365 @@
+/*
+ * This file is part of the MioLink project.
+ *
+ * Copyright (C) 2026 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/**********************************************************************************************************************
+ * Private Includes
+ **********************************************************************************************************************/
+
+#include "general.h"
+
+#include "hardware/dma.h"
+#include "hardware/gpio.h"
+#include "hardware/irq.h"
+#include "hardware/uart.h"
+#include "uart_ex.h"
+#include "dma_ex.h"
+
+#include "FreeRTOS.h"
+#include "atomic.h"
+#include "semphr.h"
+#include "task.h"
+#include "timers.h"
+
+#include "uart_bridge.h"
+
+/**********************************************************************************************************************
+ * Private Definitions
+ **********************************************************************************************************************/
+
+/**
+ * \brief DMA IRQ index used by the bridge's DMA dispatcher.
+ *
+ * Selects which of \c DMA_IRQ_0 / \c DMA_IRQ_1 (i.e. which \c INTE / \c INTS bank)
+ * the bridge's RX/TX channels are routed through. Change this single definition
+ * to retarget the bridge onto the other DMA IRQ line.
+ */
+#define UART_BRIDGE_DMA_IRQ_INDEX (0u)
+
+/**
+ * \brief Pre-increment a wrap-around ring index in place and reset it to zero when it reaches \a count.
+ *
+ * Encapsulates the "++idx; if (idx >= count) idx = 0;" rotation used by the bridge's RX paths —
+ * both the DMA buffer-slot counters (current-buffer / next-buffer-to-send) and the INT-mode flat
+ * byte position into the RX buffer pool. Both arguments are evaluated more than once and must
+ * therefore be free of side effects, apart from the intended pre-increment on \a idx.
+ *
+ * \param[in,out] idx   Ring index l-value to advance.
+ * \param[in]     count Wrap modulus (exclusive upper bound).
+ */
+#define UART_BRIDGE_RX_BUFFER_ADVANCE(idx, count) \
+    do {                                          \
+        if (++(idx) >= (count)) {                 \
+            (idx) = 0;                            \
+        }                                         \
+    } while (0)
+
+/**
+ * \brief Compile-time-friendly check that \a v is a non-zero power of two.
+ *
+ * Used to validate \ref uart_bridge_config_t::rx_buffer_count, whose value must be expressible
+ * as a single set bit so the DMA ring-wrap is encodable as \c log2(count * sizeof(pointer)).
+ * \a v is evaluated twice; pass an expression free of side effects.
+ *
+ * \param[in] v Value to test.
+ */
+#define UART_BRIDGE_IS_POWER_OF_2(v) (((v) != 0U) && (((v) & ((v) - 1U)) == 0U))
+
+/**
+ * \brief Typical bit-times per UART byte used to convert baud rate into bytes/second.
+ *
+ * Assumes 8N1 framing: 1 start + 8 data + 1 stop = 10 bits per byte. This is the most common
+ * configuration; with parity, 9-bit data, or 2 stop bits the real value is 11 or 12. The bridge
+ * uses this average only to size the RX-idle timeout timer, whose result is subsequently clamped
+ * into \c [rx_dma_min_timeout_ms, rx_dma_max_timeout_ms], so a small under- or overestimate has
+ * no functional impact.
+ */
+#define UART_BRIDGE_FRAME_BITS_AVG (10U)
+
+/**********************************************************************************************************************
+ * Private Types
+ **********************************************************************************************************************/
+
+/**
+ * \brief One slot in the UART ownership table.
+ */
+typedef struct {
+    uart_inst_t *uart;        /**< UART instance currently held in this slot, \c NULL when free. */
+    uart_bridge_ctx_t *owner; /**< Context owning the slot, \c NULL when free. */
+} uart_bridge_owner_slot_t;
+
+/**********************************************************************************************************************
+ * Private Data
+ **********************************************************************************************************************/
+
+/**
+ * \brief RX FIFO occupancy that asserts \c RXIM for each \ref uart_ex_rx_fifo_level_e.
+ *
+ * Expressed as fractions of \ref UART_EX_FIFO_DEPTH so the relationship to the underlying PL011
+ * FIFO size stays explicit. Stored in flash; consulted from the INT-mode UART ISR to bound the
+ * drain loop one byte below the trigger threshold.
+ */
+static const uint8_t s_rx_fifo_trigger_bytes[UART_EX_RX_FIFO_LEVEL_COUNT] = {
+    [UART_EX_RX_FIFO_LEVEL_1_8] = UART_EX_FIFO_DEPTH / 8U,
+    [UART_EX_RX_FIFO_LEVEL_1_4] = UART_EX_FIFO_DEPTH / 4U,
+    [UART_EX_RX_FIFO_LEVEL_1_2] = UART_EX_FIFO_DEPTH / 2U,
+    [UART_EX_RX_FIFO_LEVEL_3_4] = (UART_EX_FIFO_DEPTH * 3U) / 4U,
+    [UART_EX_RX_FIFO_LEVEL_7_8] = (UART_EX_FIFO_DEPTH * 7U) / 8U,
+};
+
+/* The INT-mode RX ISR drains at most (trigger - 1) bytes per pass. A trigger of zero
+ * would underflow the loop bound to UINT32_MAX, so the table must keep every entry
+ * strictly positive. Enforce the invariant here so a too-shallow UART_EX_FIFO_DEPTH
+ * (or a new RX-level enum value) is rejected at compile time. */
+_Static_assert((UART_EX_FIFO_DEPTH / 8U) >= 1U, "UART_EX_FIFO_DEPTH too small for LEVEL_1_8 trigger");
+_Static_assert((UART_EX_FIFO_DEPTH / 4U) >= 1U, "UART_EX_FIFO_DEPTH too small for LEVEL_1_4 trigger");
+_Static_assert((UART_EX_FIFO_DEPTH / 2U) >= 1U, "UART_EX_FIFO_DEPTH too small for LEVEL_1_2 trigger");
+_Static_assert(((UART_EX_FIFO_DEPTH * 3U) / 4U) >= 1U, "UART_EX_FIFO_DEPTH too small for LEVEL_3_4 trigger");
+_Static_assert(((UART_EX_FIFO_DEPTH * 7U) / 8U) >= 1U, "UART_EX_FIFO_DEPTH too small for LEVEL_7_8 trigger");
+
+/* rx_dma_buffer_full_mask is a uint32_t bitmap with one bit per RX slot, mutated through
+ * Atomic_OR_u32 / Atomic_AND_u32. The DMA paths use (1UL << buffer_index) shifts whose
+ * index can grow up to rx_buffer_count - 1; bounding the maximum at 32 keeps every shift
+ * well-defined and the mask wide enough to hold all bits. Raising this requires a wider
+ * mask plus a matching atomic primitive. */
+_Static_assert(UART_BRIDGE_RX_BUFFER_COUNT_MAX <= 32U,
+    "UART_BRIDGE_RX_BUFFER_COUNT_MAX must fit in the uint32_t rx_dma_buffer_full_mask");
+
+/**
+ * \brief UART ownership table.
+ *
+ * Concurrency model:
+ *  - Structural operations (\ref uart_bridge_try_claim, \ref uart_bridge_release,
+ *    \ref uart_bridge_get_owner, \ref uart_bridge_configure_uart,
+ *    \ref uart_bridge_deinit_uart, \ref uart_bridge_deinit) serialise table mutation
+ *    via \ref s_bridge_mutex (\c xSemaphoreCreateMutexStatic).
+ *  - The table is never read or written from an ISR, so no additional ISR-vs-task
+ *    interlock is required.
+ */
+static uart_bridge_owner_slot_t s_owners[UART_BRIDGE_MAX_OWNERS] = {0};
+
+/**
+ * \brief List of contexts that participate in the bridge's DMA dispatcher (see \ref UART_BRIDGE_DMA_IRQ_INDEX).
+ *
+ * Filled lazily by \ref uart_bridge_init; each context occupies a single slot for life.
+ *
+ * The dispatcher (\ref uart_bridge_dma_irq_handler) reads this array from ISR
+ * context, so mutations from task context use a short \c portENTER_CRITICAL section
+ * to prevent the dispatcher from observing a half-updated slot.
+ */
+static uart_bridge_ctx_t *s_registered[UART_BRIDGE_MAX_CONTEXTS] = {0};
+
+/**
+ * \brief Whether \ref uart_bridge_dma_irq_handler has been installed on the bridge's DMA IRQ line
+ *        (see \ref UART_BRIDGE_DMA_IRQ_INDEX).
+ *
+ * Updated only under \c portENTER_CRITICAL together with \ref s_registered.
+ */
+static bool s_dma_irq_installed = false;
+
+/**
+ * \brief Per-UART dispatcher slot consulted by the bridge's central UART ISR thunks.
+ *
+ * Indexed by \c UART_NUM(uart) (0 for \c uart0, 1 for \c uart1).  The bridge publishes
+ * a context pointer here under \c portENTER_CRITICAL whenever ownership of a UART
+ * changes; the per-UART thunk reads its slot from ISR context and dispatches into
+ * \ref uart_bridge_uart_isr_handler. A \c NULL entry means the UART has no current
+ * owner and the IRQ line is masked in the NVIC.
+ */
+static uart_bridge_ctx_t *s_uart_ctx[NUM_UARTS] = {0};
+
+/**
+ * \brief Lazy-install flags for the bridge's per-UART ISR thunks.
+ *
+ * Set under \c portENTER_CRITICAL on the first claim that touches a given UART.  The
+ * handler is installed once via \c irq_set_exclusive_handler and never removed — the
+ * bridge is the sole NVIC handler for both UART IRQ lines, so subsequent ownership
+ * transitions only flip \ref s_uart_ctx and toggle the NVIC enable bit.
+ */
+static bool s_uart_irq_installed[NUM_UARTS] = {0};
+
+/**
+ * \brief Bridge structural-operations mutex.
+ *
+ * Created once by \ref uart_bridge_common_init before the scheduler starts (or before
+ * any task that calls into the bridge is created).  \c NULL until that call returns.
+ */
+static SemaphoreHandle_t s_bridge_mutex = NULL;
+
+/**********************************************************************************************************************
+ * Private Functions Prototypes
+ **********************************************************************************************************************/
+
+/**
+ * \brief Acquire the bridge structural-operations mutex.
+ *
+ * No-op when the mutex has not been created yet (i.e. before any
+ * \ref uart_bridge_init has finished), which lets defensive callers from
+ * pre-scheduler code paths exit gracefully.
+ */
+static void uart_bridge_lock(void);
+
+/**
+ * \brief Release the bridge structural-operations mutex; mirror of \ref uart_bridge_lock.
+ */
+static void uart_bridge_unlock(void);
+
+/**
+ * \brief Add \a ctx to the list of contexts consulted by the bridge's DMA dispatcher.
+ *
+ * No-op when \a ctx is already registered. Hits \c assert(false) when
+ * \ref UART_BRIDGE_MAX_CONTEXTS is exhausted, since that is a static configuration
+ * error rather than a runtime condition. Caller must serialise concurrent mutations
+ * of \ref s_registered with \c portENTER_CRITICAL so the DMA dispatcher cannot
+ * observe a half-updated slot.
+ *
+ * \param[in] ctx Bridge context to register; must remain valid for the lifetime of the registration.
+ */
+static void uart_bridge_register_ctx(uart_bridge_ctx_t *ctx);
+
+/**
+ * \brief Remove \a ctx from \ref s_registered; mirror of \ref uart_bridge_register_ctx.
+ *
+ * No-op when \a ctx is not currently registered.
+ *
+ * \param[in] ctx Bridge context to unregister.
+ */
+static void uart_bridge_unregister_ctx(uart_bridge_ctx_t *ctx);
+
+/**
+ * \brief Locate the ownership-table slot currently bound to \a uart.
+ *
+ * \param[in] uart UART instance to search for.
+ * \return Slot index in \ref s_owners, or \c -1 when \a uart has no slot in the table.
+ */
+static int uart_bridge_find_slot_for_uart(uart_inst_t *uart);
+
+/**
+ * \brief Locate the first free slot in the ownership table.
+ *
+ * \return Slot index in \ref s_owners, or \c -1 when the table is full.
+ */
+static int uart_bridge_find_free_slot(void);
+
+/**
+ * \brief Clear every ownership-table slot owned by \a ctx.
+ *
+ * Defensive against pathological states where \a ctx may have ended up in more
+ * than one slot; iterates the full table and resets every match.
+ *
+ * \param[in] ctx Bridge context whose entries should be removed.
+ */
+static void uart_bridge_drop_owner_entries(uart_bridge_ctx_t *ctx);
+
+/**
+ * \brief Look up the binding describing the GPIO + IRQ wiring for \a uart inside \a cfg.
+ *
+ * \param[in] cfg  Owner's bridge configuration whose bindings should be searched.
+ * \param[in] uart UART instance to match against \c cfg->bindings.
+ * \return Pointer to the matching binding, or \c NULL when \a uart is not declared
+ *         by the owner.
+ */
+static const uart_bridge_binding_t *uart_bridge_find_binding(const uart_bridge_config_t *cfg, uart_inst_t *uart);
+
+/**
+ * \brief Apply a binding's GPIO functions, publish \a ctx as the binding UART's owner
+ *        for the bridge dispatcher, and enable its UART IRQ line in the NVIC.
+ *
+ * Called from \ref uart_bridge_try_claim under the bridge mutex when the context
+ * transitions to a new UART.  The dispatcher-slot publish races with hardware IRQ
+ * delivery on the other core, so the register and slot writes happen under a brief
+ * \c portENTER_CRITICAL section.  On the first call for a given UART, the bridge's
+ * per-UART ISR thunk is installed lazily via \c irq_set_exclusive_handler.
+ *
+ * \param[in,out] ctx     Bridge context being published into the dispatcher slot.
+ * \param[in]     binding Binding to activate; its UART and GPIO map become the new active hardware.
+ */
+static void uart_bridge_apply_binding_locked(uart_bridge_ctx_t *ctx, const uart_bridge_binding_t *binding);
+
+/**
+ * \brief Revert a previously applied binding: mask its UART IRQ line, retract the
+ *        bridge dispatcher slot for the binding's UART, and return its GPIO pins
+ *        to \c GPIO_FUNC_SIO.
+ *
+ * Called from \ref uart_bridge_deinit_uart_locked (so the deinit and reconfigure
+ * paths share the teardown), under the bridge mutex.  The bridge's central UART
+ * ISR thunk itself is not removed — once installed it stays for the lifetime of
+ * the bridge.
+ *
+ * \param[in] binding Binding to deactivate; its UART IRQ is masked and its pins are returned to SIO.
+ */
+static void uart_bridge_revert_binding_locked(const uart_bridge_binding_t *binding);
+/**
+ * \brief Mutex-held helper for \ref uart_bridge_release.
+ *
+ * Caller must hold \ref s_bridge_mutex.
+ *
+ * \param[in,out] ctx Bridge context whose ownership is being released.
+ */
+static void uart_bridge_release_locked(uart_bridge_ctx_t *ctx);
+
+/**
+ * \brief Mutex-held helper for \ref uart_bridge_deinit_uart.
+ *
+ * Caller must hold \ref s_bridge_mutex. The function is reused by
+ * \ref uart_bridge_deinit to avoid re-locking on the same path.
+ *
+ * \param[in,out] ctx Bridge context whose UART/DMA state is being torn down.
+ */
+static void uart_bridge_deinit_uart_locked(uart_bridge_ctx_t *ctx);
+
+/**
+ * \brief FreeRTOS timer callback for the RX-idle timeout on the DMA RX path.
+ *
+ * Posts \c cfg->notif_rx_timeout to the owner task when DMA RX is currently armed.
+ * INT mode uses the UART RX-timeout interrupt instead, so the timer is only
+ * meaningful for the DMA path; the \c rx_use_dma / \c rx_ongoing guards also
+ * suppress stale callbacks delivered after a concurrent reconfigure / deinit
+ * (\c xTimerStop is asynchronous w.r.t. the timer-service task).
+ *
+ * \param[in] timer Timer handle whose ID is the owning \ref uart_bridge_ctx_t pointer.
+ */
+static void uart_bridge_rx_timeout_callback(TimerHandle_t timer);
+
+/**
+ * \brief Switch the UART from IRQ-armed standby to an active DMA RX session.
+ *
+ * Disables the UART RX/timeout IRQs, enables UART DMA requests, kicks the RX
+ * DMA channel, and (re)starts the RX-idle timer from ISR context. The caller
+ * must guarantee that no RX session is currently in flight on \a ctx.
+ *
+ * \param[in,out] ctx Bridge context owning the UART being switched to DMA RX.
+ * \return \c pdTRUE when the timer reset signals that a higher-priority task was
+ *         woken and the caller's \c portYIELD_FROM_ISR should follow; \c pdFALSE otherwise.
+ */
+static BaseType_t uart_bridge_rx_dma_start_receiving(uart_bridge_ctx_t *ctx);
+
+/**
+ * \brief Shared DMA IRQ dispatcher for every registered bridge context.
+ *
+ * Installed once on \ref UART_BRIDGE_DMA_IRQ_INDEX by the first \ref uart_bridge_init
+ * call and uninstalled by the last \ref uart_bridge_deinit. Walks \ref s_registered
+ * and, for each context, acknowledges TX-completion and RX-buffer-full events on
+ * its DMA channels and posts the matching task notifications.
+ */
+static void uart_bridge_dma_irq_handler(void);
+
+/**
+ * \brief Per-channel UART ISR body.
+ *
+ * Reads \c MIS, drains the RX FIFO (INT-mode) or starts a DMA RX session, and notifies
+ * the owner task.  Invoked from the bridge's per-UART thunks (\ref uart_bridge_uart0_isr,
+ * \ref uart_bridge_uart1_isr) with the current dispatcher slot value as \a ctx.
+ *
+ * \param[in,out] ctx Bridge context owning the UART that raised the IRQ.
+ */
+static void uart_bridge_uart_isr_handler(uart_bridge_ctx_t *ctx);
+
+/**
+ * \brief NVIC thunk for \c uart0; dispatches to \ref uart_bridge_uart_isr_handler.
+ */
+static void uart_bridge_uart0_isr(void);
+
+/**
+ * \brief NVIC thunk for \c uart1; dispatches to \ref uart_bridge_uart_isr_handler.
+ */
+static void uart_bridge_uart1_isr(void);
+
+/**
+ * \brief Lookup table of the bridge's per-UART ISR thunks, indexed by \c UART_NUM(uart).
+ */
+static const irq_handler_t s_uart_bridge_isrs[NUM_UARTS] = {
+    uart_bridge_uart0_isr,
+    uart_bridge_uart1_isr,
+};
+
+/**********************************************************************************************************************
+ * Private Functions
+ **********************************************************************************************************************/
+
+static void uart_bridge_lock(void)
+{
+    assert(s_bridge_mutex != NULL);
+
+    xSemaphoreTake(s_bridge_mutex, portMAX_DELAY);
+}
+
+static void uart_bridge_unlock(void)
+{
+    assert(s_bridge_mutex != NULL);
+
+    xSemaphoreGive(s_bridge_mutex);
+}
+
+static void uart_bridge_register_ctx(uart_bridge_ctx_t *ctx)
+{
+    for (uint32_t i = 0; i < UART_BRIDGE_MAX_CONTEXTS; i++) {
+        if (s_registered[i] == ctx) {
+            return;
+        }
+    }
+
+    for (uint32_t i = 0; i < UART_BRIDGE_MAX_CONTEXTS; i++) {
+        if (s_registered[i] == NULL) {
+            s_registered[i] = ctx;
+            return;
+        }
+    }
+
+    /* Configuration error: bumping UART_BRIDGE_MAX_CONTEXTS is required. */
+    assert(false);
+}
+
+static void uart_bridge_unregister_ctx(uart_bridge_ctx_t *ctx)
+{
+    for (uint32_t i = 0; i < UART_BRIDGE_MAX_CONTEXTS; i++) {
+        if (s_registered[i] == ctx) {
+            s_registered[i] = NULL;
+            return;
+        }
+    }
+}
+
+static int uart_bridge_find_slot_for_uart(uart_inst_t *uart)
+{
+    for (int i = 0; i < (int)UART_BRIDGE_MAX_OWNERS; i++) {
+        if (s_owners[i].uart == uart) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static int uart_bridge_find_free_slot(void)
+{
+    for (int i = 0; i < (int)UART_BRIDGE_MAX_OWNERS; i++) {
+        if ((s_owners[i].uart == NULL) && (s_owners[i].owner == NULL)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void uart_bridge_drop_owner_entries(uart_bridge_ctx_t *ctx)
+{
+    for (uint32_t i = 0; i < UART_BRIDGE_MAX_OWNERS; i++) {
+        if (s_owners[i].owner == ctx) {
+            s_owners[i].uart = NULL;
+            s_owners[i].owner = NULL;
+        }
+    }
+}
+
+static const uart_bridge_binding_t *uart_bridge_find_binding(const uart_bridge_config_t *cfg, uart_inst_t *uart)
+{
+    if ((cfg == NULL) || (cfg->bindings == NULL) || (uart == NULL)) {
+        return NULL;
+    }
+    for (uint32_t i = 0; i < cfg->bindings_count; i++) {
+        if (cfg->bindings[i].uart == uart) {
+            return &cfg->bindings[i];
+        }
+    }
+    return NULL;
+}
+
+static void uart_bridge_apply_binding_locked(uart_bridge_ctx_t *ctx, const uart_bridge_binding_t *binding)
+{
+    if ((binding == NULL) || (binding->uart == NULL)) {
+        return;
+    }
+
+    const uint idx = UART_NUM(binding->uart);
+    const uint irq_num = UART_BRIDGE_UART_IRQ_NUM(binding->uart);
+
+    portENTER_CRITICAL();
+
+    for (uint32_t i = 0; i < UART_BRIDGE_MAX_PINS_PER_BINDING; i++) {
+        if (binding->pins[i].gpio >= 0) {
+            gpio_set_function((uint)binding->pins[i].gpio, binding->pins[i].function);
+        }
+    }
+
+    const int rx_gpio = binding->pins[UART_BRIDGE_BINDING_PIN_RX].gpio;
+    if (rx_gpio >= 0) {
+        gpio_set_pulls((uint)rx_gpio, true, false);
+    }
+
+    /* Publish ctx into the dispatcher slot before the NVIC line is enabled so an
+     * IRQ that latches on the rising edge of irq_set_enabled cannot dispatch with
+     * a stale (or NULL) ctx. */
+    s_uart_ctx[idx] = ctx;
+
+    if (s_uart_irq_installed[idx] == false) {
+        irq_set_exclusive_handler(irq_num, s_uart_bridge_isrs[idx]);
+        s_uart_irq_installed[idx] = true;
+    }
+    irq_set_enabled(irq_num, true);
+
+    portEXIT_CRITICAL();
+}
+
+static void uart_bridge_revert_binding_locked(const uart_bridge_binding_t *binding)
+{
+    if ((binding == NULL) || (binding->uart == NULL)) {
+        return;
+    }
+
+    const uint idx = UART_NUM(binding->uart);
+    const uint irq_num = UART_BRIDGE_UART_IRQ_NUM(binding->uart);
+
+    portENTER_CRITICAL();
+
+    /* Mask the NVIC line and drop the dispatcher slot atomically with respect to a
+     * concurrent ISR on the other core: portENTER_CRITICAL takes the FreeRTOS spinlock
+     * that the ISR also takes via xTaskNotifyFromISR, so by the time we clear
+     * s_uart_ctx no in-flight ISR can still observe the old ctx. */
+    irq_set_enabled(irq_num, false);
+    s_uart_ctx[idx] = NULL;
+
+    /* Return the binding's GPIOs to SIO so the next owner starts from a clean state
+     * (and so an idle TDI/TDO pair does not keep driving lines as a peripheral). */
+    for (uint32_t i = 0; i < UART_BRIDGE_MAX_PINS_PER_BINDING; i++) {
+        if (binding->pins[i].gpio >= 0) {
+            gpio_set_function((uint)binding->pins[i].gpio, GPIO_FUNC_SIO);
+        }
+    }
+
+    portEXIT_CRITICAL();
+}
+
+static void uart_bridge_rx_timeout_callback(TimerHandle_t timer)
+{
+    uart_bridge_ctx_t *ctx = (uart_bridge_ctx_t *)pvTimerGetTimerID(timer);
+    if (ctx == NULL) {
+        return;
+    }
+
+    /* INT mode uses the UART RX-timeout interrupt; the FreeRTOS timer fires only
+     * for the DMA path. The additional rx_ongoing guard handles the case where the
+     * timer-service task delivers a callback that was already in flight while a
+     * concurrent uart_bridge_deinit_uart / configure_uart had reset the channel
+     * state (xTimerStop is asynchronous w.r.t. the timer-service task). */
+    if ((ctx->rx_use_dma) && (ctx->rx_ongoing)) {
+        xTaskNotify(ctx->owner_task, ctx->cfg->notif_rx_timeout, eSetBits);
+    }
+}
+
+static BaseType_t uart_bridge_rx_dma_start_receiving(uart_bridge_ctx_t *ctx)
+{
+    assert(ctx->rx_ongoing == false);
+
+    ctx->rx_ongoing = true;
+
+    uart_ex_set_rx_and_timeout_irq_enabled(ctx->uart, false, false);
+    uart_ex_clear_rx_and_rx_timeout_irq_flags(ctx->uart);
+
+    dma_irqn_acknowledge_channel(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->rx_dma_channel);
+    dma_irqn_set_channel_enabled(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->rx_dma_channel, true);
+
+    BaseType_t higher_priority_task_woken = pdFALSE;
+    xTimerResetFromISR(ctx->rx_timeout_timer, &higher_priority_task_woken);
+
+    uart_ex_set_dma_req_enabled(ctx->uart, true, ctx->cfg->tx_buffer != NULL);
+
+    return higher_priority_task_woken;
+}
+
+static void uart_bridge_dma_irq_handler(void)
+{
+    traceISR_ENTER();
+
+    BaseType_t higher_priority_task_woken = pdFALSE;
+
+    for (uint32_t i = 0; i < UART_BRIDGE_MAX_CONTEXTS; i++) {
+        uart_bridge_ctx_t *ctx = s_registered[i];
+        if (ctx == NULL) {
+            continue;
+        }
+
+        if ((ctx->tx_dma_channel != DMA_EX_CHANNEL_UNCLAIMED) &&
+            (dma_irqn_get_channel_status(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->tx_dma_channel))) {
+            dma_irqn_set_channel_enabled(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->tx_dma_channel, false);
+            dma_irqn_acknowledge_channel(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->tx_dma_channel);
+            xTaskNotifyFromISR(ctx->owner_task, ctx->cfg->notif_tx_complete, eSetBits, &higher_priority_task_woken);
+        }
+
+        if ((ctx->rx_dma_channel != DMA_EX_CHANNEL_UNCLAIMED) &&
+            (dma_irqn_get_channel_status(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->rx_dma_channel))) {
+            dma_irqn_acknowledge_channel(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->rx_dma_channel);
+
+            /* Atomic OR because the owner task that clears bits via Atomic_AND_u32
+             * in uart_bridge_rx_dma_process_buffers runs on a different core than the
+             * DMA dispatcher (see SMP / core-affinity note in uart_bridge_init). */
+            Atomic_OR_u32(&ctx->rx_dma_buffer_full_mask, 1UL << ctx->rx_dma_current_buffer);
+            UART_BRIDGE_RX_BUFFER_ADVANCE(ctx->rx_dma_current_buffer, ctx->cfg->rx_buffer_count);
+
+            xTaskNotifyFromISR(ctx->owner_task, ctx->cfg->notif_rx_available, eSetBits, &higher_priority_task_woken);
+        }
+    }
+
+    portYIELD_FROM_ISR(higher_priority_task_woken);
+}
+
+/**********************************************************************************************************************
+ * Public Functions
+ **********************************************************************************************************************/
+
+void uart_bridge_common_init(void)
+{
+    assert(s_bridge_mutex == NULL);
+
+    for (uint32_t i = 0; i < UART_BRIDGE_MAX_OWNERS; i++) {
+        s_owners[i].uart = NULL;
+        s_owners[i].owner = NULL;
+    }
+
+    for (uint32_t i = 0; i < UART_BRIDGE_MAX_CONTEXTS; i++) {
+        s_registered[i] = NULL;
+    }
+
+    for (uint32_t i = 0; i < NUM_UARTS; i++) {
+        s_uart_ctx[i] = NULL;
+        s_uart_irq_installed[i] = false;
+    }
+
+    s_dma_irq_installed = false;
+
+    s_bridge_mutex = xSemaphoreCreateMutex();
+    assert(s_bridge_mutex != NULL);
+}
+
+void uart_bridge_init(uart_bridge_ctx_t *ctx, const uart_bridge_config_t *cfg, TaskHandle_t owner_task)
+{
+    assert(ctx != NULL);
+    assert(cfg != NULL);
+    assert(cfg->rx_buffers_base != NULL);
+    assert(cfg->rx_buffer_size > 0);
+    assert(cfg->rx_buffer_count > 0);
+    assert(cfg->rx_buffer_count <= UART_BRIDGE_RX_BUFFER_COUNT_MAX);
+    /* rx_buffer_count must be a power of 2 so the DMA ring-wrap, encoded as log2 of the
+     * wrap region in bytes, is exact. */
+    assert(UART_BRIDGE_IS_POWER_OF_2(cfg->rx_buffer_count));
+    assert(cfg->rx_ctrl_block_info != NULL);
+    assert(cfg->rx_sink != NULL);
+    assert(cfg->bindings != NULL);
+    assert(cfg->bindings_count > 0);
+    assert(cfg->rx_int_fifo_level < UART_EX_RX_FIFO_LEVEL_COUNT);
+
+    ctx->cfg = cfg;
+    ctx->owner_task = owner_task;
+
+    /* Hardware stays detached until the first uart_bridge_try_claim: the bridge
+     * does not pre-configure any binding here, and the ownership table is left
+     * untouched so a subsequent claim takes the full setup path. */
+    ctx->uart = NULL;
+
+    ctx->rx_dma_channel = DMA_EX_CHANNEL_UNCLAIMED;
+    ctx->rx_dma_ctrl_channel = DMA_EX_CHANNEL_UNCLAIMED;
+    ctx->tx_dma_channel = DMA_EX_CHANNEL_UNCLAIMED;
+
+    dma_ex_claim_channel_if_unclaimed(&ctx->rx_dma_channel);
+    dma_ex_claim_channel_if_unclaimed(&ctx->rx_dma_ctrl_channel);
+    if (cfg->tx_buffer != NULL) {
+        dma_ex_claim_channel_if_unclaimed(&ctx->tx_dma_channel);
+    }
+
+    ctx->rx_use_dma = false;
+    ctx->rx_ongoing = false;
+    ctx->rx_int_buf_pos = 0;
+    ctx->rx_dma_buffer_full_mask = 0;
+    ctx->rx_dma_current_buffer = 0;
+    ctx->rx_dma_next_buffer_to_send = 0;
+    ctx->tx_ongoing = false;
+    ctx->tx_dma_finished = false;
+
+    for (uint32_t i = 0; i < cfg->rx_buffer_count; i++) {
+        cfg->rx_ctrl_block_info[i] = cfg->rx_buffers_base + i * cfg->rx_buffer_size;
+    }
+    cfg->rx_ctrl_block_info[cfg->rx_buffer_count] = NULL;
+
+    const TickType_t timer_period_ticks = pdMS_TO_TICKS(cfg->rx_dma_max_timeout_ms);
+    ctx->rx_timeout_timer =
+        xTimerCreate(cfg->timer_name, timer_period_ticks, pdFALSE, ctx, uart_bridge_rx_timeout_callback);
+    assert(ctx->rx_timeout_timer != NULL);
+
+    /* s_registered[] and s_dma_irq_installed are read by uart_bridge_dma_irq_handler
+     * from ISR context, so the publish of a new entry plus the (one-shot) handler
+     * installation must be atomic with respect to that ISR. The bridge mutex would
+     * not suffice on its own; portENTER_CRITICAL is the right primitive here.
+     *
+     * SMP / core-affinity note: irq_set_exclusive_handler / irq_set_enabled below
+     * apply only to the core that executes this function (the Pico SDK NVIC API is
+     * per-core).  uart_bridge_init is invoked from \c target_serial_init /
+     * \c traceswo_task_init, both of which run in the GDB task context (currently
+     * pinned to core 1 via GDB_TASK_CORE_AFFINITY), while the owner tasks themselves
+     * (target_serial, traceswo) are pinned to core 0 via TARGET_SERIAL_TASK_CORE_AFFINITY /
+     * TRACESWO_TASK_CORE_AFFINITY.  The DMA dispatcher therefore runs on a different
+     * core than the owner tasks, so any update to shared state from the dispatcher
+     * must remain SMP-safe with respect to the owner (e.g. \c rx_dma_buffer_full_mask
+     * is touched with \c Atomic_OR_u32 in the dispatcher and \c Atomic_AND_u32 in
+     * \c uart_bridge_rx_dma_process_buffers).  Owner code only touches peripheral
+     * registers (UART IMSC, DMA INTE / abort / ack), which are global and safe from
+     * any core; it does not flip per-core NVIC enables for the UART or DMA IRQ lines. */
+    portENTER_CRITICAL();
+    uart_bridge_register_ctx(ctx);
+
+    if (s_dma_irq_installed == false) {
+        irq_set_exclusive_handler(dma_get_irq_num(UART_BRIDGE_DMA_IRQ_INDEX), uart_bridge_dma_irq_handler);
+        irq_set_enabled(dma_get_irq_num(UART_BRIDGE_DMA_IRQ_INDEX), true);
+        s_dma_irq_installed = true;
+    }
+    portEXIT_CRITICAL();
+}
+
+void uart_bridge_configure_uart(
+    uart_bridge_ctx_t *ctx, uint32_t baudrate, uint8_t data_bits, uint8_t stop_bits, uart_parity_t parity)
+{
+    assert(ctx != NULL);
+    assert(ctx->uart != NULL);
+
+    /* Hold the bridge mutex across the entire reconfigure so a concurrent
+     * uart_bridge_try_claim cannot reassign ctx->uart mid-flight, and so the
+     * xTimerChangePeriod call below (which would be illegal inside a critical
+     * section) is properly serialised against other structural operations. */
+    uart_bridge_lock();
+
+    /* 1. Disable the hardware sources of UART and DMA interrupts first so the
+     *    ISR and DMA dispatcher cannot observe partial state during the
+     *    reconfigure. uart_ex_set_*_enabled writes the peripheral mask, which
+     *    blocks future IRQ assertions on both cores. */
+    uart_ex_set_dma_req_enabled(ctx->uart, false, false);
+    uart_ex_set_rx_and_timeout_irq_enabled(ctx->uart, false, false);
+    /* Reset both trigger fields to their lowest valid encoding during teardown; the INT-mode setup
+     * path below reprograms the RX side from cfg, and TX trigger is unused (bridge TX is DMA). */
+    uart_ex_set_int_fifo_levels(ctx->uart, UART_EX_RX_FIFO_LEVEL_1_8, UART_EX_TX_FIFO_LEVEL_1_8);
+
+    dma_ex_channel_abort_and_disable_irq((uint32_t)ctx->rx_dma_ctrl_channel, UART_BRIDGE_DMA_IRQ_INDEX);
+    dma_ex_channel_abort_and_disable_irq((uint32_t)ctx->rx_dma_channel, UART_BRIDGE_DMA_IRQ_INDEX);
+
+    if (ctx->tx_dma_channel != DMA_EX_CHANNEL_UNCLAIMED) {
+        dma_ex_channel_abort_and_disable_irq((uint32_t)ctx->tx_dma_channel, UART_BRIDGE_DMA_IRQ_INDEX);
+    }
+
+    /* Stop the RX idle timer before changing channel state so a stale callback
+     * cannot fire after the reset below; see R4 in the plan. */
+    xTimerStop(ctx->rx_timeout_timer, 0);
+
+    /* 2. With hardware IRQ sources masked, briefly take the FreeRTOS spinlock to
+     *    flush any UART/DMA ISR that was already running on the other core
+     *    (those ISRs take the same spinlock via xTaskNotifyFromISR / xTimerResetFromISR).
+     *    After this point the ctx fields can be reset without a TOCTOU window. */
+    portENTER_CRITICAL();
+    ctx->rx_int_buf_pos = 0;
+    ctx->rx_ongoing = false;
+    ctx->rx_dma_buffer_full_mask = 0;
+    ctx->rx_dma_current_buffer = 0;
+    ctx->rx_dma_next_buffer_to_send = 0;
+    ctx->tx_ongoing = false;
+    ctx->tx_dma_finished = false;
+    portEXIT_CRITICAL();
+
+    /* Wipe the RX buffer pool before re-enabling hardware so the owner never observes
+     * leftovers from a previous configuration. Safe here: DMA is aborted and no IRQ source
+     * is armed yet. */
+    memset(ctx->cfg->rx_buffers_base, 0, ctx->cfg->rx_buffer_size * ctx->cfg->rx_buffer_count);
+
+    uart_init(ctx->uart, baudrate);
+    uart_set_format(ctx->uart, data_bits, stop_bits, parity);
+
+    if (ctx->tx_dma_channel != DMA_EX_CHANNEL_UNCLAIMED) {
+        dma_channel_config tx_config = dma_channel_get_default_config((uint)ctx->tx_dma_channel);
+        channel_config_set_transfer_data_size(&tx_config, DMA_SIZE_8);
+        channel_config_set_read_increment(&tx_config, true);
+        channel_config_set_write_increment(&tx_config, false);
+        channel_config_set_dreq(&tx_config, uart_get_dreq(ctx->uart, true));
+
+        dma_channel_configure((uint)ctx->tx_dma_channel, &tx_config, uart_ex_get_dr_address(ctx->uart),
+            ctx->cfg->tx_buffer, ctx->cfg->tx_buffer_size, false);
+    }
+
+    if (baudrate >= ctx->cfg->rx_dma_baudrate_threshold) {
+        /* RX DMA path. */
+        dma_channel_config rx_ctrl_config = dma_channel_get_default_config((uint)ctx->rx_dma_ctrl_channel);
+        channel_config_set_transfer_data_size(&rx_ctrl_config, DMA_SIZE_32);
+        channel_config_set_read_increment(&rx_ctrl_config, true);
+        channel_config_set_write_increment(&rx_ctrl_config, false);
+        channel_config_set_high_priority(&rx_ctrl_config, true);
+        /* Ring the rx_ctrl_block_info read pointer over the (count slots + sentinel) region. The
+         * hardware encodes the wrap as log2 of the region size in bytes; rx_buffer_count is
+         * asserted to be a power of 2 in uart_bridge_init so __builtin_ctz gives the exact log2. */
+        const uint32_t ring_wrap_bytes =
+            ctx->cfg->rx_buffer_count * (uint32_t)sizeof(ctx->cfg->rx_ctrl_block_info[0]);
+        channel_config_set_ring(&rx_ctrl_config, false, (uint)__builtin_ctz(ring_wrap_bytes));
+
+        dma_channel_configure((uint)ctx->rx_dma_ctrl_channel, &rx_ctrl_config,
+            dma_ex_get_al2_write_addr_trig((uint32_t)ctx->rx_dma_channel),
+            (const volatile void *)ctx->cfg->rx_ctrl_block_info, 1, false);
+
+        dma_channel_config rx_config = dma_channel_get_default_config((uint)ctx->rx_dma_channel);
+        channel_config_set_transfer_data_size(&rx_config, DMA_SIZE_8);
+        channel_config_set_read_increment(&rx_config, false);
+        channel_config_set_write_increment(&rx_config, true);
+        channel_config_set_dreq(&rx_config, uart_get_dreq(ctx->uart, false));
+        channel_config_set_high_priority(&rx_config, true);
+        channel_config_set_chain_to(&rx_config, (uint)ctx->rx_dma_ctrl_channel);
+
+        dma_channel_configure((uint)ctx->rx_dma_channel, &rx_config, ctx->cfg->rx_buffers_base,
+            uart_ex_get_dr_address(ctx->uart), ctx->cfg->rx_buffer_size, false);
+
+        ctx->rx_use_dma = true;
+
+        uart_ex_set_dma_req_enabled(ctx->uart, false, ctx->cfg->tx_buffer != NULL);
+        dma_ex_set_channel_enabled((uint32_t)ctx->rx_dma_channel, true, false);
+        dma_irqn_set_channel_enabled(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->rx_dma_channel, true);
+
+        dma_channel_set_read_addr((uint)ctx->rx_dma_ctrl_channel, (void *)ctx->cfg->rx_ctrl_block_info, true);
+
+        /* Time to fill 2 RX buffers; clamp into [min, max] ms. */
+        uint32_t timer_period = (ctx->cfg->rx_buffer_size * 2U * 1000U);
+        const uint32_t bytes_per_second = baudrate / UART_BRIDGE_FRAME_BITS_AVG;
+        if (bytes_per_second > 0U) {
+            timer_period /= bytes_per_second;
+        }
+        /* If bytes_per_second is 0 (degenerate baudrate < UART_BRIDGE_FRAME_BITS_AVG bit/s),
+         * leave timer_period at the unscaled numerator; the upper clamp below caps it to
+         * rx_dma_max_timeout_ms and avoids the otherwise undefined divide-by-zero. */
+        if (timer_period < ctx->cfg->rx_dma_min_timeout_ms) {
+            timer_period = ctx->cfg->rx_dma_min_timeout_ms;
+        } else if (timer_period > ctx->cfg->rx_dma_max_timeout_ms) {
+            timer_period = ctx->cfg->rx_dma_max_timeout_ms;
+        }
+
+        xTimerChangePeriod(ctx->rx_timeout_timer, pdMS_TO_TICKS(timer_period), portMAX_DELAY);
+
+        uart_ex_set_rx_and_timeout_irq_enabled(ctx->uart, true, true);
+    } else {
+        /* RX INT path. */
+        ctx->rx_use_dma = false;
+
+        /* TX side is DMA-driven and never enables TXIM; the trigger field is set to a sentinel only. */
+        uart_ex_set_int_fifo_levels(ctx->uart, ctx->cfg->rx_int_fifo_level, UART_EX_TX_FIFO_LEVEL_1_8);
+        uart_ex_set_rx_and_timeout_irq_enabled(ctx->uart, true, true);
+    }
+
+    uart_bridge_unlock();
+}
+
+void uart_bridge_rx_int_process(uart_bridge_ctx_t *ctx)
+{
+    if (ctx->rx_int_buf_pos > 0) {
+        const uart_bridge_sink_result_e result = ctx->cfg->rx_sink(ctx, ctx->cfg->rx_buffers_base, ctx->rx_int_buf_pos,
+            UART_BRIDGE_SINK_NO_FLUSH, UART_BRIDGE_SINK_ALLOW_DROP);
+        if (result == UART_BRIDGE_SINK_OK) {
+            ctx->rx_int_buf_pos = 0;
+        }
+        ctx->rx_ongoing = true;
+    }
+
+    uart_ex_set_rx_irq_enabled(ctx->uart, true);
+}
+
+void uart_bridge_rx_int_finish(uart_bridge_ctx_t *ctx)
+{
+    const uint32_t total_size = ctx->cfg->rx_buffer_size * ctx->cfg->rx_buffer_count;
+
+    if (ctx->rx_int_buf_pos > 0) {
+        ctx->cfg->rx_sink(ctx, ctx->cfg->rx_buffers_base, ctx->rx_int_buf_pos, UART_BRIDGE_SINK_NO_FLUSH,
+            UART_BRIDGE_SINK_ALLOW_DROP);
+        ctx->rx_int_buf_pos = 0;
+    }
+
+    while (uart_is_readable(ctx->uart)) {
+        ctx->cfg->rx_buffers_base[ctx->rx_int_buf_pos] = uart_ex_read(ctx->uart);
+        UART_BRIDGE_RX_BUFFER_ADVANCE(ctx->rx_int_buf_pos, total_size);
+    }
+
+    if (ctx->rx_int_buf_pos > 0) {
+        ctx->cfg->rx_sink(
+            ctx, ctx->cfg->rx_buffers_base, ctx->rx_int_buf_pos, UART_BRIDGE_SINK_FLUSH, UART_BRIDGE_SINK_ALLOW_DROP);
+        ctx->rx_int_buf_pos = 0;
+    }
+
+    ctx->rx_ongoing = false;
+    uart_ex_set_rx_timeout_irq_enabled(ctx->uart, true);
+}
+
+void uart_bridge_rx_dma_process_buffers(uart_bridge_ctx_t *ctx)
+{
+    xTimerReset(ctx->rx_timeout_timer, 0);
+
+    while (1) {
+        const uint32_t buffer_state = ctx->rx_dma_buffer_full_mask;
+        const uint32_t buffer_bit = (1UL << ctx->rx_dma_next_buffer_to_send);
+        const bool allow_drop = (__builtin_popcount(buffer_state) >= (int)ctx->cfg->rx_drop_threshold);
+
+        if ((buffer_state & buffer_bit) == 0) {
+            break;
+        }
+
+        uint8_t *const buf =
+            ctx->cfg->rx_buffers_base + ((size_t)ctx->rx_dma_next_buffer_to_send * ctx->cfg->rx_buffer_size);
+        const uart_bridge_sink_result_e result =
+            ctx->cfg->rx_sink(ctx, buf, ctx->cfg->rx_buffer_size, UART_BRIDGE_SINK_NO_FLUSH, allow_drop);
+
+        if (result == UART_BRIDGE_SINK_OK) {
+            Atomic_AND_u32(&ctx->rx_dma_buffer_full_mask, ~buffer_bit);
+            UART_BRIDGE_RX_BUFFER_ADVANCE(ctx->rx_dma_next_buffer_to_send, ctx->cfg->rx_buffer_count);
+        } else if (result == UART_BRIDGE_SINK_RETRY) {
+            xTimerReset(ctx->rx_timeout_timer, 0);
+            vTaskDelay(pdMS_TO_TICKS(1));
+        } else {
+            break; /* UART_BRIDGE_SINK_STALL */
+        }
+    }
+}
+
+void uart_bridge_rx_dma_finish_receiving(uart_bridge_ctx_t *ctx)
+{
+    assert(ctx->rx_ongoing != false);
+
+    /* Stop the UART from raising new RX DREQs and tear down the ctrl side of the chain so
+     * the data channel cannot loop back into a fresh buffer behind our backs. */
+    uart_ex_set_dma_req_enabled(ctx->uart, false, ctx->cfg->tx_buffer != NULL);
+    dma_ex_channel_abort_and_disable_irq((uint32_t)ctx->rx_dma_ctrl_channel, UART_BRIDGE_DMA_IRQ_INDEX);
+
+    /* Mask the data-channel completion IRQ in the dispatcher BEFORE we snapshot
+     * rx_dma_current_buffer / trans_count: otherwise a late completion firing between the
+     * ctrl abort and our reads could still advance rx_dma_current_buffer and OR a new bit
+     * into rx_dma_buffer_full_mask, racing the local current_buffer copy below. The data
+     * channel itself is left running here so dma_ex_get_trans_count can still observe the
+     * residual byte count; the abort happens further down. */
+    dma_irqn_set_channel_enabled(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->rx_dma_channel, false);
+
+    /* Brief portENTER_CRITICAL window flushes any DMA-dispatcher instance still running on
+     * the other core (the ISR takes the same FreeRTOS spinlock via xTaskNotifyFromISR), so
+     * by the time we exit no in-flight ISR can still mutate rx_dma_current_buffer. */
+    portENTER_CRITICAL();
+    portEXIT_CRITICAL();
+
+    const uint32_t current_buffer = ctx->rx_dma_current_buffer;
+
+    UART_BRIDGE_RX_BUFFER_ADVANCE(ctx->rx_dma_current_buffer, ctx->cfg->rx_buffer_count);
+
+    ctx->rx_ongoing = false;
+
+    xTimerStop(ctx->rx_timeout_timer, 0);
+
+    const uint32_t remaining = dma_ex_get_trans_count((uint32_t)ctx->rx_dma_channel);
+    const uint32_t data_in_buffer = ctx->cfg->rx_buffer_size - remaining;
+
+    dma_ex_set_chain_to((uint32_t)ctx->rx_dma_channel, (uint32_t)ctx->rx_dma_channel);
+    dma_ex_channel_abort_and_disable_irq((uint32_t)ctx->rx_dma_channel, UART_BRIDGE_DMA_IRQ_INDEX);
+    dma_ex_set_chain_to((uint32_t)ctx->rx_dma_channel, (uint32_t)ctx->rx_dma_ctrl_channel);
+
+    dma_channel_set_read_addr(
+        (uint)ctx->rx_dma_ctrl_channel, (void *)(ctx->cfg->rx_ctrl_block_info + ctx->rx_dma_current_buffer), true);
+    uart_ex_set_rx_and_timeout_irq_enabled(ctx->uart, true, true);
+
+    while (1) {
+        const uint32_t buffer_state = ctx->rx_dma_buffer_full_mask;
+        const uint32_t buffer_bit = (1UL << ctx->rx_dma_next_buffer_to_send);
+        if ((buffer_state & buffer_bit) == 0) {
+            break;
+        }
+
+        uint8_t *const buf =
+            ctx->cfg->rx_buffers_base + ((size_t)ctx->rx_dma_next_buffer_to_send * ctx->cfg->rx_buffer_size);
+        ctx->cfg->rx_sink(ctx, buf, ctx->cfg->rx_buffer_size, UART_BRIDGE_SINK_NO_FLUSH, UART_BRIDGE_SINK_ALLOW_DROP);
+
+        Atomic_AND_u32(&ctx->rx_dma_buffer_full_mask, ~buffer_bit);
+        UART_BRIDGE_RX_BUFFER_ADVANCE(ctx->rx_dma_next_buffer_to_send, ctx->cfg->rx_buffer_count);
+    }
+
+    if ((current_buffer + 1U) >= ctx->cfg->rx_buffer_count) {
+        ctx->rx_dma_next_buffer_to_send = 0;
+    } else {
+        ctx->rx_dma_next_buffer_to_send = current_buffer + 1U;
+    }
+
+    uint8_t *const tail_buf = ctx->cfg->rx_buffers_base + ((size_t)current_buffer * ctx->cfg->rx_buffer_size);
+    ctx->cfg->rx_sink(ctx, tail_buf, data_in_buffer, UART_BRIDGE_SINK_FLUSH, UART_BRIDGE_SINK_ALLOW_DROP);
+}
+
+void uart_bridge_tx_dma_send(uart_bridge_ctx_t *ctx)
+{
+    if (ctx->tx_dma_channel == DMA_EX_CHANNEL_UNCLAIMED) {
+        return;
+    }
+    if (ctx->cfg->tx_source == NULL) {
+        return;
+    }
+
+    const size_t read_count = ctx->cfg->tx_source(ctx, ctx->cfg->tx_buffer, ctx->cfg->tx_buffer_size);
+
+    if (read_count != 0) {
+        dma_irqn_acknowledge_channel(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->tx_dma_channel);
+        dma_irqn_set_channel_enabled(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->tx_dma_channel, false);
+
+        dma_channel_set_read_addr((uint)ctx->tx_dma_channel, ctx->cfg->tx_buffer, false);
+        dma_channel_set_write_addr((uint)ctx->tx_dma_channel, uart_ex_get_dr_address(ctx->uart), false);
+        dma_channel_set_trans_count((uint)ctx->tx_dma_channel, read_count, true);
+
+        ctx->tx_ongoing = true;
+
+        dma_irqn_set_channel_enabled(UART_BRIDGE_DMA_IRQ_INDEX, (uint)ctx->tx_dma_channel, true);
+    } else if (ctx->tx_ongoing) {
+        ctx->tx_dma_finished = true;
+    }
+}
+
+bool uart_bridge_tx_dma_check_finished(uart_bridge_ctx_t *ctx)
+{
+    if (ctx->tx_dma_channel == DMA_EX_CHANNEL_UNCLAIMED) {
+        return true;
+    }
+    if (ctx->uart == NULL) {
+        return true;
+    }
+    return !uart_ex_is_transmitting(ctx->uart);
+}
+
+static void uart_bridge_uart_isr_handler(uart_bridge_ctx_t *ctx)
+{
+    traceISR_ENTER();
+
+    const uint32_t uart_int_status = uart_ex_get_int_status(ctx->uart);
+    assert(uart_int_status != 0);
+
+    uint32_t notify_bits = 0;
+    BaseType_t higher_priority_task_woken = pdFALSE;
+
+    if (ctx->rx_use_dma == false) {
+        const uint32_t total_size = ctx->cfg->rx_buffer_size * ctx->cfg->rx_buffer_count;
+
+        if (uart_int_status & RP_UART_INT_RX_BITS) {
+            /* Intentionally drain at most (trigger - 1) bytes to leave at least one byte in the FIFO.
+             * RX_TIMEOUT only asserts while the FIFO is non-empty; the trailing byte ensures it fires
+             * after the burst ends, which is the trigger for rx_int_finish() to flush the residual
+             * FIFO contents and sink them. */
+            const uint8_t fifo_trigger_bytes = s_rx_fifo_trigger_bytes[ctx->cfg->rx_int_fifo_level];
+            /* Hard-guard the (trigger - 1) underflow path: a zero trigger would wrap the
+             * loop bound to UINT32_MAX and either hang this ISR or stream past the RX
+             * buffer pool. Static asserts on s_rx_fifo_trigger_bytes catch the current
+             * table, but a future entry could regress; keep the runtime check too. */
+            assert(fifo_trigger_bytes >= 1U);
+            for (uint32_t i = 0; i < (uint32_t)(fifo_trigger_bytes - 1U); i++) {
+                if (!uart_is_readable(ctx->uart)) {
+                    break;
+                }
+
+                ctx->cfg->rx_buffers_base[ctx->rx_int_buf_pos] = uart_ex_read(ctx->uart);
+                UART_BRIDGE_RX_BUFFER_ADVANCE(ctx->rx_int_buf_pos, total_size);
+            }
+
+            uart_ex_clear_rx_irq_flag(ctx->uart);
+            uart_ex_set_rx_irq_enabled(ctx->uart, false);
+            notify_bits |= ctx->cfg->notif_rx_available;
+        }
+
+        if (uart_int_status & RP_UART_INT_RX_TIMEOUT_BITS) {
+            uart_ex_clear_rx_timeout_irq_flag(ctx->uart);
+            uart_ex_set_rx_timeout_irq_enabled(ctx->uart, false);
+            notify_bits |= ctx->cfg->notif_rx_timeout;
+        }
+
+        xTaskNotifyFromISR(ctx->owner_task, notify_bits, eSetBits, &higher_priority_task_woken);
+    } else {
+        higher_priority_task_woken = uart_bridge_rx_dma_start_receiving(ctx);
+        uart_ex_clear_rx_and_rx_timeout_irq_flags(ctx->uart);
+
+        if (ctx->cfg->on_rx_active != NULL) {
+            ctx->cfg->on_rx_active(ctx);
+        }
+    }
+
+    portYIELD_FROM_ISR(higher_priority_task_woken);
+}
+
+static void uart_bridge_uart0_isr(void)
+{
+    uart_bridge_ctx_t *const ctx = s_uart_ctx[0];
+    if (ctx != NULL) {
+        uart_bridge_uart_isr_handler(ctx);
+    }
+}
+
+static void uart_bridge_uart1_isr(void)
+{
+    uart_bridge_ctx_t *const ctx = s_uart_ctx[1];
+    if (ctx != NULL) {
+        uart_bridge_uart_isr_handler(ctx);
+    }
+}
+
+bool uart_bridge_try_claim(uart_bridge_ctx_t *ctx, uart_inst_t *new_uart, bool force)
+{
+    if ((ctx == NULL) || (new_uart == NULL)) {
+        return false;
+    }
+
+    /* Fast path: ctx already owns new_uart.  The structural state read here is
+     * monotonic between try_claim / release calls on the same ctx and a stale-read
+     * is harmless (worst case we fall through to the locked path). */
+    if (ctx->uart == new_uart) {
+        return true;
+    }
+
+    /* Resolve the binding for the requested UART up front: the bridge needs the
+     * binding both for the IRQ line and for the GPIO + ISR install sequence below.
+     * A missing binding is a configuration error on the owner side. */
+    const uart_bridge_binding_t *new_binding = uart_bridge_find_binding(ctx->cfg, new_uart);
+    if (new_binding == NULL) {
+        assert(false);
+        return false;
+    }
+
+    uart_bridge_lock();
+
+    int slot = uart_bridge_find_slot_for_uart(new_uart);
+    uart_bridge_ctx_t *current_owner = (slot >= 0) ? s_owners[slot].owner : NULL;
+
+    if ((current_owner != NULL) && (current_owner != ctx)) {
+        /* The UART is owned by a different context. */
+        if (!force) {
+            uart_bridge_unlock();
+            return false;
+        }
+
+        if ((current_owner->cfg == NULL) || (current_owner->cfg->on_release_request == NULL)) {
+            uart_bridge_unlock();
+            return false;
+        }
+
+        /* Drop the bridge mutex around the cooperative-release callback: the
+         * callback runs in the requester's task context and will itself call
+         * into the bridge (typically uart_bridge_deinit_uart), which needs to
+         * take this same mutex.  Since the mutex is non-recursive we must
+         * release it here. */
+        uart_bridge_unlock();
+
+        const bool released = current_owner->cfg->on_release_request(current_owner);
+        if (!released) {
+            return false;
+        }
+
+        uart_bridge_lock();
+
+        /* Re-check the slot: another task on the other core may have claimed
+         * the UART while we were outside the mutex. */
+        slot = uart_bridge_find_slot_for_uart(new_uart);
+        uart_bridge_ctx_t *post_owner = (slot >= 0) ? s_owners[slot].owner : NULL;
+
+        if ((post_owner != NULL) && (post_owner != current_owner) && (post_owner != ctx)) {
+            /* Another context beat us to it; leave it alone. */
+            uart_bridge_unlock();
+            return false;
+        }
+
+        /* Drop the released owner's entries (on_release_request does not touch
+         * the ownership table). */
+        if (post_owner == current_owner) {
+            uart_bridge_drop_owner_entries(current_owner);
+            current_owner->uart = NULL;
+        }
+    }
+
+    /* Tear down the hardware on our previously-bound UART, if any.  This masks the
+     * old binding's UART IRQ line, retracts the bridge dispatcher slot, returns its
+     * GPIO pins to SIO, and resets per-context runtime state so the subsequent
+     * uart_bridge_configure_uart starts from a known baseline. */
+    if (ctx->uart != NULL) {
+        uart_bridge_deinit_uart_locked(ctx);
+    }
+    /* Always drop any stale ownership entries for ctx so a single context never
+     * occupies more than one slot, regardless of prior pathological state. */
+    uart_bridge_drop_owner_entries(ctx);
+    ctx->uart = NULL;
+
+    slot = uart_bridge_find_slot_for_uart(new_uart);
+    if (slot < 0) {
+        slot = uart_bridge_find_free_slot();
+    }
+    if (slot < 0) {
+        uart_bridge_unlock();
+        return false;
+    }
+
+    s_owners[slot].uart = new_uart;
+    s_owners[slot].owner = ctx;
+    ctx->uart = new_uart;
+
+    /* Apply the new binding's GPIO functions, publish ctx as the new dispatcher
+     * slot owner for binding->uart, and enable the UART IRQ line in the NVIC.
+     * The UART peripheral itself is configured by the subsequent
+     * uart_bridge_configure_uart call. */
+    uart_bridge_apply_binding_locked(ctx, new_binding);
+
+    uart_bridge_unlock();
+    return true;
+}
+
+static void uart_bridge_release_locked(uart_bridge_ctx_t *ctx)
+{
+    uart_bridge_drop_owner_entries(ctx);
+    ctx->uart = NULL;
+}
+
+void uart_bridge_release(uart_bridge_ctx_t *ctx)
+{
+    if (ctx == NULL) {
+        return;
+    }
+
+    uart_bridge_lock();
+    uart_bridge_release_locked(ctx);
+    uart_bridge_unlock();
+}
+
+uart_bridge_ctx_t *uart_bridge_get_owner(uart_inst_t *uart)
+{
+    if (uart == NULL) {
+        return NULL;
+    }
+
+    uart_bridge_ctx_t *owner = NULL;
+
+    uart_bridge_lock();
+    const int slot = uart_bridge_find_slot_for_uart(uart);
+    if (slot >= 0) {
+        owner = s_owners[slot].owner;
+    }
+    uart_bridge_unlock();
+
+    return owner;
+}
+
+static void uart_bridge_deinit_uart_locked(uart_bridge_ctx_t *ctx)
+{
+    /* Stop the RX-idle timer first; xTimerStop with 0 timeout is non-blocking. */
+    xTimerStop(ctx->rx_timeout_timer, 0);
+
+    /* Disable and abort all DMA channels before touching the UART peripheral so
+     * no in-flight transfer can write to a buffer about to be invalidated. */
+    if (ctx->rx_dma_ctrl_channel != DMA_EX_CHANNEL_UNCLAIMED) {
+        dma_ex_channel_abort_and_disable_irq((uint32_t)ctx->rx_dma_ctrl_channel, UART_BRIDGE_DMA_IRQ_INDEX);
+    }
+    if (ctx->rx_dma_channel != DMA_EX_CHANNEL_UNCLAIMED) {
+        dma_ex_channel_abort_and_disable_irq((uint32_t)ctx->rx_dma_channel, UART_BRIDGE_DMA_IRQ_INDEX);
+    }
+    if (ctx->tx_dma_channel != DMA_EX_CHANNEL_UNCLAIMED) {
+        dma_ex_channel_abort_and_disable_irq((uint32_t)ctx->tx_dma_channel, UART_BRIDGE_DMA_IRQ_INDEX);
+    }
+
+    if (ctx->uart != NULL) {
+        /* Mask UART's own interrupt generation before removing the handler so the
+         * UART cannot assert a new IRQ between the mask and the handler removal. */
+        uart_ex_set_dma_req_enabled(ctx->uart, false, false);
+        uart_ex_set_rx_and_timeout_irq_enabled(ctx->uart, false, false);
+        uart_ex_clear_rx_and_rx_timeout_irq_flags(ctx->uart);
+
+        /* Brief portENTER_CRITICAL window to flush any UART/DMA ISR still running
+         * on the other core. The ISR uses xTaskNotifyFromISR / xTimerResetFromISR
+         * which take the FreeRTOS spinlock that portENTER_CRITICAL waits on, so
+         * by the time we exit no ISR for this ctx can be in flight. */
+        portENTER_CRITICAL();
+        portEXIT_CRITICAL();
+
+        /* Roll back the active binding: remove its UART-IRQ handler and return
+         * its GPIO pins to SIO so the next owner starts from a clean state. */
+        uart_bridge_revert_binding_locked(uart_bridge_find_binding(ctx->cfg, ctx->uart));
+
+        uart_deinit(ctx->uart);
+    }
+
+    /* Reset all runtime state so a subsequent uart_bridge_configure_uart starts
+     * from a known baseline. rx_dma_buffer_full_mask is also read by the DMA
+     * dispatcher ISR but the IRQ source is now disabled, so a plain store is OK. */
+    ctx->rx_use_dma = false;
+    ctx->rx_ongoing = false;
+    ctx->rx_int_buf_pos = 0;
+    ctx->rx_dma_buffer_full_mask = 0;
+    ctx->rx_dma_current_buffer = 0;
+    ctx->rx_dma_next_buffer_to_send = 0;
+    ctx->tx_ongoing = false;
+    ctx->tx_dma_finished = false;
+}
+
+void uart_bridge_deinit_uart(uart_bridge_ctx_t *ctx)
+{
+    if (ctx == NULL) {
+        return;
+    }
+
+    uart_bridge_lock();
+    uart_bridge_deinit_uart_locked(ctx);
+    uart_bridge_unlock();
+}
+
+void uart_bridge_deinit(uart_bridge_ctx_t *ctx)
+{
+    if (ctx == NULL) {
+        return;
+    }
+
+    uart_bridge_lock();
+
+    uart_bridge_deinit_uart_locked(ctx);
+    uart_bridge_release_locked(ctx);
+
+    if (ctx->rx_timeout_timer != NULL) {
+        xTimerDelete(ctx->rx_timeout_timer, portMAX_DELAY);
+        ctx->rx_timeout_timer = NULL;
+    }
+
+    if (ctx->rx_dma_channel != DMA_EX_CHANNEL_UNCLAIMED) {
+        dma_channel_unclaim((uint)ctx->rx_dma_channel);
+        ctx->rx_dma_channel = DMA_EX_CHANNEL_UNCLAIMED;
+    }
+    if (ctx->rx_dma_ctrl_channel != DMA_EX_CHANNEL_UNCLAIMED) {
+        dma_channel_unclaim((uint)ctx->rx_dma_ctrl_channel);
+        ctx->rx_dma_ctrl_channel = DMA_EX_CHANNEL_UNCLAIMED;
+    }
+    if (ctx->tx_dma_channel != DMA_EX_CHANNEL_UNCLAIMED) {
+        dma_channel_unclaim((uint)ctx->tx_dma_channel);
+        ctx->tx_dma_channel = DMA_EX_CHANNEL_UNCLAIMED;
+    }
+
+    /* Remove from the DMA dispatcher and tear down the shared IRQ if this was the
+     * last registered context. The window must be atomic w.r.t. the dispatcher,
+     * which runs in IRQ context; the bridge mutex alone is insufficient there. */
+    portENTER_CRITICAL();
+    uart_bridge_unregister_ctx(ctx);
+
+    bool any_registered = false;
+    for (uint32_t i = 0; i < UART_BRIDGE_MAX_CONTEXTS; i++) {
+        if (s_registered[i] != NULL) {
+            any_registered = true;
+            break;
+        }
+    }
+
+    if ((!any_registered) && (s_dma_irq_installed)) {
+        irq_set_enabled(dma_get_irq_num(UART_BRIDGE_DMA_IRQ_INDEX), false);
+        irq_remove_handler(dma_get_irq_num(UART_BRIDGE_DMA_IRQ_INDEX), uart_bridge_dma_irq_handler);
+        s_dma_irq_installed = false;
+    }
+    portEXIT_CRITICAL();
+
+    uart_bridge_unlock();
+}

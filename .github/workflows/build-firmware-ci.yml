@@ -1,0 +1,212 @@
+name: Build Firmware CI
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  # Decide which build flavours this run needs. Release tags (v*) ship Release
+  # firmware only; development builds and the manual bench run need both Debug
+  # and Release.
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      flavours: ${{ steps.set.outputs.flavours }}
+    steps:
+    - id: set
+      run: |
+        if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          echo 'flavours=[{"type":"Release","name":"release"}]' >> "$GITHUB_OUTPUT"
+        else
+          echo 'flavours=[{"type":"Debug","name":"debug"},{"type":"Release","name":"release"}]' >> "$GITHUB_OUTPUT"
+        fi
+
+  build:
+    needs: setup
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        board:
+          - auto_rp2040
+          - miolink
+          - miolink_pico
+          - pico
+          - pico_w
+          - pico2
+          - pico2_w
+          - weact_studio_rp2040_2mb
+          - weact_studio_rp2040_16mb
+          - waveshare_rp2040_zero
+          - waveshare_rp2040_plus_4mb
+          - seeed_xiao_rp2040
+        # type -> CMAKE_BUILD_TYPE; name -> lower-case flavour used both for
+        # the per-build-type build directory and the bench-style artifact
+        # filename (MioLink-<board>-<flavour>.uf2). The flavour set is chosen
+        # by the setup job: Release-only for tags, Debug+Release otherwise.
+        flavour: ${{ fromJSON(needs.setup.outputs.flavours) }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0
+
+    - uses: carlosperate/arm-none-eabi-gcc-action@v1
+
+    - name: Configure CMake
+      working-directory: ./firmware
+      run: cmake -S . -B ./build-${{ matrix.flavour.name }} -DCMAKE_BUILD_TYPE=${{ matrix.flavour.type }} -DPICO_BOARD=${{ matrix.board }}
+
+    - name: Build
+      working-directory: ./firmware
+      run: cmake --build ./build-${{ matrix.flavour.name }} --config ${{ matrix.flavour.type }}
+
+    - name: Rename binary
+      working-directory: ./firmware/build-${{ matrix.flavour.name }}
+      run: mv MioLink.uf2 MioLink-${{ matrix.board }}-${{ matrix.flavour.name }}.uf2
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: MioLink-${{ matrix.board }}-${{ matrix.flavour.name }}
+        path: ./firmware/build-${{ matrix.flavour.name }}/MioLink-${{ matrix.board }}-${{ matrix.flavour.name }}.uf2
+
+  # Hand the freshly built firmware to the MioLink_TestBench hardware bench.
+  # The bench downloads this run's artifacts by run_id (so it tests exactly
+  # what was built) and reports the result back on the commit below.
+  # Manual-only: the bench runs on self-hosted hardware and is triggered on
+  # demand via workflow_dispatch.
+  dispatch-tests:
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+    # Report on the pushed/dispatched commit; the bench reports its final
+    # state on the same SHA.
+    - name: Set pending bench status
+      env:
+        GH_TOKEN: ${{ secrets.MIOLINK_BENCH_TOKEN }}
+        SHA: ${{ github.sha }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
+            -f state=pending \
+            -f context=miolink-bench \
+            -f target_url="${RUN_URL}" \
+            -f description="HIL bench tests queued"
+
+    - name: Trigger MioLink_TestBench bench
+      uses: peter-evans/repository-dispatch@v3
+      with:
+        token: ${{ secrets.MIOLINK_BENCH_TOKEN }}
+        repository: Misaka0x2730/MioLink_TestBench
+        event-type: miolink-build
+        client-payload: >-
+          {"run_id": "${{ github.run_id }}",
+           "sha": "${{ github.sha }}"}
+
+  publish-development:
+    needs: build
+    # Fork PRs only get a read-only GITHUB_TOKEN, so publishing would fail;
+    # restrict to PRs originating from this repository.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' &&
+       github.base_ref == 'main' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    # Development builds ship both Debug and Release firmware.
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+        pattern: MioLink-*
+        merge-multiple: true
+
+    # Bench artifacts are version-less (MioLink-<board>-<flavour>.uf2);
+    # restage them under a version-stamped name. Development builds are not
+    # tags, so the version is the short commit SHA.
+    - name: Rename artifacts for release
+      working-directory: ./artifacts
+      env:
+        SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      run: |
+        set -euo pipefail
+        shopt -s nullglob
+        version="${SHA::7}"
+        for f in MioLink-*.uf2; do
+          name="${f#MioLink-}"
+          name="${name%.uf2}"
+          mv "$f" "MioLink_${version}_${name}.uf2"
+        done
+
+    - name: Publish development build
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      run: |
+        tag="development"
+        version="${SHA::7}"
+        gh release delete "$tag" --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
+        gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Development Build" \
+            --prerelease \
+            --latest=false \
+            --target "$SHA" \
+            --notes "Automated build from commit ${version}" \
+            ./artifacts/*.uf2
+
+  publish-release:
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    # Releases ship Release builds only; the Debug artifacts stay as
+    # workflow artifacts for the test bench.
+    - name: Download release artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+        pattern: MioLink-*-release
+        merge-multiple: true
+
+    # Bench artifacts are version-less (MioLink-<board>-release.uf2); restage
+    # them under the version-stamped release name using the tag.
+    - name: Rename artifacts for release
+      working-directory: ./artifacts
+      env:
+        tag: ${{ github.ref_name }}
+      run: |
+        set -euo pipefail
+        shopt -s nullglob
+        for f in MioLink-*-release.uf2; do
+          board="${f#MioLink-}"
+          board="${board%-release.uf2}"
+          mv "$f" "MioLink_${tag}_${board}.uf2"
+        done
+
+    - name: Create release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        tag: ${{ github.ref_name }}
+      run: |
+        gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$tag" \
+            --generate-notes \
+            ./artifacts/*.uf2

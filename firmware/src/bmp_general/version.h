@@ -1,0 +1,38 @@
+/*
+ * This file is part of the MioLink project.
+ *
+ * Copyright (C) 2024 Dmitry Rezvanov <dmitry.rezvanov@yandex.ru>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef MIOLINK_VERSION_H
+#define MIOLINK_VERSION_H
+
+/**********************************************************************************************************************
+ * Public Includes
+ **********************************************************************************************************************/
+
+#include "git_version.h"
+
+/**********************************************************************************************************************
+ * Public Definitions
+ **********************************************************************************************************************/
+
+/**
+ * \brief Human-readable firmware string: MioLink, Black Magic, and FreeRTOS versions.
+ */
+#define FIRMWARE_VERSION GIT_MIOLINK_VERSION ", BMP " GIT_BMP_VERSION ", FreeRTOS " GIT_FREERTOS_VERSION
+
+#endif /* MIOLINK_VERSION_H */
