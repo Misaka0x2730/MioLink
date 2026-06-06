@@ -77,7 +77,7 @@ jobs:
         name: MioLink-${{ matrix.board }}-${{ matrix.flavour.name }}
         path: ./firmware/build-${{ matrix.flavour.name }}/MioLink-${{ matrix.board }}-${{ matrix.flavour.name }}.uf2
 
-  # Hand the freshly built firmware to the MioLink_TestSetup hardware bench.
+  # Hand the freshly built firmware to the MioLink_TestBench hardware bench.
   # The bench downloads this run's artifacts by run_id (so it tests exactly
   # what was built) and reports the result back on the commit below.
   # Manual-only: the bench runs on self-hosted hardware and is triggered on
@@ -102,11 +102,11 @@ jobs:
             -f target_url="${RUN_URL}" \
             -f description="HIL bench tests queued"
 
-    - name: Trigger MioLink_TestSetup bench
+    - name: Trigger MioLink_TestBench bench
       uses: peter-evans/repository-dispatch@v3
       with:
         token: ${{ secrets.MIOLINK_BENCH_TOKEN }}
-        repository: Misaka0x2730/MioLink_TestSetup
+        repository: Misaka0x2730/MioLink_TestBench
         event-type: miolink-build
         client-payload: >-
           {"run_id": "${{ github.run_id }}",
