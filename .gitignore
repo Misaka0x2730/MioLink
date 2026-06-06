@@ -2,6 +2,7 @@
 .idea/
 .vscode/
 .cursor/debug-*.log
+.claude/
 
 # KiCad files
 *.kicad_prl
