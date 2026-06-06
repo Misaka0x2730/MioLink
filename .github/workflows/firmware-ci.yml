@@ -1,4 +1,4 @@
-name: Build Pipeline
+name: Firmware CI
 
 on:
   push:
@@ -9,7 +9,24 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Decide which build flavours this run needs. Release tags (v*) ship Release
+  # firmware only; development builds and the manual bench run need both Debug
+  # and Release.
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      flavours: ${{ steps.set.outputs.flavours }}
+    steps:
+    - id: set
+      run: |
+        if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          echo 'flavours=[{"type":"Release","name":"release"}]' >> "$GITHUB_OUTPUT"
+        else
+          echo 'flavours=[{"type":"Debug","name":"debug"},{"type":"Release","name":"release"}]' >> "$GITHUB_OUTPUT"
+        fi
+
   build:
+    needs: setup
     runs-on: ubuntu-latest
 
     strategy:
@@ -30,10 +47,9 @@ jobs:
           - seeed_xiao_rp2040
         # type -> CMAKE_BUILD_TYPE; name -> lower-case flavour used both for
         # the per-build-type build directory and the bench-style artifact
-        # filename (MioLink-<board>-<flavour>.uf2).
-        flavour:
-          - { type: Debug, name: debug }
-          - { type: Release, name: release }
+        # filename (MioLink-<board>-<flavour>.uf2). The flavour set is chosen
+        # by the setup job: Release-only for tags, Debug+Release otherwise.
+        flavour: ${{ fromJSON(needs.setup.outputs.flavours) }}
 
     steps:
     - uses: actions/checkout@v4
@@ -64,24 +80,20 @@ jobs:
   # Hand the freshly built firmware to the MioLink_TestSetup hardware bench.
   # The bench downloads this run's artifacts by run_id (so it tests exactly
   # what was built) and reports the result back on the commit below.
-  # Skipped for fork PRs: they have no access to MIOLINK_BENCH_TOKEN, and the
-  # bench runs on self-hosted hardware.
+  # Manual-only: the bench runs on self-hosted hardware and is triggered on
+  # demand via workflow_dispatch.
   dispatch-tests:
     needs: build
-    if: >-
-      (github.event_name == 'workflow_dispatch') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
-    # Report on the commit visible in the PR (PR head SHA) or the pushed
-    # commit otherwise; the bench reports its final state on the same SHA.
+    # Report on the pushed/dispatched commit; the bench reports its final
+    # state on the same SHA.
     - name: Set pending bench status
       env:
         GH_TOKEN: ${{ secrets.MIOLINK_BENCH_TOKEN }}
-        SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        SHA: ${{ github.sha }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: |
         gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
@@ -98,53 +110,62 @@ jobs:
         event-type: miolink-build
         client-payload: >-
           {"run_id": "${{ github.run_id }}",
-           "sha": "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}",
-           "pr": "${{ github.event.pull_request.number }}"}
+           "sha": "${{ github.sha }}"}
 
   publish-development:
     needs: build
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    # Fork PRs only get a read-only GITHUB_TOKEN, so publishing would fail;
+    # restrict to PRs originating from this repository.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' &&
+       github.base_ref == 'main' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-    # Releases ship Release builds only; the Debug artifacts stay as
-    # workflow artifacts for the test bench.
-    - name: Download release artifacts
+    # Development builds ship both Debug and Release firmware.
+    - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
         path: ./artifacts
-        pattern: MioLink-*-release
+        pattern: MioLink-*
         merge-multiple: true
 
-    # Bench artifacts are version-less (MioLink-<board>-release.uf2); restage
-    # them under the version-stamped release name. Development builds are not
-    # tags, so the version is the commit SHA.
+    # Bench artifacts are version-less (MioLink-<board>-<flavour>.uf2);
+    # restage them under a version-stamped name. Development builds are not
+    # tags, so the version is the short commit SHA.
     - name: Rename artifacts for release
       working-directory: ./artifacts
+      env:
+        SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       run: |
         set -euo pipefail
         shopt -s nullglob
-        version="$GITHUB_SHA"
-        for f in MioLink-*-release.uf2; do
-          board="${f#MioLink-}"
-          board="${board%-release.uf2}"
-          mv "$f" "MioLink_${version}_${board}.uf2"
+        version="${SHA::7}"
+        for f in MioLink-*.uf2; do
+          name="${f#MioLink-}"
+          name="${name%.uf2}"
+          mv "$f" "MioLink_${version}_${name}.uf2"
         done
 
     - name: Publish development build
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       run: |
         tag="development"
+        version="${SHA::7}"
         gh release delete "$tag" --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
         gh release create "$tag" \
             --repo "$GITHUB_REPOSITORY" \
             --title "Development Build" \
+            --prerelease \
             --latest=false \
-            --target "$GITHUB_SHA" \
-            --notes "Automated build from commit $GITHUB_SHA" \
+            --target "$SHA" \
+            --notes "Automated build from commit ${version}" \
             ./artifacts/*.uf2
 
   publish-release:
